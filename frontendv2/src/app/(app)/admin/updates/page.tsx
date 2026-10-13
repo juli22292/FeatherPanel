@@ -529,7 +529,7 @@ export default function AdminUpdatesPage() {
                 }
                 icon={ArrowUpCircle}
                 action={
-                    panelVersion?.update_available && panelVersion?.source !== 'github' ? (
+                    panelVersion?.update_available ? (
                         <Button size='sm' onClick={() => void handleUpdatePanel()} disabled={isUpdatingPanel}>
                             {isUpdatingPanel ? (
                                 <Loader2 className='mr-2 h-4 w-4 animate-spin' />

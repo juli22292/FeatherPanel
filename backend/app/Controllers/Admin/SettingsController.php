@@ -4288,12 +4288,9 @@ class SettingsController
     ),]
     public function triggerDockerUpdate(Request $request): Response
     {
-        if (trim((string) getenv('UPDATE_REPOSITORY')) !== '') {
-            return ApiResponse::error(
-                'Automatic updates are disabled for custom GitHub releases. Review the release notes and update manually.',
-                'CUSTOM_RELEASE_MANUAL_UPDATE_REQUIRED',
-                400,
-            );
+        $updateRepository = trim((string) getenv('UPDATE_REPOSITORY'));
+        if ($updateRepository !== '' && $updateRepository !== 'juli22292/FeatherPanel') {
+            return ApiResponse::error('This GitHub update source is not supported.', 'UNSUPPORTED_UPDATE_REPOSITORY', 400);
         }
 
         if (!$this->isDockerDeployment()) {
@@ -4312,6 +4309,14 @@ class SettingsController
                 'Docker updater is not configured. Missing DOCKER_UPDATER_URL or DOCKER_UPDATER_TOKEN.',
                 'DOCKER_UPDATER_NOT_CONFIGURED',
                 500,
+            );
+        }
+
+        if ($updateRepository !== '' && !$this->isVerifiedForkUpdater($updaterUrl, $updateRepository)) {
+            return ApiResponse::error(
+                'The local updater for this FeatherPanel fork is unavailable or not configured.',
+                'FORK_UPDATER_UNAVAILABLE',
+                503,
             );
         }
 
@@ -4404,6 +4409,33 @@ class SettingsController
                 'updater_response' => $decodedResponse,
             ],
         );
+    }
+
+    private function isVerifiedForkUpdater(string $url, string $repository): bool
+    {
+        $parts = parse_url($url);
+        if (!is_array($parts)
+            || ($parts['scheme'] ?? '') !== 'http'
+            || ($parts['host'] ?? '') !== 'host.docker.internal'
+            || ($parts['path'] ?? '') !== '/update'
+            || !isset($parts['port'])
+            || isset($parts['user'])
+            || isset($parts['pass'])
+            || isset($parts['query'])
+            || isset($parts['fragment'])) {
+            return false;
+        }
+
+        $healthUrl = 'http://host.docker.internal:' . $parts['port'] . '/health';
+        $response = @file_get_contents($healthUrl, false, stream_context_create([
+            'http' => ['timeout' => 3, 'ignore_errors' => false],
+        ]));
+        $health = is_string($response) ? json_decode($response, true) : null;
+
+        return is_array($health)
+            && ($health['service'] ?? null) === 'featherpanel-fork-updater'
+            && ($health['protocol'] ?? null) === 1
+            && ($health['repository'] ?? null) === $repository;
     }
 
     /**

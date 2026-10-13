@@ -87,4 +87,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: bash -n install.sh installer/install.bash installer/source/init/panel.bash
+      - run: bash -n install.sh installer/install.bash installer/source/init/panel.bash deploy/fork-updater/install.sh
+      - run: python3 -m unittest discover -s deploy/fork-updater -p 'test_*.py' -v

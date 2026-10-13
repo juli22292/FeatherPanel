@@ -323,7 +323,7 @@ export function VersionInfoWidget({ version, loading }: VersionInfoWidgetProps) 
                                     <Link href='/admin/updates'>{t('admin_updates.title')}</Link>
                                 </Button>
                             </div>
-                            {!isGitHubReleaseSource ? (
+                            {(!isGitHubReleaseSource || version?.update_available) ? (
                                 <Button
                                     variant='warning'
                                     className='w-full'

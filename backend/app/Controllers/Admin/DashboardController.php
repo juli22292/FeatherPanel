@@ -351,8 +351,16 @@ class DashboardController
 
             // Get version information with caching (15 minutes)
             $updateRepository = trim((string) getenv('UPDATE_REPOSITORY'));
-            $versionCacheKey = 'dashboard_version_info_v3_' . sha1($upstream . ':' . $updateRepository);
+            $versionCacheKey = 'dashboard_version_info_v4_' . sha1($upstream . ':' . $updateRepository . ':' . $version);
             $versionInfo = Cache::get($versionCacheKey);
+
+            // The explicit Check for Updates action may refresh GitHub after one minute.
+            if ($updateRepository !== '' && $request->query->get('refresh') === '1' && is_array($versionInfo)) {
+                $lastChecked = strtotime((string) ($versionInfo['last_checked'] ?? ''));
+                if ($lastChecked === false || time() - $lastChecked >= 60) {
+                    $versionInfo = null;
+                }
+            }
 
             if ($versionInfo === null) {
                 $versionInfo = $this->fetchVersionInfo($upstream, $version);
