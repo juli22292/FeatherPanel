@@ -13,6 +13,7 @@ on:
 
 jobs:
   build-backend:
+    if: github.repository == 'MythicalLTD/FeatherPanel'
     name: Build & Push Backend (Dev) - ${{ matrix.platform }}
     runs-on: ${{ matrix.runner }}
     permissions:
@@ -86,6 +87,7 @@ jobs:
             ghcr.io/mythicalltd/featherpanel-backend:dev-${{ steps.tags.outputs.branch }}-${{ steps.tags.outputs.sha }}-${{ steps.platform-tag.outputs.tag }}
 
   manifest-backend:
+    if: github.repository == 'MythicalLTD/FeatherPanel'
     name: Create Multi-Arch Manifest - Backend
     runs-on: blacksmith-4vcpu-ubuntu-2404
     needs: build-backend
@@ -142,6 +144,7 @@ jobs:
             ghcr.io/mythicalltd/featherpanel-backend:dev-${{ steps.tags.outputs.branch }}-${{ steps.tags.outputs.sha }}-linux-arm64
 
   build-frontendv2:
+    if: github.repository == 'MythicalLTD/FeatherPanel'
     name: Build & Push Frontend v2 (Dev) - ${{ matrix.platform }}
     runs-on: ${{ matrix.runner }}
     permissions:
@@ -251,6 +254,7 @@ jobs:
             ghcr.io/mythicalltd/featherpanel-frontendv2:dev-${{ steps.tags.outputs.branch }}-${{ steps.tags.outputs.sha }}-${{ steps.platform-tag.outputs.tag }}
 
   manifest-frontendv2:
+    if: github.repository == 'MythicalLTD/FeatherPanel'
     name: Create Multi-Arch Manifest - Frontend v2
     runs-on: blacksmith-4vcpu-ubuntu-2404
     needs: build-frontendv2
@@ -307,6 +311,7 @@ jobs:
             ghcr.io/mythicalltd/featherpanel-frontendv2:dev-${{ steps.tags.outputs.branch }}-${{ steps.tags.outputs.sha }}-linux-arm64
 
   build-async-runner:
+    if: github.repository == 'MythicalLTD/FeatherPanel'
     name: Build & Push Async Runner (Dev) - ${{ matrix.platform }}
     runs-on: ${{ matrix.runner }}
     permissions:
@@ -373,6 +378,7 @@ jobs:
             ghcr.io/mythicalltd/featherpanel-async-runner:dev-${{ steps.tags.outputs.branch }}-${{ steps.tags.outputs.sha }}-${{ steps.platform-tag.outputs.tag }}
 
   manifest-async-runner:
+    if: github.repository == 'MythicalLTD/FeatherPanel'
     name: Create Multi-Arch Manifest - Async Runner
     runs-on: blacksmith-4vcpu-ubuntu-2404
     needs: build-async-runner
@@ -429,6 +435,7 @@ jobs:
             ghcr.io/mythicalltd/featherpanel-async-runner:dev-${{ steps.tags.outputs.branch }}-${{ steps.tags.outputs.sha }}-linux-arm64
 
   build-mcp:
+    if: github.repository == 'MythicalLTD/FeatherPanel'
     name: Build & Push MCP (Dev) - ${{ matrix.platform }}
     runs-on: ${{ matrix.runner }}
     permissions:
@@ -494,6 +501,7 @@ jobs:
             ghcr.io/mythicalltd/featherpanel-mcp:dev-${{ steps.tags.outputs.branch }}-${{ steps.tags.outputs.sha }}-${{ steps.platform-tag.outputs.tag }}
 
   manifest-mcp:
+    if: github.repository == 'MythicalLTD/FeatherPanel'
     name: Create Multi-Arch Manifest - MCP
     runs-on: blacksmith-2vcpu-ubuntu-2404
     needs: build-mcp

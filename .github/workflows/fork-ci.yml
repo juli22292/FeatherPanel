@@ -1,0 +1,90 @@
+name: Fork CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      database:
+        image: mariadb:11
+        env:
+          MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: "1"
+          MARIADB_DATABASE: testing
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mariadb-admin ping -h localhost -u root"
+          --health-interval=10s --health-timeout=5s --health-retries=10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.5"
+          extensions: bcmath, curl, gd, intl, mbstring, mysqli, pdo_mysql, redis, sodium, xml, zip
+          tools: composer:v2
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Prepare test database
+        run: |
+          mkdir -p storage/config
+          printf 'DATABASE_HOST=127.0.0.1\nDATABASE_PORT=3306\nDATABASE_DATABASE=testing\nDATABASE_USER=root\nDATABASE_PASSWORD=\nDATABASE_ENCRYPTION=xchacha20\nDATABASE_ENCRYPTION_KEY=%s\nREDIS_HOST=127.0.0.1\nREDIS_PASSWORD=testredis\n' "$(head -c 32 /dev/urandom | base64)" > storage/config/.env
+          php cli migrate --skip-path-check
+      - run: composer tests
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontendv2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.10.1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+          cache-dependency-path: frontendv2/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+
+  docker:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: backend
+            context: backend
+          - service: frontendv2
+            context: frontendv2
+          - service: mcp
+            context: mcp
+          - service: async-runner
+            context: runner
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Check Docker build
+        uses: docker/build-push-action@v6
+        with:
+          context: ./${{ matrix.context }}
+          push: false
+          tags: featherpanel-${{ matrix.service }}:ci
+
+  installer:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash -n install.sh installer/install.bash installer/source/init/panel.bash

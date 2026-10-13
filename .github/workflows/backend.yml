@@ -7,6 +7,7 @@ permissions:
 
 jobs:
   lint:
+    if: github.repository == 'MythicalLTD/FeatherPanel'
     name: Backend Lint
     runs-on: blacksmith-4vcpu-ubuntu-2404
     defaults:
@@ -34,6 +35,7 @@ jobs:
       - name: Lint
         run: composer lint
   tests:
+    if: github.repository == 'MythicalLTD/FeatherPanel'
     name: Backend Tests
     runs-on: blacksmith-4vcpu-ubuntu-2404
     defaults:

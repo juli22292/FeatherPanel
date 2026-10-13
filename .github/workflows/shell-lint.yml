@@ -4,6 +4,7 @@ on: [push, pull_request]
 
 jobs:
   shellcheck:
+    if: github.repository == 'MythicalLTD/FeatherPanel'
     name: ShellCheck
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
@@ -19,6 +20,7 @@ jobs:
         run: shellcheck installer/install.bash
 
   bash-syntax:
+    if: github.repository == 'MythicalLTD/FeatherPanel'
     name: Bash Syntax
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:

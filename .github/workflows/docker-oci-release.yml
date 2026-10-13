@@ -14,6 +14,7 @@ on:
 
 jobs:
   build-oci:
+    if: github.repository == 'MythicalLTD/FeatherPanel'
     name: Build & Push OCI Image (Release) - ${{ matrix.platform }}
     runs-on: ${{ matrix.runner }}
     permissions:
@@ -82,6 +83,7 @@ jobs:
             ghcr.io/${{ steps.repo-owner.outputs.owner }}/featherpanel-oci:${{ steps.version.outputs.tag }}-${{ steps.platform-tag.outputs.tag }}
 
   manifest-oci:
+    if: github.repository == 'MythicalLTD/FeatherPanel'
     name: Create Multi-Arch Manifest - OCI (Release)
     runs-on: blacksmith-4vcpu-ubuntu-2404
     needs: build-oci

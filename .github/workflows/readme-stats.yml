@@ -24,10 +24,10 @@ concurrency:
 
 jobs:
   update:
+    if: github.repository == 'MythicalLTD/FeatherPanel' && github.actor != 'github-actions[bot]'
     name: Update README stats
     runs-on: blacksmith-2vcpu-ubuntu-2404
     # Skip bot commits so a stats push cannot loop
-    if: github.actor != 'github-actions[bot]'
     steps:
       - name: Checkout
         uses: useblacksmith/checkout@v1

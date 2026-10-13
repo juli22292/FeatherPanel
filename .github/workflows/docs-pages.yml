@@ -31,6 +31,7 @@ concurrency:
 
 jobs:
   build:
+    if: github.repository == 'MythicalLTD/FeatherPanel'
     name: Build icanhasfeatherpanel site
     runs-on: blacksmith-2vcpu-ubuntu-2404
     steps:
@@ -92,6 +93,7 @@ jobs:
           path: docs-site
 
   deploy:
+    if: github.repository == 'MythicalLTD/FeatherPanel'
     name: Deploy to GitHub Pages
     needs: build
     runs-on: blacksmith-2vcpu-ubuntu-2404

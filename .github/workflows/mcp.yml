@@ -17,6 +17,7 @@ concurrency:
 
 jobs:
   build:
+    if: github.repository == 'MythicalLTD/FeatherPanel'
     name: MCP Typecheck & Build
     runs-on: blacksmith-2vcpu-ubuntu-2404
     permissions:
@@ -68,6 +69,7 @@ jobs:
           test -f dist/errors.js
 
   inventory:
+    if: github.repository == 'MythicalLTD/FeatherPanel'
     name: MCP Tool Inventory
     runs-on: blacksmith-2vcpu-ubuntu-2404
     permissions:
@@ -110,6 +112,7 @@ jobs:
           PY
 
   docker:
+    if: github.repository == 'MythicalLTD/FeatherPanel'
     name: MCP Docker build (smoke)
     runs-on: blacksmith-2vcpu-ubuntu-2404
     permissions:

@@ -3,6 +3,7 @@ name: Frontend Jobs
 on: [push, pull_request]
 jobs:
   build:
+    if: github.repository == 'MythicalLTD/FeatherPanel'
     name: Frontend Build
     runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
