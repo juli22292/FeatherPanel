@@ -152,12 +152,21 @@ class FeatherPanelPremium
      */
     public static function canCustomizeUi(): bool
     {
-        return self::isActive();
+        return self::localCustomizationEnabled() || self::isActive();
     }
 
     public static function canCustomSidebar(): bool
     {
         return self::canCustomizeUi();
+    }
+
+    /**
+     * This fork can enable its own self-hosted UI controls independently of a
+     * Mythic subscription. Cloud entitlements and support remain unchanged.
+     */
+    public static function localCustomizationEnabled(): bool
+    {
+        return filter_var(getenv('FEATHERPANEL_LOCAL_CUSTOMIZATION') ?: 'false', FILTER_VALIDATE_BOOLEAN);
     }
 
     public static function manageUrl(): string
@@ -181,6 +190,7 @@ class FeatherPanelPremium
      *   using_cache: bool,
      *   can_customize_ui: bool,
      *   can_custom_sidebar: bool,
+     *   local_customization_active: bool,
      *   manage_url: string
      * }
      */
@@ -210,8 +220,9 @@ class FeatherPanelPremium
             'expires_at' => $expiresAt,
             'last_failure_at' => $lastFailureAt,
             'using_cache' => $usingCache,
-            'can_customize_ui' => $active,
-            'can_custom_sidebar' => $active,
+            'can_customize_ui' => $active || self::localCustomizationEnabled(),
+            'can_custom_sidebar' => $active || self::localCustomizationEnabled(),
+            'local_customization_active' => self::localCustomizationEnabled(),
             'manage_url' => self::manageUrl(),
         ];
     }
@@ -257,7 +268,7 @@ class FeatherPanelPremium
             $config->setSetting(ConfigInterface::FEATHERPANEL_PREMIUM_EXPIRES_AT, null);
         }
 
-        if ($forceResetCustomizations || (!$active && $wasActive)) {
+        if (!self::localCustomizationEnabled() && ($forceResetCustomizations || (!$active && $wasActive))) {
             self::resetCustomizations();
         }
     }

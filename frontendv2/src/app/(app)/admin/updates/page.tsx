@@ -600,7 +600,8 @@ export default function AdminUpdatesPage() {
                     </div>
                     {(panelVersion?.latest?.is_security_release ||
                         panelVersion?.current?.is_security_release ||
-                        panelVersion?.current_listed_on_update_server === false) && (
+                        (panelVersion?.source !== 'github' &&
+                            panelVersion?.current_listed_on_update_server === false)) && (
                         <div className='flex flex-wrap gap-2'>
                             {(panelVersion?.latest?.is_security_release ||
                                 panelVersion?.current?.is_security_release) && (
@@ -608,7 +609,8 @@ export default function AdminUpdatesPage() {
                                     {t('admin.version.security_release')}
                                 </span>
                             )}
-                            {panelVersion?.current_listed_on_update_server === false && (
+                            {panelVersion?.source !== 'github' &&
+                                panelVersion?.current_listed_on_update_server === false && (
                                 <span className='rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[10px] font-semibold tracking-wide text-amber-600 uppercase dark:text-amber-400'>
                                     {t('admin.version.unlisted_update_server_badge')}
                                 </span>

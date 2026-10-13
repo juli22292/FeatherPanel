@@ -815,20 +815,21 @@ function SidebarContent({
                     )}
                 >
                     {showSidebarToggle && (
-                        <SidebarCollapseToggle
-                            position={sidebarPosition}
-                            collapsed={collapsed}
-                            t={t}
-                            variant='rail'
-                            className={cn(isClassicChrome ? 'mx-3 my-2' : 'mx-2 my-1.5')}
-                            tooltipLabel={
-                                showCollapsedTooltips
-                                    ? collapsed
-                                        ? t('navbar.expandSidebar')
-                                        : t('navbar.collapseSidebar')
-                                    : undefined
-                            }
-                        />
+                        <div className={cn(isClassicChrome ? 'px-3 py-2' : 'px-2 py-1.5')}>
+                            <SidebarCollapseToggle
+                                position={sidebarPosition}
+                                collapsed={collapsed}
+                                t={t}
+                                variant='rail'
+                                tooltipLabel={
+                                    showCollapsedTooltips
+                                        ? collapsed
+                                            ? t('navbar.expandSidebar')
+                                            : t('navbar.collapseSidebar')
+                                        : undefined
+                                }
+                            />
+                        </div>
                     )}
                     {!collapsed && (
                         <div className={cn(isClassicChrome ? 'p-3 pt-0' : 'p-2 pt-0')}>

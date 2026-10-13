@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.4.2 STABLE (juli22292 fork)
+
+### Added
+
+- Self-hosted branding, AI appearance, and sidebar customization can be enabled in this fork without a Mythic subscription. Mythic Cloud benefits and priority support remain separate.
+
+### Fixed
+
+- The sidebar Collapse/Expand button now stays centered within the sidebar instead of overflowing its right edge.
+
+### Previous fork changes
+
+- Stable GitHub releases from `juli22292/FeatherPanel` power the admin update display. The release workflow publishes this fork's Docker images and source archive.
+
 ## v1.4.1 STABLE
 
 ### Fixed

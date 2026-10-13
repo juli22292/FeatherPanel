@@ -63,12 +63,14 @@ class FeatherPanelPremiumController
             return DemoCloudHelper::denyResponse();
         }
 
-        // Refresh entitlement before write so cancelled subscriptions cannot save.
-        $this->tryRefreshEntitlement($request);
+        // A linked Mythic subscription must be current before it authorizes a write.
+        if (!FeatherPanelPremium::localCustomizationEnabled()) {
+            $this->tryRefreshEntitlement($request);
+        }
 
         if (!FeatherPanelPremium::canCustomizeUi()) {
             return ApiResponse::error(
-                'FeatherPanel Premium is required to customize branding and AI appearance.',
+                'FeatherPanel Premium or local fork customization is required to customize branding and AI appearance.',
                 'PREMIUM_REQUIRED',
                 403
             );
@@ -117,7 +119,7 @@ class FeatherPanelPremiumController
         if (array_key_exists('sidebar_navigation_config', $body)) {
             if (!FeatherPanelPremium::canCustomSidebar()) {
                 return ApiResponse::error(
-                    'FeatherPanel Premium is required to customize the sidebar.',
+                    'FeatherPanel Premium or local fork customization is required to customize the sidebar.',
                     'PREMIUM_REQUIRED',
                     403
                 );

@@ -56,6 +56,7 @@ export type FeatherPanelPremiumFeatures = {
 
 export type FeatherPanelPremiumStatus = {
     active: boolean;
+    local_customization_active?: boolean;
     features: FeatherPanelPremiumFeatures;
     checked_at?: string | null;
     expires_at?: string | null;
@@ -134,7 +135,7 @@ export default function FeatherPanelPremiumPage() {
     );
 
     useEffect(() => {
-        void load(true);
+        void load(false);
     }, [load]);
 
     const save = async () => {
@@ -172,6 +173,8 @@ export default function FeatherPanelPremiumPage() {
 
     const premium = data?.premium;
     const active = Boolean(premium?.active);
+    const localCustomization = Boolean(premium?.local_customization_active);
+    const canCustomize = Boolean(premium?.can_customize_ui);
     const linked = Boolean(data?.linked);
     const manageUrl = premium?.manage_url || 'https://my.mythicalsystems.org/clouds';
 
@@ -179,10 +182,14 @@ export default function FeatherPanelPremiumPage() {
         <div className='space-y-6 md:space-y-8'>
             <PageHeader
                 title={t('admin.featherpanel_premium.title')}
-                description={t('admin.featherpanel_premium.subtitle')}
+                description={t(
+                    localCustomization
+                        ? 'admin.featherpanel_premium.local_subtitle'
+                        : 'admin.featherpanel_premium.subtitle',
+                )}
                 icon={Crown}
                 actions={
-                    <Button
+                    !localCustomization ? <Button
                         variant='outline'
                         size='sm'
                         disabled={loading || refreshing}
@@ -190,7 +197,7 @@ export default function FeatherPanelPremiumPage() {
                     >
                         <RefreshCw className={cn('mr-2 h-4 w-4', refreshing && 'animate-spin')} />
                         {t('admin.featherpanel_premium.refresh')}
-                    </Button>
+                    </Button> : null
                 }
             />
 
@@ -200,10 +207,27 @@ export default function FeatherPanelPremiumPage() {
                 </div>
             ) : (
                 <>
-                    <PageCard title={t('admin.featherpanel_premium.status.card_title')} icon={Sparkles}>
+                    <PageCard
+                        title={t(
+                            localCustomization
+                                ? 'admin.featherpanel_premium.status.local_card_title'
+                                : 'admin.featherpanel_premium.status.card_title',
+                        )}
+                        icon={Sparkles}
+                    >
                         <div className='space-y-4'>
                             <div className='flex flex-wrap items-center gap-2'>
-                                {active ? (
+                                {localCustomization ? (
+                                    <>
+                                        <CheckCircle2 className='text-primary h-5 w-5' />
+                                        <span className='text-foreground text-lg font-semibold'>
+                                            {t('admin.featherpanel_premium.status.local_active')}
+                                        </span>
+                                        <span className='bg-primary/10 text-primary border-primary/20 rounded-md border px-2 py-0.5 text-xs font-medium'>
+                                            {t('admin.featherpanel_premium.status.local_badge')}
+                                        </span>
+                                    </>
+                                ) : active ? (
                                     <>
                                         <CheckCircle2 className='text-primary h-5 w-5' />
                                         <span className='text-foreground text-lg font-semibold'>
@@ -223,7 +247,11 @@ export default function FeatherPanelPremiumPage() {
                                 )}
                             </div>
 
-                            {!linked ? (
+                            {localCustomization ? (
+                                <p className='text-muted-foreground text-sm'>
+                                    {t('admin.featherpanel_premium.status.local_desc')}
+                                </p>
+                            ) : !linked ? (
                                 <div className='space-y-3'>
                                     <p className='text-muted-foreground text-sm'>
                                         {t('admin.featherpanel_premium.status.not_linked')}
@@ -293,9 +321,16 @@ export default function FeatherPanelPremiumPage() {
                         </div>
                     </PageCard>
 
-                    {linked && active && (
+                    {canCustomize && (
                         <>
-                            <PageCard title={t('admin.featherpanel_premium.customize.card_title')} icon={ImageIcon}>
+                            <PageCard
+                                title={t(
+                                    localCustomization
+                                        ? 'admin.featherpanel_premium.customize.local_card_title'
+                                        : 'admin.featherpanel_premium.customize.card_title',
+                                )}
+                                icon={ImageIcon}
+                            >
                                 <div className='space-y-6'>
                                     <p className='text-muted-foreground text-sm'>
                                         {t('admin.featherpanel_premium.customize.description')}
