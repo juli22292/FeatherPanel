@@ -9744,6 +9744,7 @@
 		"featherpanel_premium": {
 			"title": "FeatherPanel Premium",
 			"subtitle": "Customize AI branding, powered-by text, and version labels with a Mythic team Premium subscription.",
+			"local_subtitle": "Customize the self-hosted panel in this independent FeatherPanel fork.",
 			"refresh": "Refresh entitlement",
 			"load_failed": "Failed to load FeatherPanel Premium status",
 			"save_failed": "Failed to save Premium settings",
@@ -9755,6 +9756,10 @@
 			"your_team": "your team",
 			"status": {
 				"card_title": "Subscription status",
+				"local_card_title": "Local fork features",
+				"local_active": "Local customization is active",
+				"local_badge": "Own fork",
+				"local_desc": "Branding, AI appearance, and sidebar customization are available in this self-hosted fork without a Mythic subscription. Mythic Cloud benefits and priority support are not included.",
 				"active": "Premium is active",
 				"inactive": "Premium is not active",
 				"not_linked": "Link Mythic Cloud first so this panel can read your team's Premium entitlement.",
@@ -9767,6 +9772,7 @@
 			},
 			"customize": {
 				"card_title": "Premium customization",
+				"local_card_title": "Fork customization",
 				"description": "These settings apply across the panel for all users. Clearing a field restores the FeatherPanel default.",
 				"ai_name": "AI assistant name",
 				"ai_name_placeholder": "FeatherPanel AI",
