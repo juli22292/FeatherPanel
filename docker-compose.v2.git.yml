@@ -15,17 +15,7 @@ services:
     networks:
       - featherpanel_network
     healthcheck:
-      test:
-        [
-          "CMD",
-          "mariadb-admin",
-          "ping",
-          "-h",
-          "localhost",
-          "-u",
-          "root",
-          "-pfeatherpanel_root",
-        ]
+      test: ["CMD-SHELL", "mariadb-admin ping -h localhost -u root -p\"$$MARIADB_ROOT_PASSWORD\""]
       timeout: 20s
       retries: 10
 
@@ -34,6 +24,8 @@ services:
     container_name: featherpanel_redis
     restart: unless-stopped
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-featherpanel_redis}
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-featherpanel_redis}
     volumes:
       - redis_data:/data
     networks:
@@ -42,12 +34,13 @@ services:
       mysql:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep -q PONG"]
       timeout: 20s
       retries: 10
 
   backend:
     #image: ghcr.io/mythicalltd/featherpanel-backend:dev
+    image: featherpanel-backend:local
     build:
       context: ./backend
       dockerfile: Dockerfile
@@ -64,7 +57,7 @@ services:
       - REDIS_PASSWORD=${REDIS_PASSWORD:-featherpanel_redis}
       - TRUST_PROXY_HEADERS=true
       - PANEL_DOCKER_DEPLOYMENT=true
-      - FEATHERPANEL_VERSION_CHANNEL=development
+      - UPDATE_REPOSITORY=${UPDATE_REPOSITORY:-juli22292/FeatherPanel}
       - DOCKER_UPDATER_URL=http://host.docker.internal:9418/update
       - DOCKER_UPDATER_TOKEN=${DOCKER_UPDATER_TOKEN:-}
     extra_hosts:
@@ -93,6 +86,7 @@ services:
 
   frontendv2:
     #image: ghcr.io/mythicalltd/featherpanel-frontendv2:dev
+    image: featherpanel-frontendv2:local
     build:
       context: ./frontendv2
       dockerfile: Dockerfile
@@ -121,7 +115,7 @@ services:
       timeout: 20s
       retries: 10
     ports:
-      - "${FEATHERPANEL_PANEL_PORT:-4831}:80"
+      - "127.0.0.1:${FEATHERPANEL_PANEL_PORT:-4831}:80"
     networks:
       - featherpanel_network
 
@@ -158,6 +152,7 @@ services:
       - featherpanel_network
 
   async-runner:
+    image: featherpanel-async-runner:local
     build:
       context: ./runner
       dockerfile: Dockerfile

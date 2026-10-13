@@ -15,17 +15,7 @@ services:
     networks:
       - featherpanel_network
     healthcheck:
-      test:
-        [
-          "CMD",
-          "mariadb-admin",
-          "ping",
-          "-h",
-          "localhost",
-          "-u",
-          "root",
-          "-pfeatherpanel_root",
-        ]
+      test: ["CMD-SHELL", "mariadb-admin ping -h localhost -u root -p\"$$MARIADB_ROOT_PASSWORD\""]
       timeout: 20s
       retries: 10
 
@@ -34,6 +24,8 @@ services:
     container_name: featherpanel_redis
     restart: unless-stopped
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-featherpanel_redis}
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-featherpanel_redis}
     volumes:
       - redis_data:/data
     networks:
@@ -42,12 +34,12 @@ services:
       mysql:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "REDISCLI_AUTH=\"$$REDIS_PASSWORD\" redis-cli ping | grep -q PONG"]
       timeout: 20s
       retries: 10
 
   backend:
-    image: ghcr.io/mythicalltd/featherpanel-backend:dev
+    image: ghcr.io/juli22292/featherpanel-backend:dev
     container_name: featherpanel_backend
     restart: unless-stopped
     environment:
@@ -62,6 +54,7 @@ services:
       - TRUST_PROXY_HEADERS=true
       - PANEL_DOCKER_DEPLOYMENT=true
       - FEATHERPANEL_VERSION_CHANNEL=development
+      - UPDATE_REPOSITORY=${UPDATE_REPOSITORY:-juli22292/FeatherPanel}
       - DOCKER_UPDATER_URL=http://host.docker.internal:9418/update
       - DOCKER_UPDATER_TOKEN=${DOCKER_UPDATER_TOKEN:-}
     extra_hosts:
@@ -89,7 +82,7 @@ services:
       - featherpanel_network
 
   frontendv2:
-    image: ghcr.io/mythicalltd/featherpanel-frontendv2:dev
+    image: ghcr.io/juli22292/featherpanel-frontendv2:dev
     container_name: featherpanel_frontendv2
     restart: unless-stopped
     environment:
@@ -115,12 +108,12 @@ services:
       timeout: 20s
       retries: 10
     ports:
-      - "${FEATHERPANEL_PANEL_PORT:-4831}:80"
+      - "${FEATHERPANEL_BIND_ADDRESS:-127.0.0.1}:${FEATHERPANEL_PANEL_PORT:-4831}:80"
     networks:
       - featherpanel_network
 
   mcp:
-    image: ghcr.io/mythicalltd/featherpanel-mcp:dev
+    image: ghcr.io/juli22292/featherpanel-mcp:dev
     container_name: featherpanel_mcp
     restart: unless-stopped
     environment:
@@ -149,7 +142,7 @@ services:
       - featherpanel_network
 
   async-runner:
-    image: ghcr.io/mythicalltd/featherpanel-async-runner:dev
+    image: ghcr.io/juli22292/featherpanel-async-runner:dev
     container_name: featherpanel_async_runner
     restart: unless-stopped
     sysctls:
