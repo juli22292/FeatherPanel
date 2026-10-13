@@ -10,7 +10,7 @@ Die Datei `docker-compose.v2.git.yml` baut eigene lokale Images. `docker-compose
 
 ## Updates und Releases
 
-Die Adminanzeige prüft stabile GitHub-Releases von `juli22292/FeatherPanel`. Automatische Panel-Updates sind für diesen Fork deaktiviert. [Update-System](docs/updates.md) und [Releases](docs/releases.md) beschreiben den Ablauf. Der [Installer](install.sh) installiert die neueste veröffentlichte Version; er überschreibt keine bestehende Installation.
+Die Adminanzeige prüft stabile GitHub-Releases von `juli22292/FeatherPanel`. Ab Version 1.4.3 kann die Adminseite spätere Fork-Releases über einen separat eingerichteten Host-Updater installieren. Für den ersten Wechsel von 1.4.2 ist eine einmalige manuelle Aktualisierung nötig. [Update-System](docs/updates.md) und [Releases](docs/releases.md) beschreiben den Ablauf. Der [Installer](install.sh) installiert die neueste veröffentlichte Version; er überschreibt keine bestehende Installation.
 
 Seit Version 1.4.2 sind die im Quellcode enthaltenen lokalen Anpassungen für Branding, KI-Anzeige und Seitenleiste im Fork verfügbar. Das ist kein Mythic-Premium-Abonnement und beinhaltet keine Cloud-Vorteile oder bevorzugten Support.
 

@@ -100,12 +100,13 @@ export function useAdminDashboard() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    const fetchDashboard = useCallback(async () => {
+    const fetchDashboard = useCallback(async (forceRefresh = false) => {
         setLoading(true);
         setError(null);
         try {
             const response = await axios.get('/api/admin/dashboard', {
                 withCredentials: true,
+                params: forceRefresh ? { refresh: '1' } : undefined,
             });
             if (response.data.success) {
                 setData(response.data.data);
@@ -120,8 +121,8 @@ export function useAdminDashboard() {
     }, [t]);
 
     useEffect(() => {
-        fetchDashboard();
+        void fetchDashboard();
     }, [fetchDashboard]);
 
-    return { data, loading, error, refresh: fetchDashboard };
+    return { data, loading, error, refresh: () => fetchDashboard(true) };
 }

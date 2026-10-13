@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.4.3 STABLE (juli22292 fork)
+
+### Added
+
+- A host-side updater for this fork can install later stable GitHub releases through the panel after one-time setup, preserving the existing Compose project and its persistent data.
+- The admin update check can refresh the GitHub release result after one minute.
+
+### Fixed
+
+- File upload progress now shows the uploaded filename instead of the literal `{FILE}` placeholder.
+
 ## v1.4.2 STABLE (juli22292 fork)
 
 ### Added
