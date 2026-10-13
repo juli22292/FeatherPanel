@@ -4288,6 +4288,14 @@ class SettingsController
     ),]
     public function triggerDockerUpdate(Request $request): Response
     {
+        if (trim((string) getenv('UPDATE_REPOSITORY')) !== '') {
+            return ApiResponse::error(
+                'Automatic updates are disabled for custom GitHub releases. Review the release notes and update manually.',
+                'CUSTOM_RELEASE_MANUAL_UPDATE_REQUIRED',
+                400,
+            );
+        }
+
         if (!$this->isDockerDeployment()) {
             return ApiResponse::error(
                 'Docker updates are available only for Docker deployments.',

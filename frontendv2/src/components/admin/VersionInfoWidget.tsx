@@ -65,6 +65,8 @@ interface VersionDetails {
 
 interface VersionInfoWidgetProps {
     version?: {
+        source?: 'github';
+        check_error?: string;
         current: VersionDetails | null;
         latest: VersionDetails | null;
         update_available: boolean;
@@ -119,6 +121,7 @@ export function VersionInfoWidget({ version, loading }: VersionInfoWidgetProps) 
     }, [version?.last_checked]);
 
     const isLatest = !version?.update_available;
+    const isGitHubReleaseSource = version?.source === 'github';
     const settingsVersion = (settings?.app_version || '').replace(/^v/i, '').trim();
     const current = version?.current
         ? version.current
@@ -138,7 +141,7 @@ export function VersionInfoWidget({ version, loading }: VersionInfoWidgetProps) 
     const hasLatestKnown = Boolean((latest?.version || '').trim());
     // Dev / custom / unlisted builds often report "no update" from the catalog but can still docker pull newer images.
     const canOfferManualDockerPull =
-        hasLatestKnown && (isCurrentVersionUnknown || isDevelopmentChannel || isUnlistedOnUpdateServer);
+        !isGitHubReleaseSource && hasLatestKnown && (isCurrentVersionUnknown || isDevelopmentChannel || isUnlistedOnUpdateServer);
     const showUpdateSection = !isLatest || canOfferManualDockerPull;
     const useManualPullMessaging = isLatest && canOfferManualDockerPull;
 
@@ -284,10 +287,16 @@ export function VersionInfoWidget({ version, loading }: VersionInfoWidgetProps) 
                             {loading ? t('common.loading') : t('admin.system_health.status.unavailable')}
                         </p>
                     ) : !showUpdateSection ? (
-                        <div className='flex items-center justify-between gap-3 rounded-lg bg-emerald-500/5 p-3 text-emerald-700 dark:text-emerald-400'>
+                        <div className={`flex items-center justify-between gap-3 rounded-lg p-3 ${isGitHubReleaseSource && !latest ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400' : 'bg-emerald-500/5 text-emerald-700 dark:text-emerald-400'}`}>
                             <div className='flex items-center gap-3'>
-                                <CheckCircle2 className='h-5 w-5' />
-                                <p className='text-sm font-bold'>{t('admin.version.up_to_date')}</p>
+                                {!isGitHubReleaseSource || latest ? <CheckCircle2 className='h-5 w-5' /> : <AlertTriangle className='h-5 w-5' />}
+                                <p className='text-sm font-bold'>
+                                    {isGitHubReleaseSource && !latest
+                                        ? version?.check_error
+                                            ? t('admin.system_health.status.unavailable')
+                                            : t('admin.version.no_releases_yet')
+                                        : t('admin.version.up_to_date')}
+                                </p>
                             </div>
                             <Button variant='ghost' size='sm' asChild>
                                 <Link href='/admin/updates'>{t('common.view')}</Link>
@@ -314,17 +323,19 @@ export function VersionInfoWidget({ version, loading }: VersionInfoWidgetProps) 
                                     <Link href='/admin/updates'>{t('admin_updates.title')}</Link>
                                 </Button>
                             </div>
-                            <Button
-                                variant='warning'
-                                className='w-full'
-                                onClick={() => setShowUpdateModal(true)}
-                                disabled={isUpdatingDocker || updateInProgress}
-                                loading={isUpdatingDocker}
-                            >
-                                {isUpdatingDocker
-                                    ? t('admin.settings.docker_update.updating')
-                                    : t('admin.version.update_now')}
-                            </Button>
+                            {!isGitHubReleaseSource ? (
+                                <Button
+                                    variant='warning'
+                                    className='w-full'
+                                    onClick={() => setShowUpdateModal(true)}
+                                    disabled={isUpdatingDocker || updateInProgress}
+                                    loading={isUpdatingDocker}
+                                >
+                                    {isUpdatingDocker
+                                        ? t('admin.settings.docker_update.updating')
+                                        : t('admin.version.update_now')}
+                                </Button>
+                            ) : null}
                         </div>
                     )}
 

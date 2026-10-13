@@ -28,6 +28,7 @@ use App\Chat\Database;
 use App\Chat\TimedTask;
 use App\Chat\VmInstance;
 use App\Helpers\ApiResponse;
+use App\Services\Updates\GitHubReleaseChecker;
 use OpenApi\Attributes as OA;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -349,7 +350,8 @@ class DashboardController
             $upstream = APP_UPSTREAM;
 
             // Get version information with caching (15 minutes)
-            $versionCacheKey = "dashboard_version_info_v2_{$upstream}";
+            $updateRepository = trim((string) getenv('UPDATE_REPOSITORY'));
+            $versionCacheKey = 'dashboard_version_info_v3_' . sha1($upstream . ':' . $updateRepository);
             $versionInfo = Cache::get($versionCacheKey);
 
             if ($versionInfo === null) {
@@ -502,6 +504,11 @@ class DashboardController
         string $upstream,
         string $currentVersion,
     ): array {
+        $updateRepository = trim((string) getenv('UPDATE_REPOSITORY'));
+        if ($updateRepository !== '') {
+            return (new GitHubReleaseChecker())->check($updateRepository, $currentVersion);
+        }
+
         $logger = App::getInstance(true)->getLogger();
 
         $versionInfo = [

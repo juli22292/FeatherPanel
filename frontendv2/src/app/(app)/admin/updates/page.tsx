@@ -519,13 +519,17 @@ export default function AdminUpdatesPage() {
             <PageCard
                 title={t('admin_updates.panel.title')}
                 description={
-                    panelVersion?.update_available
+                    panelVersion?.source === 'github' && !panelVersion?.latest
+                        ? panelVersion?.check_error
+                            ? t('admin.system_health.status.unavailable')
+                            : t('admin.version.no_releases_yet')
+                        : panelVersion?.update_available
                         ? t('admin_updates.panel.update_available')
                         : t('admin_updates.panel.up_to_date')
                 }
                 icon={ArrowUpCircle}
                 action={
-                    panelVersion?.update_available ? (
+                    panelVersion?.update_available && panelVersion?.source !== 'github' ? (
                         <Button size='sm' onClick={() => void handleUpdatePanel()} disabled={isUpdatingPanel}>
                             {isUpdatingPanel ? (
                                 <Loader2 className='mr-2 h-4 w-4 animate-spin' />
@@ -556,7 +560,8 @@ export default function AdminUpdatesPage() {
                                     panelVersion?.update_available && 'text-amber-600 dark:text-amber-400',
                                 )}
                             >
-                                {panelVersion?.latest?.version || panelVersion?.current?.version || '-'}
+                                {panelVersion?.latest?.version ||
+                                    (panelVersion?.source === 'github' ? '-' : panelVersion?.current?.version || '-')}
                             </p>
                             {panelVersion?.latest?.release_name ? (
                                 <p className='text-muted-foreground mt-0.5 text-xs'>
@@ -586,7 +591,7 @@ export default function AdminUpdatesPage() {
                                 </p>
                             ) : null}
                         </div>
-                        {!panelVersion?.update_available ? (
+                        {!panelVersion?.update_available && (panelVersion?.source !== 'github' || panelVersion?.latest) ? (
                             <div className='text-muted-foreground ml-auto flex items-center gap-2 text-sm'>
                                 <CheckCircle2 className='h-4 w-4 text-emerald-500' />
                                 {t('admin_updates.panel.running_latest')}

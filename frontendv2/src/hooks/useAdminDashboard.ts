@@ -40,6 +40,8 @@ interface AdminDashboardData {
         summary: string | null;
     };
     version: {
+        source?: 'github';
+        check_error?: string;
         current: {
             version: string;
             type: string;

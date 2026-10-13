@@ -10,6 +10,7 @@ devlogs.log
 mysql/
 # Root docs folder only (not frontendv2/docs or similar)
 /docs/
+!/docs/
 nginx.conf
 backend/public/addons/*
 backend/public/components/*
@@ -38,6 +39,8 @@ backend/tests/*
 !backend/tests/Backup/*.php
 !backend/tests/Telemetry/
 !backend/tests/Telemetry/SentryTelemetryTest.php
+!backend/tests/Updates/
+!backend/tests/Updates/*.php
 runner/async-runner.out
 todokutzu.md
 TODO.txt
