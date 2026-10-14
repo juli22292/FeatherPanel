@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.4.3.1 STABLE (juli22292 fork)
+
+### Added
+
+- GitHub release checks, the host updater, installer, and release workflow accept four-part versions such as `v1.4.3.1` so later updates can be started from the panel.
+
 ## v1.4.3 STABLE (juli22292 fork)
 
 ### Added

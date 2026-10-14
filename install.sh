@@ -27,7 +27,7 @@ if ! release_json="$(curl -fsSL -H 'Accept: application/vnd.github+json' \
 fi
 tag="$(printf '%s\n' "$release_json" \
     | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
-if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
     printf 'No stable versioned release is available in %s yet.\n' "$repository" >&2
     exit 1
 fi

@@ -62,7 +62,7 @@ final class GitHubReleaseChecker
         if ($latest !== null) {
             $latestVersion = self::stableVersion($latest);
             $result['latest'] = $this->versionDetails($latestVersion, $latest, $projectUrl);
-            $result['update_available'] = (bool) preg_match('/^\d+\.\d+\.\d+$/D', $installed)
+            $result['update_available'] = (bool) preg_match('/^\d+\.\d+\.\d+(?:\.\d+)?$/D', $installed)
                 && version_compare($installed, $latestVersion, '<');
         }
 
@@ -94,7 +94,7 @@ final class GitHubReleaseChecker
         }
         $tag = (string) ($release['tag_name'] ?? '');
 
-        return preg_match('/^v?(\d+\.\d+\.\d+)$/iD', $tag, $matches) ? $matches[1] : null;
+        return preg_match('/^v?(\d+\.\d+\.\d+(?:\.\d+)?)$/iD', $tag, $matches) ? $matches[1] : null;
     }
 
     private function fetchReleases(string $repository): ?array

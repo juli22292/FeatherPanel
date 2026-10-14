@@ -33,6 +33,17 @@ final class GitHubReleaseCheckerTest extends TestCase
         self::assertSame('v1.4.10', GitHubReleaseChecker::latestStableRelease($releases)['tag_name']);
     }
 
+    public function testFourthComponentIsAStableUpdate(): void
+    {
+        $releases = [
+            ['tag_name' => 'v1.4.3', 'draft' => false, 'prerelease' => false],
+            ['tag_name' => 'v1.4.3.1', 'draft' => false, 'prerelease' => false],
+            ['tag_name' => 'v1.4.3.2', 'draft' => false, 'prerelease' => false],
+        ];
+
+        self::assertSame('v1.4.3.2', GitHubReleaseChecker::latestStableRelease($releases)['tag_name']);
+    }
+
     public function testReturnsNoReleaseWhenOnlyPrereleasesExist(): void
     {
         self::assertNull(GitHubReleaseChecker::latestStableRelease([

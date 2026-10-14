@@ -42,9 +42,17 @@ class ForkUpdaterTests(unittest.TestCase):
             {"tag_name": "v1.4.4", "prerelease": True},
             {"tag_name": "v1.4.2"},
             {"tag_name": "v1.4.3.1"},
+            {"tag_name": "v1.4.3.2", "prerelease": True},
         ]
         with patch.object(updater.urllib.request, "urlopen", return_value=io.BytesIO(json.dumps(releases).encode())):
-            self.assertEqual(self.instance.latest_release(), "v1.4.3")
+            self.assertEqual(self.instance.latest_release(), "v1.4.3.1")
+
+    def test_three_and_four_part_versions_sort_numerically(self):
+        self.assertLess(updater.version_parts("v1.4.3"), updater.version_parts("v1.4.3.1"))
+        self.assertLess(updater.version_parts("v1.4.3.9"), updater.version_parts("v1.4.3.10"))
+        self.assertEqual(updater.version_parts("v1.4.3"), updater.version_parts("v1.4.3.0"))
+        with self.assertRaises(ValueError):
+            updater.version_parts("v1.4.3.1.1")
 
     def test_compose_must_use_all_four_fork_images(self):
         expected = "\n".join(
@@ -62,12 +70,12 @@ class ForkUpdaterTests(unittest.TestCase):
         def record_run(command, **_kwargs):
             events.append(command)
             if command[:2] == ["docker", "inspect"]:
-                return "ghcr.io/juli22292/featherpanel-backend:v1.4.2"
+                return "ghcr.io/juli22292/featherpanel-backend:v1.4.3"
             return ""
 
         with patch.object(updater, "run", side_effect=record_run):
-            with patch.object(self.instance, "installed_version", return_value="v1.4.2"):
-                with patch.object(self.instance, "latest_release", return_value="v1.4.3"):
+            with patch.object(self.instance, "installed_version", return_value="v1.4.3"):
+                with patch.object(self.instance, "latest_release", return_value="v1.4.3.1"):
                     with patch.object(self.instance, "check_compose_images"):
                         with patch.object(self.instance, "backup", side_effect=lambda _current: events.append("backup") or Path("/backup")):
                             with patch.object(self.instance, "set_image_tag", side_effect=lambda _tag: events.append("tag")):
