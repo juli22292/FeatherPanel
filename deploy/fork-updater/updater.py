@@ -28,8 +28,8 @@ from pathlib import Path
 
 REPOSITORY = "juli22292/FeatherPanel"
 SERVICES = ("backend", "frontendv2", "mcp", "async-runner")
-VERSION_PATTERN = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
-INSTALLED_VERSION_PATTERN = re.compile(r"define\('APP_VERSION',\s*'(v\d+\.\d+\.\d+)'\)")
+VERSION_PATTERN = re.compile(r"^v(\d+)\.(\d+)\.(\d+)(?:\.(\d+))?$")
+INSTALLED_VERSION_PATTERN = re.compile(r"define\('APP_VERSION',\s*'(v\d+\.\d+\.\d+(?:\.\d+)?)'\)")
 
 
 def run(command: list[str], *, env: dict[str, str] | None = None, output=None) -> str:
@@ -41,11 +41,11 @@ def run(command: list[str], *, env: dict[str, str] | None = None, output=None) -
     return result.stdout.strip() if output is None else ""
 
 
-def version_parts(value: str) -> tuple[int, int, int]:
+def version_parts(value: str) -> tuple[int, int, int, int]:
     match = VERSION_PATTERN.fullmatch(value)
     if not match:
         raise ValueError(f"Invalid release version: {value}")
-    return tuple(map(int, match.groups()))
+    return tuple(int(part or 0) for part in match.groups())
 
 
 class Updater:
