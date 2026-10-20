@@ -42,7 +42,7 @@ jobs:
             package_version="${BASH_REMATCH[1]}-${BASH_REMATCH[2]}"
           fi
           test "$(node -p "require('./frontendv2/package.json').version")" = "$package_version"
-          for path in backend/public/index.php backend/cli backend/storage/cron/runner.php backend/scripts/export-openapi.php; do
+          for path in backend/boot/constants.php backend/cli backend/storage/cron/runner.php backend/scripts/export-openapi.php app; do
             grep -Fq "define('APP_VERSION', '$tag');" "$path"
           done
       - id: owner
