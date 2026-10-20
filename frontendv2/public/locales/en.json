@@ -1544,7 +1544,9 @@
             "FEATHEROS_NOTE_DELETE_FAILED": "Failed to delete the note",
             "FEATHEROS_STATE_RESET_FAILED": "Failed to reset the desktop state",
             "FEATHEROS_WALLPAPER_SAVE_FAILED": "Failed to save wallpaper",
-            "FEATHEROS_TRASH_UNAVAILABLE": "Trash is unavailable. Run database migrations, then try again."
+            "FEATHEROS_TRASH_UNAVAILABLE": "Trash is unavailable. Run database migrations, then try again.",
+            "FORK_UPDATER_UNAVAILABLE": "The local updater for this FeatherPanel fork is unavailable or not configured.",
+            "UNSUPPORTED_UPDATE_REPOSITORY": "This GitHub update source is not supported."
         },
         "global": {}
     },
