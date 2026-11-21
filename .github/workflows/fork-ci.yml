@@ -2,8 +2,9 @@ name: Fork CI
 
 on:
   pull_request:
+  workflow_dispatch:
   push:
-    branches: [main, develop]
+    branches: [main, develop, 'codex/**']
   workflow_call:
 
 permissions:
