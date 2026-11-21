@@ -31,14 +31,19 @@ use App\Services\Wings\Wings;
 use OpenApi\Attributes as OA;
 use App\Helpers\WingsUrlHelper;
 use App\Helpers\BackupIgnoreHelper;
+use App\Chat\UserStorageDestination;
+use App\Services\Backup\BackupQuota;
 use App\Plugins\Events\Events\ServerEvent;
+use App\Services\Storage\StorageException;
 use App\Services\Backup\BackupFifoEviction;
 use Symfony\Component\HttpFoundation\Request;
 use App\Services\Backup\BackupAdapterResolver;
 use App\Services\Backup\StalledBackupRecovery;
+use App\Services\Storage\BackupStorageService;
 use Symfony\Component\HttpFoundation\Response;
 use App\Plugins\Events\Events\ServerBackupEvent;
 use App\Services\Backup\ServerFullBackupService;
+use App\Services\Storage\StorageDestinationService;
 use App\Services\Database\ServerDatabaseDumpService;
 
 #[OA\Schema(
@@ -240,8 +245,21 @@ class ServerBackupController
         $total = count($backups);
         $offset = ($page - 1) * $perPage;
         $paginatedBackups = array_slice($backups, $offset, $perPage);
+        $destinations = [];
         foreach ($paginatedBackups as &$backup) {
             $backup['is_stale'] = StalledBackupRecovery::isStale($backup);
+            $backup['destination'] = null;
+            if (!empty($backup['destination_id'])) {
+                $destId = (int) $backup['destination_id'];
+                $destinations[$destId] ??= UserStorageDestination::getById($destId, true);
+                $dest = $destinations[$destId];
+                $backup['destination'] = [
+                    'id' => $destId,
+                    'name' => $dest['name'] ?? null,
+                    'provider' => $dest['provider'] ?? null,
+                    'state' => BackupStorageService::destinationState($backup),
+                ];
+            }
         }
         unset($backup);
         $paginatedBackups = TimeHelper::normaliseRows($paginatedBackups, ['completed_at', 'deleted_at']);
@@ -262,6 +280,8 @@ class ServerBackupController
             'backup_retention_mode_override' => $retention['backup_retention_mode_override'],
             'effective_backup_retention_mode' => $retention['effective_backup_retention_mode'],
             'fifo_rolling_enabled' => $retention['fifo_rolling_enabled'],
+            // Backups that use the server's backup_limit; BYO storage is excluded unless the admin counts it.
+            'limit_usage' => BackupQuota::usage($server),
         ]);
     }
 
@@ -396,19 +416,29 @@ class ServerBackupController
         }
 
         $backupType = strtolower(trim((string) ($body['type'] ?? 'files')));
+
+        // Bring-your-own storage: only destinations owned by the requesting user.
+        $requestUser = $request->attributes->get('user');
+        try {
+            $destination = StorageDestinationService::resolveForBackup($body['destination_id'] ?? null, (int) ($requestUser['id'] ?? 0));
+        } catch (StorageException $e) {
+            return ApiResponse::error($e->getMessage(), $e->errorCode(), $e->status());
+        }
+        $body['destination_id'] = $destination !== null ? (int) $destination['id'] : null;
+
         if ($backupType === 'full') {
             return $this->createFullBackup($request, $server, $body);
         }
 
-        // Check backup limit (0 = disabled; optional FIFO rotation per panel setting)
-        $currentBackups = count(Backup::getBackupsByServerId((int) $server['id']));
+        // Check backup limit (0 = disabled; optional FIFO rotation per panel setting).
+        // Backups on the user's own storage do not use the host quota (BackupQuota).
         $backupLimit = (int) ($server['backup_limit'] ?? 0);
 
         if ($backupLimit === 0) {
             return ApiResponse::error('Backups are disabled for this server', 'BACKUPS_DISABLED', 403);
         }
 
-        if ($currentBackups >= $backupLimit) {
+        if (BackupQuota::atLimit($server, $body['destination_id'])) {
             if (!BackupFifoEviction::isFifoRollingForServer($server)) {
                 return ApiResponse::error('Backup limit reached', 'BACKUP_LIMIT_REACHED', 400);
             }
@@ -430,7 +460,7 @@ class ServerBackupController
 
                 return ApiResponse::error('Failed to connect to node for backup rotation', 'FIFO_EVICTION_FAILED', 500);
             }
-            $evictErr = BackupFifoEviction::evictOldestWingsBackup((int) $server['id'], $serverUuid, $wingsEvict);
+            $evictErr = BackupFifoEviction::evictOldestWingsBackup((int) $server['id'], $serverUuid, $wingsEvict, $body['destination_id']);
             if ($evictErr !== null) {
                 return ApiResponse::error($evictErr['message'], $evictErr['code'], $evictErr['status']);
             }
@@ -473,8 +503,9 @@ class ServerBackupController
                 (string) ($node['daemon_type'] ?? 'featherwings')
             );
 
-            // Adapter is node-admin configured; users cannot choose destination.
-            $adapter = BackupAdapterResolver::resolveDefault($wings);
+            // Panel-managed S3 (presigned uploads) wins when the admin enabled it as default;
+            // otherwise the node-admin configured adapter is used.
+            $adapter = BackupStorageService::chooseAdapter($wings, $body['destination_id']);
 
             // Create backup record in database
             $backupData = [
@@ -483,6 +514,7 @@ class ServerBackupController
                 'name' => $backupName,
                 'ignored_files' => $ignoredFiles,
                 'disk' => $adapter,
+                'destination_id' => $body['destination_id'],
                 'is_successful' => 0,
                 'is_locked' => 1, // Lock while backup is in progress
             ];
@@ -513,6 +545,12 @@ class ServerBackupController
 
                 return ApiResponse::error('Failed to initiate backup on Wings: ' . $error, 'WINGS_ERROR', $response->getStatusCode());
             }
+        } catch (StorageException $e) {
+            if ($backupId) {
+                Backup::deleteBackup($backupId);
+            }
+
+            return ApiResponse::error($e->getMessage(), $e->errorCode(), $e->status());
         } catch (\Exception $e) {
             // Rollback database record
             if ($backupId) {
@@ -527,6 +565,7 @@ class ServerBackupController
         $this->logActivity($server, $node, 'backup_created', [
             'backup_uuid' => $backupUuid,
             'adapter' => $adapter,
+            'destination_id' => $body['destination_id'],
             'backup_name' => $backupName,
         ], $user);
 
@@ -548,6 +587,7 @@ class ServerBackupController
             'uuid' => $backupUuid,
             'name' => $backupName,
             'adapter' => $adapter,
+            'destination_id' => $body['destination_id'],
         ], 'Backup initiated successfully', 202);
     }
 
@@ -755,8 +795,22 @@ class ServerBackupController
         // Use the adapter stored on the backup (wings local archive or PBS)
         $adapter = BackupAdapterResolver::normalizeStored($backup['disk'] ?? null);
 
-        $truncateDirectory = $body['truncate_directory'] ?? false;
-        $downloadUrl = $body['download_url'] ?? null;
+        $truncateDirectory = (bool) ($body['truncate_directory'] ?? false);
+        // Never trust a client-supplied download URL (SSRF from the node). Remote backups get
+        // a short-lived presigned URL generated by the panel.
+        $downloadUrl = null;
+        $downloadHeaders = [];
+        if (BackupStorageService::isRemote($backup)) {
+            try {
+                $source = BackupStorageService::restoreSource($backup, $server);
+                $downloadUrl = $source['download_url'];
+                $downloadHeaders = $source['headers'];
+            } catch (StorageException $e) {
+                return ApiResponse::error($e->getMessage(), $e->errorCode(), $e->status());
+            } catch (\Throwable $e) {
+                return ApiResponse::error('Failed to prepare backup download: ' . $e->getMessage(), 'BACKUP_PRESIGN_FAILED', 502);
+            }
+        }
 
         // Get node information
         $node = Node::getNodeById($server['node_id']);
@@ -784,7 +838,7 @@ class ServerBackupController
             $daemonAdapter = BackupAdapterResolver::toDaemonAdapter($adapter, $wings);
 
             // Initiate restore on Wings
-            $response = $wings->getServer()->restoreBackup($serverUuid, $backupUuid, $daemonAdapter, $truncateDirectory, $downloadUrl);
+            $response = $wings->getServer()->restoreBackup($serverUuid, $backupUuid, $daemonAdapter, $truncateDirectory, $downloadUrl, $downloadHeaders);
 
             if (!$response->isSuccessful()) {
                 $error = $response->getError();
@@ -1145,6 +1199,14 @@ class ServerBackupController
                 WingsUrlHelper::isBehindProxy($node)
             );
 
+            if (BackupStorageService::isRemote($backup)) {
+                try {
+                    BackupStorageService::deleteObject($backup, $server);
+                } catch (\Throwable $e) {
+                    return ApiResponse::error('Failed to delete backup from remote storage: ' . $e->getMessage(), 'REMOTE_DELETE_FAILED', 502);
+                }
+            }
+
             // Delete backup on Wings
             $response = $wings->getServer()->deleteBackup($serverUuid, $backupUuid, $this->pbsSnapshotForBackup($backup));
 
@@ -1350,6 +1412,9 @@ class ServerBackupController
         foreach ($backupsToDelete as $backup) {
             $backupUuid = $backup['uuid'];
             try {
+                if (BackupStorageService::isRemote($backup)) {
+                    BackupStorageService::deleteObject($backup, $server);
+                }
                 $response = $wings->getServer()->deleteBackup($serverUuid, $backupUuid, $this->pbsSnapshotForBackup($backup));
                 if (!$response->isSuccessful() && $response->getStatusCode() !== 404) {
                     $failed[] = [
@@ -1505,6 +1570,23 @@ class ServerBackupController
         $user = $request->attributes->get('user');
         if (!$user) {
             return ApiResponse::error('User not authenticated', 'UNAUTHORIZED', 401);
+        }
+
+        if (BackupStorageService::isRemote($backup)) {
+            try {
+                $downloadUrl = BackupStorageService::downloadUrl($backup, $server);
+            } catch (StorageException $e) {
+                return ApiResponse::error($e->getMessage(), $e->errorCode(), $e->status());
+            } catch (\Throwable $e) {
+                return ApiResponse::error('Failed to generate download URL: ' . $e->getMessage(), 'DOWNLOAD_URL_GENERATION_FAILED', 502);
+            }
+            $this->logActivity($server, $node, 'backup_download_url_generated', [
+                'backup_uuid' => $backupUuid,
+                'backup_name' => $backup['name'],
+                'adapter' => BackupAdapterResolver::normalizeStored($backup['disk'] ?? null),
+            ], $user);
+
+            return ApiResponse::success(['download_url' => $downloadUrl], 'Download URL generated successfully', 200);
         }
 
         try {
@@ -1690,12 +1772,19 @@ class ServerBackupController
             );
         }
 
-        $currentBackups = count(Backup::getBackupsByServerId((int) $server['id']));
         $backupLimit = (int) ($server['backup_limit'] ?? 0);
 
         if ($backupLimit === 0) {
             return ApiResponse::error('Backups are disabled for this server', 'BACKUPS_DISABLED', 403);
         }
+        // Bring-your-own storage: only destinations owned by the requesting user (same rule as plain backups).
+        try {
+            $fullDestination = StorageDestinationService::resolveForBackup($body['destination_id'] ?? null, (int) ($user['id'] ?? 0));
+        } catch (StorageException $e) {
+            return ApiResponse::error($e->getMessage(), $e->errorCode(), $e->status());
+        }
+        $fullDestinationId = $fullDestination !== null ? (int) $fullDestination['id'] : null;
+        $body['destination_id'] = $fullDestinationId;
 
         $node = Node::getNodeById($server['node_id']);
         if (!$node) {
@@ -1708,11 +1797,20 @@ class ServerBackupController
             return ApiResponse::error('Failed to connect to node: ' . $e->getMessage(), 'WINGS_CONNECTION_FAILED', 500);
         }
 
-        if ($currentBackups >= $backupLimit) {
+        if ($fullDestinationId !== null) {
+            // Fail before dumping databases when the node cannot reach this kind of storage.
+            try {
+                BackupStorageService::chooseAdapter($wings, $fullDestinationId);
+            } catch (StorageException $e) {
+                return ApiResponse::error($e->getMessage(), $e->errorCode(), $e->status());
+            }
+        }
+
+        if (BackupQuota::atLimit($server, $fullDestinationId)) {
             if (!BackupFifoEviction::isFifoRollingForServer($server)) {
                 return ApiResponse::error('Backup limit reached', 'BACKUP_LIMIT_REACHED', 400);
             }
-            $evictErr = BackupFifoEviction::evictOldestWingsBackup((int) $server['id'], (string) $server['uuid'], $wings);
+            $evictErr = BackupFifoEviction::evictOldestWingsBackup((int) $server['id'], (string) $server['uuid'], $wings, $fullDestinationId);
             if ($evictErr !== null) {
                 return ApiResponse::error($evictErr['message'], $evictErr['code'], $evictErr['status']);
             }
@@ -1742,6 +1840,7 @@ class ServerBackupController
             $result = ServerFullBackupService::run($wings, $server, $parsed, [
                 'name' => $backupName,
                 'uuid' => $body['uuid'] ?? null,
+                'destination_id' => $body['destination_id'] ?? null,
             ]);
 
             $this->logActivity($server, $node, 'full_backup_created', [

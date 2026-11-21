@@ -131,6 +131,7 @@ function RowContextMenu({
     onClose: () => void;
 }) {
     const menuRef = useRef<HTMLDivElement>(null);
+    const { t } = useTranslation();
 
     useEffect(() => {
         const handleOutside = (e: MouseEvent) => {
@@ -197,14 +198,41 @@ function RowContextMenu({
                             a.danger && 'text-red-500 hover:bg-red-500/10 hover:text-red-500 focus:bg-red-500/10',
                         )}
                     >
-                        <a.Icon className='mr-2 h-4 w-4' />
-                        {a.label}
+                        <a.Icon className='mr-2 h-4 w-4 opacity-80 group-hover:opacity-100' />
+                        <span className='flex-1 text-left'>{a.label}</span>
+                        {MENU_KBD[a.key] && (
+                            <kbd className='text-muted-foreground border-border/70 bg-muted/40 ml-4 rounded border px-1.5 py-px font-mono text-[10px] font-medium'>
+                                {t(MENU_KBD[a.key])}
+                            </kbd>
+                        )}
                     </button>
                 </React.Fragment>
             ))}
         </div>,
         document.body,
     );
+}
+
+/** Keyboard hints shown next to context menu entries that have a list shortcut. */
+const MENU_KBD: Record<string, string> = {
+    edit: 'files.row.kbd.enter',
+    rename: 'files.row.kbd.f2',
+    delete: 'files.row.kbd.delete',
+};
+
+/** Colour tile per file type so the list scans faster. Purely visual. */
+const FILE_TONES: [RegExp, string][] = [
+    [/\.(jar|war)$/i, 'bg-rose-500/10 text-rose-600 dark:text-rose-400'],
+    [/\.(zip|tar|gz|tgz|rar|7z|xz|bz2)$/i, 'bg-orange-500/10 text-orange-600 dark:text-orange-400'],
+    [/\.(png|jpe?g|gif|webp|svg|ico|bmp)$/i, 'bg-pink-500/10 text-pink-600 dark:text-pink-400'],
+    [/\.(ya?ml|json|toml|ini|cfg|conf|properties|env|xml)$/i, 'bg-violet-500/10 text-violet-600 dark:text-violet-400'],
+    [/\.(js|mjs|ts|tsx|jsx|py|java|kt|lua|php|go|rs|cs|cpp|c|h|rb)$/i, 'bg-sky-500/10 text-sky-600 dark:text-sky-400'],
+    [/\.(sh|bash|bat|cmd|ps1)$/i, 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'],
+    [/\.(log|txt|md)$/i, 'bg-slate-500/10 text-slate-600 dark:text-slate-300'],
+];
+function fileTypeTone(name: string): string {
+    for (const [re, tone] of FILE_TONES) if (re.test(name)) return tone;
+    return 'bg-muted text-muted-foreground';
 }
 
 export function FileRow({
@@ -441,6 +469,8 @@ export function FileRow({
                     ? 'group fp-surface hover:border-primary/40 relative flex cursor-pointer flex-col items-center gap-2 rounded-xl border px-3 pt-8 pb-3 text-center transition-all select-none'
                     : 'group hover:bg-primary/5 flex min-h-14 cursor-pointer items-center gap-3 bg-transparent px-4 py-2.5 transition-colors select-none',
                 selected && 'bg-primary/5 dark:bg-primary/10',
+                selected && !grid && 'shadow-[inset_3px_0_0_hsl(var(--primary))]',
+                selected && grid && 'border-primary/50 ring-primary/30 ring-1',
                 isAnchor && 'ring-primary/40 ring-1 ring-inset',
                 isDragging && 'opacity-40',
                 isDropTarget && !isDragging && 'bg-primary/15 dark:bg-primary/20 ring-primary/60 ring-2 ring-inset',
@@ -476,8 +506,8 @@ export function FileRow({
                                 virtualTrash
                                     ? 'border-primary/20 bg-primary/10 text-primary'
                                     : file.isFile
-                                      ? 'bg-muted text-muted-foreground'
-                                      : 'bg-amber-500/10 text-amber-500',
+                                      ? fileTypeTone(file.name)
+                                      : 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
                             )}
                         >
                             {virtualTrash ? (
@@ -504,8 +534,8 @@ export function FileRow({
                         virtualTrash
                             ? 'border-primary/20 bg-primary/10 text-primary'
                             : file.isFile
-                              ? 'bg-muted text-muted-foreground'
-                              : 'bg-amber-500/10 text-amber-500',
+                              ? fileTypeTone(file.name)
+                              : 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
                     )}
                 >
                     {virtualTrash ? (

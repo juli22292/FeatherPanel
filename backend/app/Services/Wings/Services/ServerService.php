@@ -165,7 +165,8 @@ class ServerService
     public function getServerLogs(string $serverUuid, int $lines = 100): WingsResponse
     {
         try {
-            $response = $this->connection->get("/api/servers/{$serverUuid}/logs?lines={$lines}");
+            // Wings reads the line count from "size" (capped at 100).
+            $response = $this->connection->get("/api/servers/{$serverUuid}/logs?size={$lines}");
 
             return new WingsResponse($response, 200);
         } catch (\Exception $e) {
@@ -198,7 +199,7 @@ class ServerService
     /**
      * Execute a shell command inside the server Docker container via docker exec.
      *
-     * @param int $timeoutSeconds Optional timeout (1–120); Wings defaults to 30 when omitted/0
+     * @param int $timeoutSeconds Optional timeout (1-120); Wings defaults to 30 when omitted/0
      */
     public function execInContainer(string $serverUuid, string $command, int $timeoutSeconds = 30): WingsResponse
     {
@@ -1058,8 +1059,11 @@ class ServerService
 
     /**
      * Restore backup.
+     *
+     * @param array<string, string> $headers extra request headers Wings sends when fetching download_url
+     *                                       (s3 and resumable adapters), e.g. a provider bearer token
      */
-    public function restoreBackup(string $serverUuid, string $backupId, string $adapter, bool $truncateDirectory, ?string $downloadUrl = null): WingsResponse
+    public function restoreBackup(string $serverUuid, string $backupId, string $adapter, bool $truncateDirectory, ?string $downloadUrl = null, array $headers = []): WingsResponse
     {
         try {
             $data = [
@@ -1069,6 +1073,9 @@ class ServerService
 
             if ($downloadUrl) {
                 $data['download_url'] = $downloadUrl;
+            }
+            if ($headers !== []) {
+                $data['headers'] = $headers;
             }
 
             $response = $this->connection->post("/api/servers/{$serverUuid}/backup/{$backupId}/restore", $data);

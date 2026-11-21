@@ -15,6 +15,7 @@ See the LICENSE file or <https://www.gnu.org/licenses/>.
 
 'use client';
 
+import { AdminListToolbar } from '@/components/admin/AdminListToolbar';
 import { TipCard, TipGrid } from '@/components/featherui/TipCard';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -39,7 +40,6 @@ import { cn } from '@/lib/utils';
 import {
     Globe,
     Plus,
-    Search,
     Pencil,
     Trash2,
     Server,
@@ -66,6 +66,8 @@ interface Location {
     name: string;
     description?: string;
     flag_code?: string | null;
+    latitude?: number | string | null;
+    longitude?: number | string | null;
     type: LocationType;
     created_at: string;
     updated_at: string;
@@ -271,15 +273,19 @@ export default function LocationsPage() {
         name: string;
         description: string;
         flag_code: string;
+        latitude: string;
+        longitude: string;
         type: LocationType;
-    }>({ name: '', description: '', flag_code: '', type: 'game' });
+    }>({ name: '', description: '', flag_code: '', latitude: '', longitude: '', type: 'game' });
 
     const [createForm, setCreateForm] = useState<{
         name: string;
         description: string;
         flag_code: string;
+        latitude: string;
+        longitude: string;
         type: LocationType;
-    }>({ name: '', description: '', flag_code: '', type: 'game' });
+    }>({ name: '', description: '', flag_code: '', latitude: '', longitude: '', type: 'game' });
     const [webHostingAccepted, setWebHostingAccepted] = useState(false);
     const { dirty: editFormDirty, commit: commitEditForm } = useFormBaseline(editForm);
     const { dirty: createFormDirty } = useFormBaseline(createForm, { trackFromStart: true });
@@ -367,6 +373,8 @@ export default function LocationsPage() {
                 name: loc.name || '',
                 description: loc.description || '',
                 flag_code: loc.flag_code || '__NONE__',
+                latitude: loc.latitude != null && loc.latitude !== '' ? String(loc.latitude) : '',
+                longitude: loc.longitude != null && loc.longitude !== '' ? String(loc.longitude) : '',
                 type: (loc.type as LocationType) || 'game',
             };
             setEditForm(loaded);
@@ -401,17 +409,23 @@ export default function LocationsPage() {
         }
         setIsSubmitting(true);
         try {
-            const payload = {
+            const payload: Record<string, unknown> = {
                 name: createForm.name,
                 type: createForm.type,
                 ...(createForm.type === 'web' ? { webhosting_alpha_accepted: true } : {}),
                 ...(createForm.description ? { description: createForm.description } : {}),
                 flag_code: createForm.flag_code === '__NONE__' ? null : createForm.flag_code || null,
             };
+            const createLat = createForm.latitude.trim();
+            const createLng = createForm.longitude.trim();
+            if (createLat !== '' || createLng !== '') {
+                payload.latitude = createLat === '' ? null : Number(createLat);
+                payload.longitude = createLng === '' ? null : Number(createLng);
+            }
             await axios.put('/api/admin/locations', payload);
             toast.success(t('admin.locations.messages.created'));
             setCreateOpen(false);
-            setCreateForm({ name: '', description: '', flag_code: '', type: 'game' });
+            setCreateForm({ name: '', description: '', flag_code: '', latitude: '', longitude: '', type: 'game' });
             setWebHostingAccepted(false);
             setRefreshKey((prev) => prev + 1);
         } catch (error) {
@@ -426,10 +440,14 @@ export default function LocationsPage() {
         if (!editingLocation) return;
         setIsSubmitting(true);
         try {
-            const payload = {
+            const editLat = editForm.latitude.trim();
+            const editLng = editForm.longitude.trim();
+            const payload: Record<string, unknown> = {
                 name: editForm.name,
                 ...(editForm.description !== undefined ? { description: editForm.description || undefined } : {}),
                 flag_code: editForm.flag_code === '__NONE__' ? null : editForm.flag_code || null,
+                latitude: editLat === '' ? null : Number(editLat),
+                longitude: editLng === '' ? null : Number(editLng),
             };
             await axios.patch(`/api/admin/locations/${editingLocation.id}`, payload);
             toast.success(t('admin.locations.messages.updated'));
@@ -472,17 +490,11 @@ export default function LocationsPage() {
 
             <WidgetRenderer widgets={getWidgets('admin-locations', 'after-header')} />
 
-            <div className='fp-surface flex flex-col items-center gap-4 rounded-2xl border p-4 sm:flex-row'>
-                <div className='group relative w-full flex-1'>
-                    <Search className='text-muted-foreground group-focus-within:text-primary absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 transition-colors' />
-                    <Input
-                        placeholder={t('admin.locations.search_placeholder')}
-                        value={searchQuery}
-                        onChange={(e) => patchFilters({ searchQuery: e.target.value })}
-                        className='h-11 w-full pl-10'
-                    />
-                </div>
-            </div>
+            <AdminListToolbar
+                searchPlaceholder={t('admin.locations.search_placeholder')}
+                searchValue={searchQuery}
+                onSearchChange={(value) => patchFilters({ searchQuery: value })}
+            />
 
             <WidgetRenderer widgets={getWidgets('admin-locations', 'before-list')} />
 
@@ -533,6 +545,15 @@ export default function LocationsPage() {
                                         />
                                     )}
                                     <span>{location.description || t('common.nA')}</span>
+                                    {location.latitude != null &&
+                                        location.longitude != null &&
+                                        location.latitude !== '' &&
+                                        location.longitude !== '' && (
+                                            <span className='text-muted-foreground'>
+                                                · {Number(location.latitude).toFixed(2)},{' '}
+                                                {Number(location.longitude).toFixed(2)}
+                                            </span>
+                                        )}
                                 </div>
                             }
                             actions={
@@ -692,6 +713,35 @@ export default function LocationsPage() {
                                 ))}
                             </Select>
                         </div>
+                        <div className='grid grid-cols-2 gap-3'>
+                            <div className='space-y-2'>
+                                <Label htmlFor='edit-latitude'>{t('admin.locations.form.latitude')}</Label>
+                                <Input
+                                    id='edit-latitude'
+                                    type='number'
+                                    step='any'
+                                    min={-90}
+                                    max={90}
+                                    placeholder='48.2082'
+                                    value={editForm.latitude}
+                                    onChange={(e) => setEditForm({ ...editForm, latitude: e.target.value })}
+                                />
+                            </div>
+                            <div className='space-y-2'>
+                                <Label htmlFor='edit-longitude'>{t('admin.locations.form.longitude')}</Label>
+                                <Input
+                                    id='edit-longitude'
+                                    type='number'
+                                    step='any'
+                                    min={-180}
+                                    max={180}
+                                    placeholder='16.3738'
+                                    value={editForm.longitude}
+                                    onChange={(e) => setEditForm({ ...editForm, longitude: e.target.value })}
+                                />
+                            </div>
+                        </div>
+                        <p className='text-muted-foreground text-xs'>{t('admin.locations.form.coordinates_help')}</p>
                         <div className='space-y-2'>
                             <Label>{t('admin.locations.form.type')}</Label>
                             <TypeSelector
@@ -758,6 +808,35 @@ export default function LocationsPage() {
                                 ))}
                             </Select>
                         </div>
+                        <div className='grid grid-cols-2 gap-3'>
+                            <div className='space-y-2'>
+                                <Label htmlFor='create-latitude'>{t('admin.locations.form.latitude')}</Label>
+                                <Input
+                                    id='create-latitude'
+                                    type='number'
+                                    step='any'
+                                    min={-90}
+                                    max={90}
+                                    placeholder='48.2082'
+                                    value={createForm.latitude}
+                                    onChange={(e) => setCreateForm({ ...createForm, latitude: e.target.value })}
+                                />
+                            </div>
+                            <div className='space-y-2'>
+                                <Label htmlFor='create-longitude'>{t('admin.locations.form.longitude')}</Label>
+                                <Input
+                                    id='create-longitude'
+                                    type='number'
+                                    step='any'
+                                    min={-180}
+                                    max={180}
+                                    placeholder='16.3738'
+                                    value={createForm.longitude}
+                                    onChange={(e) => setCreateForm({ ...createForm, longitude: e.target.value })}
+                                />
+                            </div>
+                        </div>
+                        <p className='text-muted-foreground text-xs'>{t('admin.locations.form.coordinates_help')}</p>
                         <div className='space-y-2'>
                             <Label>{t('admin.locations.form.type')} *</Label>
                             <p className='text-muted-foreground text-xs'>

@@ -15,6 +15,7 @@ See the LICENSE file or <https://www.gnu.org/licenses/>.
 
 'use client';
 
+import { AdminListToolbar } from '@/components/admin/AdminListToolbar';
 import { TipCard, TipGrid } from '@/components/featherui/TipCard';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -23,7 +24,6 @@ import { useTranslation } from '@/contexts/TranslationContext';
 import { getApiErrorMessage } from '@/lib/api-errors';
 import { PageHeader } from '@/components/featherui/PageHeader';
 import { Button } from '@/components/featherui/Button';
-import { Input } from '@/components/featherui/Input';
 import { ResourceCard, ResourceTable, type ResourceBadge } from '@/components/featherui/ResourceCard';
 import { TableSkeleton } from '@/components/featherui/TableSkeleton';
 import { ListEmptyState } from '@/components/featherui/ListEmptyState';
@@ -34,7 +34,6 @@ import { toast } from 'sonner';
 import {
     Server,
     Plus,
-    Search,
     Pencil,
     Trash2,
     ChevronLeft,
@@ -45,6 +44,7 @@ import {
 } from 'lucide-react';
 import { useIpMask } from '@/hooks/useIpMask';
 import { ListPagination } from '@/components/featherui/ListPagination';
+import { DAEMON_STATUS_STYLES, useDaemonHealthSummaries } from '@/components/admin/daemon-health';
 
 interface WebNode {
     id: number;
@@ -112,6 +112,10 @@ export default function WebNodesPage() {
     const [deleting, setDeleting] = useState(false);
     const [nodeHealth, setNodeHealth] = useState<Record<number, NodeHealth>>({});
     const [isCheckingHealth, setIsCheckingHealth] = useState(false);
+    const { summaries: daemonHealth } = useDaemonHealthSummaries(
+        'web',
+        webNodes.map((node) => node.id),
+    );
 
     const [pagination, setPagination] = useState<Omit<Pagination, 'page' | 'pageSize'>>({
         total: 0,
@@ -269,17 +273,11 @@ export default function WebNodesPage() {
 
             <WidgetRenderer widgets={getWidgets('admin-web-nodes', 'after-header')} />
 
-            <div className='fp-surface flex flex-col items-center gap-4 rounded-2xl border p-4 sm:flex-row'>
-                <div className='group relative w-full flex-1'>
-                    <Search className='text-muted-foreground group-focus-within:text-primary absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 transition-colors' />
-                    <Input
-                        placeholder={t('admin.webNodes.search_placeholder')}
-                        value={searchQuery}
-                        onChange={(e) => patchFilters({ searchQuery: e.target.value })}
-                        className='h-11 w-full pl-10'
-                    />
-                </div>
-            </div>
+            <AdminListToolbar
+                searchPlaceholder={t('admin.webNodes.search_placeholder')}
+                searchValue={searchQuery}
+                onSearchChange={(value) => patchFilters({ searchQuery: value })}
+            />
 
             <WidgetRenderer widgets={getWidgets('admin-web-nodes', 'before-list')} />
 
@@ -327,6 +325,14 @@ export default function WebNodesPage() {
                                           ? 'bg-red-500/10 text-red-500 border-red-500/20'
                                           : 'bg-muted text-muted-foreground border-border',
                             },
+                            ...(daemonHealth[node.id]
+                                ? [
+                                      {
+                                          label: t(`admin.daemonHealth.status.${daemonHealth[node.id].status}`),
+                                          className: DAEMON_STATUS_STYLES[daemonHealth[node.id].status]?.pill,
+                                      },
+                                  ]
+                                : []),
                             {
                                 label: getLocationName(node.location_id),
                                 className: 'bg-primary/10 text-primary border-primary/20',

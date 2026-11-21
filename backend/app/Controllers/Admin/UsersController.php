@@ -512,7 +512,7 @@ class UsersController
             if (!isset($mailQueues[$queueId])) {
                 continue;
             }
-            $mail = $mailQueues[$queueId];
+            $mail = MailQueue::redactOneTimeCode($mailQueues[$queueId]);
             $mail['id'] = (int) $mailListEntry['id'];
             unset($mail['user_uuid'], $mail['deleted'], $mail['locked'], $mail['updated_at']);
             $user['mails'][] = $mail;
@@ -613,7 +613,7 @@ class UsersController
             if (!isset($mailQueues[$queueId])) {
                 continue;
             }
-            $mail = $mailQueues[$queueId];
+            $mail = MailQueue::redactOneTimeCode($mailQueues[$queueId]);
             $mail['id'] = (int) $mailListEntry['id'];
             unset($mail['user_uuid'], $mail['deleted'], $mail['locked'], $mail['updated_at']);
             $user['mails'][] = $mail;
@@ -721,9 +721,24 @@ class UsersController
         $data['uuid'] = UUIDUtils::generateV4();
         $config = App::getInstance(true)->getConfig();
         $data['remember_token'] = User::generateAccountToken();
-        // Set default role if not provided
-        if (empty($data['role_id'])) {
+        // Set default role if not provided. Assigning a role is a root-only
+        // decision: with every role grantable here, `admin.users.create` alone
+        // was enough to create a second full administrator.
+        $actor = $request->attributes->get('user');
+        if (isset($data['role_id']) && (int) $data['role_id'] > 0 && (int) $data['role_id'] !== 1) {
+            if (!\App\Helpers\AdminRank::isRoot(is_array($actor) ? $actor : null)) {
+                return ApiResponse::error('Only a full administrator can assign a role', 'ROLE_ASSIGNMENT_FORBIDDEN', 403);
+            }
+        } else {
             $data['role_id'] = 1;
+        }
+        // Creating an account with admin permissions needs a confirmed session
+        // (the default role is checked too: it can carry admin permissions).
+        if (\App\Helpers\StepUpAuth::roleGrantsAdmin((int) $data['role_id'])) {
+            $reauth = \App\Helpers\StepUpAuth::require($request, \App\Helpers\StepUpAuth::ACTION_ADMIN_ROLE);
+            if ($reauth !== null) {
+                return $reauth;
+            }
         }
         $userId = User::createUser($data);
         if (!$userId) {
@@ -860,6 +875,59 @@ class UsersController
                     'INSUFFICIENT_PERMISSIONS_FOR_FIELD',
                     403
                 );
+            }
+        }
+
+        // Rank guard: a support account must not modify an account that holds
+        // root-level permissions (password/e-mail change would be a takeover).
+        $rankDenied = \App\Helpers\AdminRank::check($request->attributes->get('user'), $user);
+        if ($rankDenied !== null) {
+            return ApiResponse::error($rankDenied, 'TARGET_OUTRANKS_ACTOR', 403);
+        }
+
+        if (array_key_exists('role_id', $data) && ($data['role_id'] === null || $data['role_id'] === '')) {
+            unset($data['role_id']); // the edit form sends an empty value when no role is selected
+        }
+        if (array_key_exists('role_id', $data)) {
+            $roleId = filter_var($data['role_id'], FILTER_VALIDATE_INT);
+            if ($roleId === false || $roleId < 1) {
+                return ApiResponse::error('Role ID must be a positive integer', 'INVALID_DATA_TYPE', 400);
+            }
+            $data['role_id'] = $roleId;
+        }
+
+        // Changing two-factor state or the session token of an account changes
+        // what the confirmation step relies on, so it needs a confirmed session.
+        $securityFields = array_intersect(['two_fa_enabled', 'two_fa_key', 'two_fa_blocked', 'remember_token'], array_keys($data));
+        $actorUuid = \App\Helpers\StepUpAuth::actor($request)['uuid'] ?? null;
+        $securityChanged = false;
+        foreach ($securityFields as $field) {
+            if ((string) $data[$field] !== (string) ($user[$field] ?? '')) {
+                $securityChanged = true;
+                break;
+            }
+        }
+        // The same goes for the confirming admin's own password and e-mail.
+        if (!$securityChanged && $actorUuid !== null && $actorUuid === $user['uuid']) {
+            $securityChanged = (isset($data['password']) && (string) $data['password'] !== '')
+                || (isset($data['email']) && (string) $data['email'] !== (string) ($user['email'] ?? ''));
+        }
+        if ($securityChanged) {
+            $reauth = \App\Helpers\StepUpAuth::require($request, \App\Helpers\StepUpAuth::ACTION_ACCOUNT_SECURITY);
+            if ($reauth !== null) {
+                return $reauth;
+            }
+        }
+
+        // Promoting an account to a role with admin permissions needs a confirmed session.
+        if (
+            isset($data['role_id'])
+            && $data['role_id'] !== (int) ($user['role_id'] ?? 0)
+            && \App\Helpers\StepUpAuth::roleGrantsAdmin((int) $data['role_id'])
+        ) {
+            $reauth = \App\Helpers\StepUpAuth::require($request, \App\Helpers\StepUpAuth::ACTION_ADMIN_ROLE);
+            if ($reauth !== null) {
+                return $reauth;
             }
         }
 
@@ -1083,6 +1151,11 @@ class UsersController
         $user = User::getUserByUuid($uuid);
         if (!$user) {
             return ApiResponse::error('User not found', 'USER_NOT_FOUND', 404);
+        }
+
+        $rankDenied = \App\Helpers\AdminRank::check($request->attributes->get('user'), $user);
+        if ($rankDenied !== null) {
+            return ApiResponse::error($rankDenied, 'TARGET_OUTRANKS_ACTOR', 403);
         }
 
         if ($app->isDemoMode()) {
@@ -1438,16 +1511,46 @@ class UsersController
         if (!\App\Chat\UserDevice::deleteUserData($uuid)) {
             return ApiResponse::error('Failed to clear device records', 'DEVICE_CLEAR_FAILED', 500);
         }
+        // Also drop IP based alt links for this user, in both directions.
+        if (!\App\Chat\AltDetectionReset::markUser($uuid)) {
+            return ApiResponse::error('Failed to reset alt detection', 'ALT_RESET_FAILED', 500);
+        }
 
         $admin = $request->attributes->get('user');
         Activity::createActivity([
             'user_uuid' => $admin['uuid'] ?? $uuid,
             'name' => 'admin_clear_user_devices',
-            'context' => 'Cleared device fingerprints for user ' . $user['username'] . ' (' . $uuid . ')',
+            'context' => 'Cleared device fingerprints and alt links for user ' . $user['username'] . ' (' . $uuid . ')',
             'ip_address' => CloudFlareRealIP::getRealIP(),
         ]);
 
         return ApiResponse::success([], 'Device records cleared for user', 200);
+    }
+
+    #[OA\Post(
+        path: '/api/admin/users/alt-detection/reset',
+        summary: 'Reset alt detection for all users',
+        description: 'Clears every device fingerprint and ignores all IP evidence recorded before now when matching alts. Activity logs are kept.',
+        tags: ['Admin - Users'],
+        responses: [
+            new OA\Response(response: 200, description: 'Alt detection reset'),
+        ]
+    )]
+    public function resetAltDetection(Request $request): Response
+    {
+        if (!\App\Chat\UserDevice::deleteAll() || !\App\Chat\AltDetectionReset::markAll()) {
+            return ApiResponse::error('Failed to reset alt detection', 'ALT_RESET_FAILED', 500);
+        }
+
+        $admin = $request->attributes->get('user');
+        Activity::createActivity([
+            'user_uuid' => $admin['uuid'] ?? '',
+            'name' => 'admin_reset_alt_detection',
+            'context' => 'Reset alt detection for all users',
+            'ip_address' => CloudFlareRealIP::getRealIP(),
+        ]);
+
+        return ApiResponse::success([], 'Alt detection reset for all users', 200);
     }
 
     #[OA\Delete(
@@ -1559,6 +1662,14 @@ class UsersController
         $user = User::getUserByUuid($uuid);
         if (!$user) {
             return ApiResponse::error('User not found', 'USER_NOT_FOUND', 404);
+        }
+
+        // Rank guard: an SSO token is a full session for the target account and
+        // the login flow skips its second factor, so minting one for an account
+        // that outranks the actor would be a silent takeover.
+        $rankDenied = \App\Helpers\AdminRank::check($request->attributes->get('user'), $user);
+        if ($rankDenied !== null) {
+            return ApiResponse::error($rankDenied, 'TARGET_OUTRANKS_ACTOR', 403);
         }
 
         $config = App::getInstance(true)->getConfig();
@@ -1879,6 +1990,11 @@ class UsersController
         $user = User::getUserByUuid($uuid);
         if (!$user) {
             return ApiResponse::error('User not found', 'USER_NOT_FOUND', 404);
+        }
+
+        $rankDenied = \App\Helpers\AdminRank::check($request->attributes->get('user'), $user);
+        if ($rankDenied !== null) {
+            return ApiResponse::error($rankDenied, 'TARGET_OUTRANKS_ACTOR', 403);
         }
 
         if ($user['banned'] === 'true') {

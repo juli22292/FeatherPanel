@@ -7,6 +7,7 @@ use crate::database;
 use crate::mail;
 pub mod vm;
 pub mod create;
+pub mod cidr;
 
 pub use vm::process_vm_task;
 
@@ -57,10 +58,18 @@ pub async fn process_mail(pool: &MySqlPool, queue_id: &str) -> Result<()> {
         }
     };
 
-    // Get SMTP config
+    // Get mail config (SMTP or HTTP API transport)
     let smtp_config = database::get_smtp_config(pool).await?;
     if !smtp_config.enabled {
-        warn!("⚠️  Mail {} not sent because SMTP is disabled", queue_id);
+        warn!("⚠️  Mail {} not sent because email is disabled", queue_id);
+        database::mark_failed(pool, queue_id).await?;
+        return Ok(());
+    }
+    if smtp_config.transport != "smtp" && smtp_config.api_key.trim().is_empty() {
+        error!(
+            "❌ Mail {} failed: mail_transport={} requires mail_api_key",
+            queue_id, smtp_config.transport
+        );
         database::mark_failed(pool, queue_id).await?;
         return Ok(());
     }

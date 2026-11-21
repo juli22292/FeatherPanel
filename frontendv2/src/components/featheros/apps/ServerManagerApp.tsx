@@ -31,6 +31,7 @@ import {
     Archive,
     Database,
     Network,
+    ServerCog,
 } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'sonner';
@@ -140,6 +141,12 @@ export default function ServerManagerApp({ win }: OsAppProps) {
     const rowMenu = (s: Server, e: React.MouseEvent) => {
         e.preventDefault();
         openContextMenu({ x: e.clientX, y: e.clientY }, [
+            {
+                id: 'open',
+                label: t('featheros.server_workspace.open'),
+                icon: ServerCog,
+                onSelect: () => openApp('server', { serverUuid: s.uuidShort }),
+            },
             {
                 id: 'files',
                 label: t('featheros.apps.finder'),
@@ -322,15 +329,15 @@ export default function ServerManagerApp({ win }: OsAppProps) {
                             const ld = live[s.uuidShort];
                             const state = serverState(s, ld?.status);
                             const busy = pending.has(s.uuidShort);
-                            const addr = s.allocation
-                                ? `${s.allocation.ip_alias || s.allocation.ip}:${s.allocation.port}`
-                                : '—';
+                            const addr = s.subdomain_requirement?.enforced
+                                ? t('serverSubdomains.requirementAddressPending')
+                                : s.allocation
+                                  ? `${s.allocation.ip_alias || s.allocation.ip}:${s.allocation.port}`
+                                  : '-';
                             return (
                                 <tr
                                     key={s.uuidShort}
-                                    onDoubleClick={() =>
-                                        can(s, 'file.read') && openApp('finder', { serverUuid: s.uuidShort })
-                                    }
+                                    onDoubleClick={() => openApp('server', { serverUuid: s.uuidShort })}
                                     onContextMenu={(e) => rowMenu(s, e)}
                                     className={cn(
                                         'hover:bg-muted/50 border-b border-black/5 dark:border-white/5',
@@ -370,16 +377,16 @@ export default function ServerManagerApp({ win }: OsAppProps) {
                                         </span>
                                     </td>
                                     <td className='px-2 py-1.5 tabular-nums'>
-                                        {ld?.stats ? `${ld.stats.cpuUsage}%` : '—'}
+                                        {ld?.stats ? `${ld.stats.cpuUsage}%` : '-'}
                                     </td>
                                     <td className='px-2 py-1.5 tabular-nums'>
-                                        {ld?.stats ? formatBytes(ld.stats.memoryUsage) : '—'}
+                                        {ld?.stats ? formatBytes(ld.stats.memoryUsage) : '-'}
                                         <span className='text-muted-foreground'>
                                             {' '}
                                             / {s.memory ? formatBytes(s.memory * 1024 * 1024, 0) : '∞'}
                                         </span>
                                     </td>
-                                    <td className='text-muted-foreground px-2 py-1.5'>{s.node?.name ?? '—'}</td>
+                                    <td className='text-muted-foreground px-2 py-1.5'>{s.node?.name ?? '-'}</td>
                                     <td className='text-muted-foreground px-2 py-1.5 font-mono text-[11px]'>{addr}</td>
                                     <td className='px-2 py-1.5'>
                                         <div className='flex justify-end gap-0.5'>

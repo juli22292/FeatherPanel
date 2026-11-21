@@ -6,10 +6,10 @@ jobs:
   shellcheck:
     if: github.repository == 'MythicalLTD/FeatherPanel'
     name: ShellCheck
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: useblacksmith/checkout@v1
+        uses: actions/checkout@v4
 
       - name: Install ShellCheck
         run: |
@@ -22,10 +22,10 @@ jobs:
   bash-syntax:
     if: github.repository == 'MythicalLTD/FeatherPanel'
     name: Bash Syntax
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: useblacksmith/checkout@v1
+        uses: actions/checkout@v4
 
       - name: Validate installer syntax
         run: bash -n installer/install.bash

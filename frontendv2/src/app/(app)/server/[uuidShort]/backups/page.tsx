@@ -48,6 +48,7 @@ import { useServerPermissions } from '@/hooks/useServerPermissions';
 import { WidgetRenderer } from '@/components/server/WidgetRenderer';
 import { usePluginWidgets } from '@/hooks/usePluginWidgets';
 import { DatabaseDumpsPanel } from '@/components/server/backup/DatabaseDumpsPanel';
+import { BackupStorageBadge } from '@/components/server/backup/BackupStorageBadge';
 import { cn, formatMib } from '@/lib/utils';
 import { triggerSignedUrlDownload } from '@/lib/trigger-signed-download';
 import { formatBackupLimitLabel, isBackupLimitDisabled } from '@/lib/server-utils';
@@ -63,9 +64,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogTitle, DialogDescription, DialogHeader, DialogFooter } from '@/components/ui/dialog';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
-import { BackupItem, BackupsResponse, Server } from '@/types/server';
+import { BackupItem, BackupsResponse, BackupLimitUsage, Server } from '@/types/server';
 import { getApiErrorMessage, getApiErrorMessageFromPayload } from '@/lib/api-errors';
 import { ListPagination } from '@/components/featherui/ListPagination';
+
+/** Backups whose own storage was removed or disconnected cannot be downloaded or restored. */
+const storageGone = (b: BackupItem) => b.destination?.state === 'orphaned' || b.destination?.state === 'revoked';
 
 type BackupTab = 'files' | 'databases';
 
@@ -78,7 +82,7 @@ function BackupStatus({
     const pending = !backup.completed_at && !backup.is_successful;
     const cls = pending
         ? backup.is_stale
-            ? 'border-amber-500/20 bg-amber-500/10 text-amber-500'
+            ? 'border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400'
             : 'animate-pulse border-blue-500/20 bg-blue-500/10 text-blue-500'
         : backup.is_successful
           ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-500'
@@ -155,6 +159,7 @@ export default function ServerBackupsPage() {
     } | null>(null);
 
     const [selectedUuids, setSelectedUuids] = useState<string[]>([]);
+    const [limitUsage, setLimitUsage] = useState<BackupLimitUsage | null>(null);
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -185,6 +190,7 @@ export default function ServerBackupsPage() {
                 if (backupsRes.data.success) {
                     setBackups(backupsRes.data.data.data);
                     if (!quiet) setSelectedUuids([]);
+                    setLimitUsage(backupsRes.data.data.limit_usage ?? null);
                     const p = backupsRes.data.data.pagination;
                     setPagination({
                         current_page: p.current_page,
@@ -415,7 +421,10 @@ export default function ServerBackupsPage() {
         }
     };
 
-    const backupCountTotal = pagination.total;
+    // Only backups on the host's storage use the limit; the rest live on the user's own storage.
+    const backupCountTotal = limitUsage ? limitUsage.used : pagination.total;
+    const uncountedBackups = limitUsage ? Math.max(0, limitUsage.total - limitUsage.used) : 0;
+    const ownStorageAvailable = Boolean(limitUsage?.byo_enabled && !limitUsage.byo_counts_toward_limit);
     const fifoRolling = Boolean(server?.fifo_rolling_enabled);
     const backupsDisabled = server ? isBackupLimitDisabled(server.backup_limit) : false;
     const atBackupCapacity =
@@ -441,18 +450,21 @@ export default function ServerBackupsPage() {
                             <span className='bg-primary/5 text-primary border-primary/20 rounded-full border px-3 py-1 text-[10px] font-semibold whitespace-nowrap'>
                                 {backupCountTotal} / {formatBackupLimitLabel(server.backup_limit, t('common.disabled'))}
                                 {fifoRolling ? ' · FIFO' : ''}
+                                {uncountedBackups > 0
+                                    ? ` · ${t('serverBackups.storageTarget.uncounted', { count: String(uncountedBackups) })}`
+                                    : ''}
                             </span>
                         )}
                     </div>
                 }
                 actions={
-                    <div className='flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-3'>
+                    <div className='flex w-full flex-wrap gap-2 sm:w-auto sm:flex-nowrap sm:items-center sm:gap-3'>
                         {showHeaderCreateAction && (
                             <Button
                                 size='default'
                                 disabled={loading}
                                 onClick={() => router.push(`/server/${uuidShort}/backups/new`)}
-                                className='order-1 w-full transition-all active:scale-95 sm:order-2 sm:w-auto'
+                                className='order-1 min-w-0 flex-1 transition-all active:scale-95 sm:order-2 sm:flex-none'
                             >
                                 <Plus className='mr-2 h-5 w-5' />
                                 {t('serverBackups.createBackup')}
@@ -522,13 +534,13 @@ export default function ServerBackupsPage() {
                         <div className='animate-in slide-in-from-top relative overflow-hidden rounded-3xl border border-yellow-500/20 bg-yellow-500/10 p-6 backdrop-blur-xl duration-500'>
                             <div className='relative z-10 flex items-start gap-5'>
                                 <div className='flex h-12 w-12 items-center justify-center rounded-2xl border border-yellow-500/30 bg-yellow-500/20'>
-                                    <AlertTriangle className='h-6 w-6 text-yellow-500' />
+                                    <AlertTriangle className='h-6 w-6 text-yellow-700 dark:text-yellow-400' />
                                 </div>
                                 <div className='space-y-1'>
-                                    <h3 className='text-lg leading-none font-bold text-yellow-500'>
+                                    <h3 className='text-lg leading-none font-bold text-yellow-700 dark:text-yellow-400'>
                                         {t('common.disabled')}
                                     </h3>
-                                    <p className='text-sm leading-relaxed font-medium text-yellow-500/80'>
+                                    <p className='text-sm leading-relaxed font-medium text-yellow-800 dark:text-yellow-500/80'>
                                         {t('serverBackups.noBackupsNoLimit')}
                                     </p>
                                 </div>
@@ -540,16 +552,17 @@ export default function ServerBackupsPage() {
                         <div className='animate-in slide-in-from-top relative overflow-hidden rounded-3xl border border-yellow-500/20 bg-yellow-500/10 p-6 backdrop-blur-xl duration-500'>
                             <div className='relative z-10 flex items-start gap-5'>
                                 <div className='flex h-12 w-12 items-center justify-center rounded-2xl border border-yellow-500/30 bg-yellow-500/20'>
-                                    <AlertTriangle className='h-6 w-6 text-yellow-500' />
+                                    <AlertTriangle className='h-6 w-6 text-yellow-700 dark:text-yellow-400' />
                                 </div>
                                 <div className='space-y-1'>
-                                    <h3 className='text-lg leading-none font-bold text-yellow-500'>
+                                    <h3 className='text-lg leading-none font-bold text-yellow-700 dark:text-yellow-400'>
                                         {t('serverBackups.backupLimitReached')}
                                     </h3>
-                                    <p className='text-sm leading-relaxed font-medium text-yellow-500/80'>
+                                    <p className='text-sm leading-relaxed font-medium text-yellow-800 dark:text-yellow-500/80'>
                                         {t('serverBackups.backupLimitReachedDescription', {
                                             limit: String(server?.backup_limit || 0),
                                         })}
+                                        {ownStorageAvailable ? ` ${t('serverBackups.storageTarget.limitHint')}` : ''}
                                     </p>
                                 </div>
                             </div>
@@ -561,6 +574,7 @@ export default function ServerBackupsPage() {
                             <Search className='text-muted-foreground/80 group-focus-within:text-foreground absolute top-1/2 left-4 h-5 w-5 -translate-y-1/2 transition-colors' />
                             <Input
                                 placeholder={t('serverBackups.searchPlaceholder')}
+                                variant='surface'
                                 className='h-14 pl-12 text-base'
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -572,7 +586,7 @@ export default function ServerBackupsPage() {
                                 size='default'
                                 onClick={handleDeleteAll}
                                 disabled={loading || actionLoading || pagination.total === 0}
-                                className='w-full shrink-0 sm:w-auto'
+                                className='h-14 w-full shrink-0 sm:w-auto'
                             >
                                 <Trash2 className='mr-2 h-4 w-4' />
                                 {t('serverBackups.deleteAll')}
@@ -581,7 +595,7 @@ export default function ServerBackupsPage() {
                     </div>
 
                     {canDelete && backups.length > 0 && (
-                        <div className='fp-surface flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3'>
+                        <div className='fp-surface-solid flex flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-3'>
                             <div className='flex items-center gap-3'>
                                 <Checkbox
                                     checked={allDeletableSelected}
@@ -673,7 +687,7 @@ export default function ServerBackupsPage() {
                                             <div className='min-w-0'>
                                                 <p className='truncate font-medium'>{backup.name}</p>
                                                 {backup.is_locked === 1 && (
-                                                    <p className='flex items-center gap-1 text-xs text-yellow-500'>
+                                                    <p className='flex items-center gap-1 text-xs text-yellow-700 dark:text-yellow-400'>
                                                         <Lock className='h-3 w-3' />
                                                         {t('serverBackups.statusLocked')}
                                                     </p>
@@ -697,12 +711,7 @@ export default function ServerBackupsPage() {
                                     key: 'disk',
                                     header: t('serverBackups.storage'),
                                     className: 'text-muted-foreground',
-                                    cell: (backup) =>
-                                        backup.disk === 'pbs'
-                                            ? 'PBS'
-                                            : backup.disk === 'wings'
-                                              ? t('ui.server.backups.local')
-                                              : backup.disk,
+                                    cell: (backup) => <BackupStorageBadge backup={backup} />,
                                 },
                                 {
                                     key: 'created',
@@ -725,6 +734,7 @@ export default function ServerBackupsPage() {
                                     <div className='min-w-0 space-y-1.5'>
                                         <p className='truncate font-medium'>{backup.name}</p>
                                         <BackupStatus backup={backup} />
+                                        <BackupStorageBadge backup={backup} />
                                         <p className='text-muted-foreground text-xs'>
                                             {formatMib(backup.bytes / 1024 / 1024)} ·{' '}
                                             {formatDateTimeInTz(backup.created_at, dateOpts)}
@@ -739,7 +749,11 @@ export default function ServerBackupsPage() {
                                             {
                                                 label: t('serverBackups.restore'),
                                                 icon: RotateCcw,
-                                                hidden: !(canRestore && backup.is_successful === 1),
+                                                hidden: !(
+                                                    canRestore &&
+                                                    backup.is_successful === 1 &&
+                                                    !storageGone(backup)
+                                                ),
                                                 disabled: backup.is_locked === 1,
                                                 onClick: () => {
                                                     setBackupToRestore(backup);
@@ -752,7 +766,8 @@ export default function ServerBackupsPage() {
                                                 hidden: !(
                                                     canDownload &&
                                                     backup.is_successful === 1 &&
-                                                    backup.disk !== 'pbs'
+                                                    backup.disk !== 'pbs' &&
+                                                    !storageGone(backup)
                                                 ),
                                                 onClick: () => handleDownloadBackup(backup),
                                             },

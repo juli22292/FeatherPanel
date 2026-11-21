@@ -31,6 +31,7 @@ import {
     LayoutGrid,
     Users,
     Activity,
+    Wrench,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -69,6 +70,7 @@ interface NodeEntry {
 
 interface StatusData {
     enabled: boolean;
+    maintenance?: { enabled: boolean; message?: string };
     allow_iframe?: boolean;
     show_raw_values?: boolean;
     show_player_count?: boolean;
@@ -375,6 +377,16 @@ export default function StatusPage() {
 
             <WidgetRenderer widgets={getWidgets('dashboard-status', 'after-header')} />
 
+            {statusData?.maintenance?.enabled && (
+                <Alert className='border-amber-500/30 bg-amber-500/10'>
+                    <Wrench className='h-4 w-4 text-amber-500' />
+                    <AlertTitle>{t('maintenance.title')}</AlertTitle>
+                    <AlertDescription>
+                        {statusData.maintenance.message || t('maintenance.defaultMessage')}
+                    </AlertDescription>
+                </Alert>
+            )}
+
             {/*  Global stat cards  */}
             {global && (
                 <div className='grid grid-cols-2 gap-3 md:grid-cols-4'>
@@ -451,7 +463,8 @@ export default function StatusPage() {
                             placeholder={t('dashboard.status.searchPlaceholder')}
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className='bg-background/50 border-border/50 focus:border-primary/50 h-10 w-full pr-10'
+                            variant='surface'
+                            className='h-10 w-full pr-10'
                         />
                         <Search className='text-muted-foreground absolute top-3 right-3 h-4 w-4 opacity-40' />
                     </div>

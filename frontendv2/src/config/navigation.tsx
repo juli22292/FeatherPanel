@@ -18,6 +18,9 @@ import { NavigationItem } from '@/types/navigation';
 import { applyModulesToNavigation } from '@/lib/modules';
 import type { AppSettings } from '@/types/settings';
 import {
+    Disc3,
+    CalendarClock,
+    Shield,
     Home,
     LayoutDashboard,
     Server,
@@ -25,6 +28,7 @@ import {
     ShieldCheck,
     Settings,
     Activity,
+    Hourglass,
     BookOpen,
     Ticket,
     BarChart3,
@@ -69,6 +73,8 @@ import {
     Mail,
     Palette,
     LifeBuoy,
+    Camera,
+    Radar,
 } from 'lucide-react';
 import { isEnabled, isEnabledUnlessExplicitlyFalse } from '@/lib/utils';
 import { supportsDaemonFeature, type DaemonFeature } from '@/lib/daemonCapabilities';
@@ -120,7 +126,7 @@ const buildAdminNavigationItems = (
             icon: BarChart3,
             isActive: false,
             category: 'admin',
-            permission: Permissions.ADMIN_USERS_VIEW,
+            permission: Permissions.ADMIN_STATISTICS_VIEW,
             group: 'overview',
             priority: 10,
         },
@@ -192,6 +198,18 @@ const buildAdminNavigationItems = (
             group: 'servers',
         },
         {
+            id: 'admin-inactive-servers',
+            module: 'game',
+            name: t('navigation.items.inactiveServers'),
+            title: t('navigation.items.inactiveServers'),
+            url: '/admin/inactive-servers',
+            icon: Hourglass,
+            isActive: false,
+            category: 'admin',
+            permission: Permissions.ADMIN_SERVERS_VIEW,
+            group: 'servers',
+        },
+        {
             id: 'admin-vm-instances',
             module: 'vds',
             name: t('navigation.items.virtualServersVds'),
@@ -200,7 +218,7 @@ const buildAdminNavigationItems = (
             icon: Server,
             isActive: false,
             category: 'admin',
-            permission: Permissions.ADMIN_NODES_VIEW,
+            permission: Permissions.ADMIN_VM_INSTANCES_VIEW,
             group: 'servers',
         },
         {
@@ -263,6 +281,28 @@ const buildAdminNavigationItems = (
             group: 'infrastructure',
         },
         {
+            id: 'admin-health',
+            name: t('navigation.items.health'),
+            title: t('navigation.items.health'),
+            url: '/admin/health',
+            icon: Activity,
+            isActive: false,
+            category: 'admin',
+            permission: Permissions.ADMIN_DASHBOARD_VIEW,
+            group: 'infrastructure',
+        },
+        {
+            id: 'admin-observability',
+            name: t('navigation.items.observability'),
+            title: t('navigation.items.observability'),
+            url: '/admin/observability',
+            icon: Radar,
+            isActive: false,
+            category: 'admin',
+            permission: Permissions.ADMIN_SETTINGS_VIEW,
+            group: 'infrastructure',
+        },
+        {
             id: 'admin-nodes-status',
             module: 'game',
             name: t('navigation.items.nodeStatus'),
@@ -283,7 +323,19 @@ const buildAdminNavigationItems = (
             icon: Server,
             isActive: false,
             category: 'admin',
-            permission: Permissions.ADMIN_NODES_VIEW,
+            permission: Permissions.ADMIN_VM_NODES_VIEW,
+            group: 'infrastructure',
+        },
+        {
+            id: 'admin-vds-isos',
+            module: 'vds',
+            name: t('navigation.items.vdsIsos'),
+            title: t('navigation.items.vdsIsos'),
+            url: '/admin/vds-isos',
+            icon: Disc3,
+            isActive: false,
+            category: 'admin',
+            permission: Permissions.ADMIN_VM_NODES_VIEW,
             group: 'infrastructure',
         },
         {
@@ -295,7 +347,7 @@ const buildAdminNavigationItems = (
             icon: Server,
             isActive: false,
             category: 'admin',
-            permission: Permissions.ADMIN_NODES_VIEW,
+            permission: Permissions.ADMIN_WEB_NODES_VIEW,
             group: 'infrastructure',
         },
         {
@@ -307,7 +359,7 @@ const buildAdminNavigationItems = (
             icon: Mail,
             isActive: false,
             category: 'admin',
-            permission: Permissions.ADMIN_WEBSPACES_VIEW,
+            permission: Permissions.ADMIN_MAIL_HOSTS_VIEW,
             group: 'infrastructure',
         },
         {
@@ -319,7 +371,19 @@ const buildAdminNavigationItems = (
             icon: Cloud,
             isActive: false,
             category: 'admin',
-            permission: Permissions.ADMIN_WEBSPACES_VIEW,
+            permission: Permissions.ADMIN_DNS_HOSTS_VIEW,
+            group: 'infrastructure',
+        },
+        {
+            id: 'admin-hosting-packages',
+            module: 'web',
+            name: t('navigation.items.hostingPackages'),
+            title: t('navigation.items.hostingPackages'),
+            url: '/admin/hosting-packages',
+            icon: Package,
+            isActive: false,
+            category: 'admin',
+            permission: Permissions.ADMIN_HOSTING_PACKAGES_VIEW,
             group: 'infrastructure',
         },
         {
@@ -342,7 +406,7 @@ const buildAdminNavigationItems = (
             icon: Database,
             isActive: false,
             category: 'admin',
-            permission: Permissions.ADMIN_NODES_VIEW,
+            permission: Permissions.ADMIN_DATABASES_VIEW,
             group: 'infrastructure',
         },
         {
@@ -366,7 +430,7 @@ const buildAdminNavigationItems = (
             icon: Sparkles,
             isActive: false,
             category: 'admin',
-            permission: Permissions.ADMIN_REALMS_VIEW,
+            permission: Permissions.ADMIN_SPELLS_VIEW,
             group: 'templates',
         },
         {
@@ -415,6 +479,17 @@ const buildAdminNavigationItems = (
             group: 'security',
         },
         {
+            id: 'admin-security-center',
+            name: t('navigation.items.securityCenter'),
+            title: t('navigation.items.securityCenter'),
+            url: '/admin/security',
+            icon: ShieldCheck,
+            isActive: false,
+            category: 'admin',
+            permission: Permissions.ADMIN_SETTINGS_VIEW,
+            group: 'security',
+        },
+        {
             id: 'admin-blocked-ips',
             name: t('navigation.items.blockedIps'),
             title: t('navigation.items.blockedIps'),
@@ -444,7 +519,7 @@ const buildAdminNavigationItems = (
             icon: ShieldAlert,
             isActive: false,
             category: 'admin',
-            permission: Permissions.ADMIN_USERS_VIEW,
+            permission: Permissions.ADMIN_ABUSEIPDB_VIEW,
             group: 'security',
         },
         {
@@ -455,7 +530,7 @@ const buildAdminNavigationItems = (
             icon: Settings,
             isActive: false,
             category: 'admin',
-            permission: Permissions.ADMIN_ROOT,
+            permission: Permissions.ADMIN_SETTINGS_VIEW,
             group: 'settings',
         },
         {
@@ -511,7 +586,7 @@ const buildAdminNavigationItems = (
             icon: Bot,
             isActive: false,
             category: 'admin',
-            permission: Permissions.ADMIN_STATISTICS_VIEW,
+            permission: Permissions.ADMIN_SETTINGS_VIEW,
             group: 'settings',
         },
         {
@@ -544,7 +619,7 @@ const buildAdminNavigationItems = (
             icon: BrushCleaning,
             isActive: false,
             category: 'admin',
-            permission: Permissions.ADMIN_SETTINGS_VIEW,
+            permission: Permissions.ADMIN_STORAGE_SENSE_VIEW,
             group: 'system',
         },
         {
@@ -555,7 +630,7 @@ const buildAdminNavigationItems = (
             icon: ScrollText,
             isActive: false,
             category: 'admin',
-            permission: Permissions.ADMIN_USERS_VIEW,
+            permission: Permissions.ADMIN_AUDIT_LOG_VIEW,
             group: 'system',
         },
         {
@@ -589,7 +664,7 @@ const buildAdminNavigationItems = (
             icon: Download,
             isActive: false,
             category: 'admin',
-            permission: Permissions.ADMIN_DATABASES_MANAGE,
+            permission: Permissions.ADMIN_ROOT,
             group: 'system',
         },
         {
@@ -1156,7 +1231,12 @@ const buildMainNavigationItems = (
     return items;
 };
 
-export const getVdsNavigationItems = (t: TFunction, instanceId: string): NavigationItem[] => {
+export const getVdsNavigationItems = (
+    t: TFunction,
+    instanceId: string,
+    options?: { vmType?: string | null },
+): NavigationItem[] => {
+    const isQemu = (options?.vmType ?? 'qemu') !== 'lxc';
     const items: NavigationItem[] = [
         {
             id: 'vds-overview',
@@ -1191,6 +1271,17 @@ export const getVdsNavigationItems = (t: TFunction, instanceId: string): Navigat
             permission: 'backup',
         },
         {
+            id: 'vds-snapshots',
+            name: t('navigation.items.snapshots'),
+            title: t('navigation.items.snapshots'),
+            url: `/vds/${instanceId}/snapshots`,
+            icon: Camera,
+            isActive: false,
+            category: 'server',
+            group: 'files',
+            permission: 'snapshot',
+        },
+        {
             id: 'vds-users',
             name: t('navigation.items.users'),
             title: t('navigation.items.users'),
@@ -1211,6 +1302,43 @@ export const getVdsNavigationItems = (t: TFunction, instanceId: string): Navigat
             category: 'server',
             group: 'configuration',
         },
+        {
+            id: 'vds-firewall',
+            name: t('navigation.items.firewall'),
+            title: t('navigation.items.firewall'),
+            url: `/vds/${instanceId}/firewall`,
+            icon: Shield,
+            isActive: false,
+            category: 'server',
+            group: 'configuration',
+            permission: 'firewall',
+        },
+        {
+            id: 'vds-schedules',
+            name: t('navigation.items.schedules'),
+            title: t('navigation.items.schedules'),
+            url: `/vds/${instanceId}/schedules`,
+            icon: CalendarClock,
+            isActive: false,
+            category: 'server',
+            group: 'automation',
+            permission: 'schedules',
+        },
+        ...(isQemu
+            ? [
+                  {
+                      id: 'vds-boot',
+                      name: t('navigation.items.boot'),
+                      title: t('navigation.items.boot'),
+                      url: `/vds/${instanceId}/boot`,
+                      icon: HardDrive,
+                      isActive: false,
+                      category: 'server' as const,
+                      group: 'configuration',
+                      permission: 'settings',
+                  },
+              ]
+            : []),
         {
             id: 'vds-settings',
             name: t('navigation.items.settings'),

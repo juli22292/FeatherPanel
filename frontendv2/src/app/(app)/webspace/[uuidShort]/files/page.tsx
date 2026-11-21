@@ -18,11 +18,17 @@ See the LICENSE file or <https://www.gnu.org/licenses/>.
 import { use, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
-import { AlertCircle, CheckCircle2, Download, Loader2, Upload, X } from 'lucide-react';
-import { PageHeader } from '@/components/featherui/PageHeader';
+import { AlertCircle, CheckCircle2, Download, Loader2, Pause, Play, Upload, X } from 'lucide-react';
+import { WebSpacePageHeader as PageHeader } from '@/components/webspace/WebSpacePageHeader';
+import { WebSpacePageTips } from '@/components/webspace/WebSpacePageTips';
 import { Button } from '@/components/featherui/Button';
 import { useTranslation } from '@/contexts/TranslationContext';
 import { FileManagerApiProvider, useFileManagerApi } from '@/contexts/FileManagerApiContext';
+import { useFileManager } from '@/hooks/useFileManager';
+import { useFilesViewPrefs, useFilesQuickAccess, sortAndFilterFiles } from '@/lib/files-view-prefs';
+import { FileInfoSheet } from '@/app/(app)/server/[uuidShort]/files/components/FileInfoSheet';
+import { FileListControls } from '@/app/(app)/server/[uuidShort]/files/components/FileListControls';
+import { FileQuickAccess } from '@/app/(app)/server/[uuidShort]/files/components/FileQuickAccess';
 import { WebSpacePageWidgets } from '@/components/webspace/WebSpacePageWidgets';
 import { useWebSpacePermissions } from '@/hooks/useWebSpacePermissions';
 import { WebSpaceSubuserPermissions } from '@/lib/webspace-permissions';
@@ -73,8 +79,14 @@ type UploadQueueItem = {
     id: string;
     file: File;
     progress: number;
-    status: 'pending' | 'uploading' | 'done' | 'error';
+    status: 'pending' | 'uploading' | 'paused' | 'done' | 'error';
     error?: string;
+    /** Bytes per second while uploading. */
+    speed?: number;
+    /** Seconds remaining while uploading. */
+    eta?: number | null;
+    /** Continued from parts the panel already had. */
+    resumed?: boolean;
     targetDirectory: string;
     batchId?: string;
 };
@@ -95,13 +107,6 @@ function resolveDirectoryTarget(currentDirectory: string, nameOrPath: string): s
     if (!nameOrPath) return normalizePath(currentDirectory || '/');
     if (nameOrPath.startsWith('/')) return normalizePath(nameOrPath);
     return joinPath(currentDirectory || '/', nameOrPath);
-}
-
-function sortFiles(files: FileObject[]): FileObject[] {
-    return [...files].sort((a, b) => {
-        if (a.isFile !== b.isFile) return a.isFile ? 1 : -1;
-        return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
-    });
 }
 
 async function collectFilesFromDataTransfer(dt: DataTransfer): Promise<FileWithPath[]> {
@@ -148,6 +153,28 @@ async function collectFilesFromDataTransfer(dt: DataTransfer): Promise<FileWithP
 }
 
 let uploadIdCounter = 0;
+
+const formatUploadSpeed = (bytesPerSecond: number): string => {
+    if (!bytesPerSecond || bytesPerSecond < 1) return '0 B/s';
+    const units = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
+    let v = bytesPerSecond;
+    let i = 0;
+    while (v >= 1024 && i < units.length - 1) {
+        v /= 1024;
+        i += 1;
+    }
+    return `${v.toFixed(v >= 100 || i === 0 ? 0 : 1)} ${units[i]}`;
+};
+
+const formatUploadEta = (seconds: number): string => {
+    const s = Math.max(0, Math.round(seconds));
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    if (h > 0) return `${h}h ${m}m`;
+    if (m > 0) return `${m}m ${sec}s`;
+    return `${sec}s`;
+};
 const generateUploadId = (): string => {
     if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
         return crypto.randomUUID();
@@ -190,11 +217,22 @@ function WebSpaceFilesPageInner({ uuidShort }: { uuidShort: string }) {
     const currentDirectory = normalizePath(searchParams?.get('path') || '/');
     const filesBasePath = `/webspace/${uuidShort}/files`;
 
-    const [files, setFiles] = useState<FileObject[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
-    const [searchQuery, setSearchQuery] = useState('');
-    const [debouncedSearch, setDebouncedSearch] = useState('');
+    const {
+        files,
+        loading,
+        selectedFiles,
+        setSelectedFiles,
+        searchQuery,
+        setSearchQuery,
+        activePulls,
+        refresh,
+        navigate,
+        cancelPull,
+        refreshPulls,
+    } = useFileManager(uuidShort, { enabled: canRead, pullProgress: pullProgressEnabled });
+    const { prefs: viewPrefs, update: updateViewPrefs } = useFilesViewPrefs();
+    const quickAccess = useFilesQuickAccess(`webspace:${uuidShort}`);
+    const [infoFile, setInfoFile] = useState<FileObject | null>(null);
     const [actionFile, setActionFile] = useState<FileObject | null>(null);
     const [anchorName, setAnchorName] = useState<string | null>(null);
     const [isDragging, setIsDragging] = useState(false);
@@ -219,7 +257,6 @@ function WebSpaceFilesPageInner({ uuidShort }: { uuidShort: string }) {
     const [trashStats, setTrashStats] = useState<TrashFolderStats | null>(null);
     const [emptyTrashOpen, setEmptyTrashOpen] = useState(false);
     const [emptyTrashBusy, setEmptyTrashBusy] = useState(false);
-    const [activePulls, setActivePulls] = useState<{ Identifier: string; Progress: number }[]>([]);
     const [includePattern, setIncludePattern] = useState('');
     const [excludePattern, setExcludePattern] = useState('');
     const [searchCaseInsensitive] = useState(true);
@@ -235,55 +272,9 @@ function WebSpaceFilesPageInner({ uuidShort }: { uuidShort: string }) {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const folderInputRef = useRef<HTMLInputElement>(null);
     const uploadProcessingRef = useRef(false);
+    const uploadAbortRef = useRef<Map<string, AbortController>>(new Map());
     const createdDirectoriesRef = useRef<Set<string>>(new Set());
-    const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const shiftPivotRef = useRef<string | null>(null);
-
-    const navigate = useCallback(
-        (path: string) => {
-            const params = new URLSearchParams(searchParams?.toString() ?? '');
-            const sanitized = normalizePath(path || '/');
-            if (sanitized === '/') {
-                params.delete('path');
-            } else {
-                params.set('path', sanitized);
-            }
-            const qs = params.toString();
-            router.push(qs ? `${filesBasePath}?${qs}` : filesBasePath);
-            setSelectedFiles([]);
-            setSearchQuery('');
-            setDebouncedSearch('');
-        },
-        [filesBasePath, router, searchParams],
-    );
-
-    useEffect(() => {
-        if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-        searchDebounceRef.current = setTimeout(() => {
-            setDebouncedSearch(searchQuery.trim());
-        }, 250);
-        return () => {
-            if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-        };
-    }, [searchQuery]);
-
-    const refresh = useCallback(async () => {
-        if (!uuidShort || !canRead) return;
-        setLoading(true);
-        try {
-            const data = await filesApi.getFiles(uuidShort, currentDirectory, debouncedSearch || undefined);
-            setFiles(sortFiles(data.contents));
-            setSelectedFiles([]);
-        } catch (error) {
-            toast.error(getApiErrorMessage(error, t, 'files.messages.load_error'));
-        } finally {
-            setLoading(false);
-        }
-    }, [uuidShort, canRead, filesApi, currentDirectory, debouncedSearch, t]);
-
-    useEffect(() => {
-        void refresh();
-    }, [refresh]);
 
     const activeAdvancedFiltersCount = useMemo(() => {
         let count = 0;
@@ -323,39 +314,6 @@ function WebSpaceFilesPageInner({ uuidShort }: { uuidShort: string }) {
     useEffect(() => {
         void refreshTrashStats();
     }, [refreshTrashStats]);
-
-    const refreshPulls = useCallback(async () => {
-        if (!pullProgressEnabled || !uuidShort) return;
-        try {
-            const pulls = await filesApi.getPullFiles(uuidShort);
-            setActivePulls(pulls.filter((p) => p.Progress < 100));
-        } catch {
-            setActivePulls([]);
-        }
-    }, [filesApi, pullProgressEnabled, uuidShort]);
-
-    useEffect(() => {
-        void refreshPulls();
-    }, [refreshPulls]);
-
-    useEffect(() => {
-        if (!pullProgressEnabled || activePulls.length === 0) return;
-        const interval = setInterval(() => void refreshPulls(), 5000);
-        return () => clearInterval(interval);
-    }, [activePulls.length, pullProgressEnabled, refreshPulls]);
-
-    const cancelPull = useCallback(
-        async (id: string) => {
-            try {
-                await filesApi.deletePullFile(uuidShort, id);
-                toast.success(t('files.messages.download_cancelled'));
-                void refreshPulls();
-            } catch (error) {
-                toast.error(getApiErrorMessage(error, t, 'files.messages.cancel_download_failed'));
-            }
-        },
-        [filesApi, refreshPulls, t, uuidShort],
-    );
 
     useEffect(() => {
         let cancelled = false;
@@ -458,7 +416,10 @@ function WebSpaceFilesPageInner({ uuidShort }: { uuidShort: string }) {
         }
     };
 
-    const baseFiles = searchResults ?? files;
+    const baseFiles = useMemo(
+        () => sortAndFilterFiles(searchResults ?? files, viewPrefs),
+        [searchResults, files, viewPrefs],
+    );
     const selectableFiles = useMemo(() => filterSelectableFiles(baseFiles), [baseFiles]);
     const visibleFiles = useMemo(() => {
         if (!trashEnabled || searchResults !== null) return baseFiles;
@@ -537,19 +498,53 @@ function WebSpaceFilesPageInner({ uuidShort }: { uuidShort: string }) {
             );
             try {
                 await ensureDirectoryExists(next.targetDirectory);
-                await filesApi.uploadFile(uuidShort, next.targetDirectory, next.file, (percent) => {
-                    setUploadQueue((p) => p.map((u) => (u.id === next.id ? { ...u, progress: percent } : u)));
-                });
+                const controller = new AbortController();
+                uploadAbortRef.current.set(next.id, controller);
+                await filesApi.uploadFile(
+                    uuidShort,
+                    next.targetDirectory,
+                    next.file,
+                    (percent) => {
+                        setUploadQueue((p) => p.map((u) => (u.id === next.id ? { ...u, progress: percent } : u)));
+                    },
+                    {
+                        signal: controller.signal,
+                        onStats: (st) => {
+                            setUploadQueue((p) =>
+                                p.map((u) =>
+                                    u.id === next.id
+                                        ? { ...u, speed: st.speed, eta: st.eta, resumed: st.resumed || u.resumed }
+                                        : u,
+                                ),
+                            );
+                        },
+                    },
+                );
                 setUploadQueue((prev) =>
                     prev.map((u) => (u.id === next.id ? { ...u, status: 'done' as const, progress: 100 } : u)),
                 );
                 void refresh();
             } catch (error) {
+                const reason = uploadAbortRef.current.get(next.id)?.signal.reason;
+                if (reason === 'pause') {
+                    setUploadQueue((prev) =>
+                        prev.map((u) =>
+                            u.id === next.id ? { ...u, status: 'paused' as const, speed: 0, eta: null } : u,
+                        ),
+                    );
+                    return;
+                }
+                if (reason === 'cancel') {
+                    void filesApi.discardUpload(uuidShort, next.targetDirectory, next.file);
+                    setUploadQueue((prev) => prev.filter((u) => u.id !== next.id));
+                    return;
+                }
                 const message = getApiErrorMessage(error, t, 'files.messages.upload_failed');
                 setUploadQueue((prev) =>
                     prev.map((u) => (u.id === next.id ? { ...u, status: 'error' as const, error: message } : u)),
                 );
             } finally {
+                uploadAbortRef.current.delete(next.id);
                 uploadProcessingRef.current = false;
                 setTimeout(() => {
                     setUploadQueue((prev) => {
@@ -562,6 +557,41 @@ function WebSpaceFilesPageInner({ uuidShort }: { uuidShort: string }) {
             }
         },
         [ensureDirectoryExists, filesApi, uuidShort, refresh, t],
+    );
+
+    const removeUploadFromQueue = useCallback(
+        (id: string) => {
+            const running = uploadAbortRef.current.get(id);
+            setUploadQueue((prev) => {
+                const item = prev.find((u) => u.id === id);
+                if (item && !running && (item.status === 'paused' || item.status === 'error')) {
+                    // Drop the parts the panel kept for resuming.
+                    void filesApi.discardUpload(uuidShort, item.targetDirectory, item.file);
+                }
+                return prev.filter((u) => u.id !== id);
+            });
+            if (running) running.abort('cancel');
+        },
+        [filesApi, uuidShort],
+    );
+
+    const pauseUpload = useCallback((id: string) => {
+        uploadAbortRef.current.get(id)?.abort('pause');
+    }, []);
+
+    const resumeUpload = useCallback(
+        (id: string) => {
+            setUploadQueue((prev) => {
+                const next = prev.map((u) =>
+                    u.id === id && (u.status === 'paused' || u.status === 'error')
+                        ? { ...u, status: 'pending' as const, error: undefined }
+                        : u,
+                );
+                setTimeout(() => void processUploadQueue(next), 0);
+                return next;
+            });
+        },
+        [processUploadQueue],
     );
 
     const addToUploadQueue = useCallback(
@@ -725,6 +755,14 @@ function WebSpaceFilesPageInner({ uuidShort }: { uuidShort: string }) {
                     return;
             }
             return;
+        }
+
+        if (action === 'info') {
+            setInfoFile(file);
+            return;
+        }
+        if (file.isFile && (action === 'edit' || action === 'preview')) {
+            quickAccess.addRecent(joinPath(currentDirectory || '/', file.name));
         }
 
         setActionFile(file);
@@ -905,6 +943,7 @@ function WebSpaceFilesPageInner({ uuidShort }: { uuidShort: string }) {
                 title={t('files.title')}
                 description={t('files.manage_description', { directory: currentDirectory || '/' })}
             />
+            <WebSpacePageTips page='files' />
 
             <div className='flex flex-col gap-4'>
                 <div className='fp-surface flex flex-col gap-4 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between'>
@@ -917,6 +956,18 @@ function WebSpaceFilesPageInner({ uuidShort }: { uuidShort: string }) {
                         onToggleFilters={fileSearchEnabled ? () => setSearchFiltersOpen(true) : undefined}
                         activeFiltersCount={activeAdvancedFiltersCount}
                     />
+                </div>
+
+                <div className='flex flex-wrap items-center justify-end gap-2'>
+                    <FileQuickAccess
+                        currentDirectory={currentDirectory || '/'}
+                        pins={quickAccess.pins}
+                        recent={quickAccess.recent}
+                        onTogglePin={quickAccess.togglePin}
+                        onClearRecent={quickAccess.clearRecent}
+                        onNavigate={navigate}
+                    />
+                    <FileListControls prefs={viewPrefs} onChange={updateViewPrefs} />
                 </div>
 
                 <FileActionToolbar
@@ -999,25 +1050,68 @@ function WebSpaceFilesPageInner({ uuidShort }: { uuidShort: string }) {
                                             {item.status === 'pending' && (
                                                 <Upload className='text-muted-foreground h-4 w-4' />
                                             )}
+                                            {item.status === 'paused' && (
+                                                <Pause className='text-muted-foreground h-4 w-4' />
+                                            )}
                                             <span className='truncate text-sm font-medium' title={item.file.name}>
                                                 {item.file.name}
                                             </span>
                                         </div>
-                                        <Button
-                                            variant='ghost'
-                                            size='icon'
-                                            onClick={() =>
-                                                setUploadQueue((prev) => prev.filter((u) => u.id !== item.id))
-                                            }
-                                            className='text-muted-foreground h-7 w-7 shrink-0 hover:text-red-500'
-                                        >
-                                            <X className='h-4 w-4' />
-                                        </Button>
+                                        <div className='flex shrink-0 items-center gap-1'>
+                                            {item.status === 'uploading' && (
+                                                <Button
+                                                    variant='ghost'
+                                                    size='icon'
+                                                    onClick={() => pauseUpload(item.id)}
+                                                    title={t('files.upload.pause')}
+                                                    aria-label={t('files.upload.pause')}
+                                                    className='text-muted-foreground hover:text-foreground h-7 w-7'
+                                                >
+                                                    <Pause className='h-4 w-4' />
+                                                </Button>
+                                            )}
+                                            {(item.status === 'paused' || item.status === 'error') && (
+                                                <Button
+                                                    variant='ghost'
+                                                    size='icon'
+                                                    onClick={() => resumeUpload(item.id)}
+                                                    title={
+                                                        item.status === 'paused'
+                                                            ? t('files.upload.resume')
+                                                            : t('files.upload.retry')
+                                                    }
+                                                    aria-label={
+                                                        item.status === 'paused'
+                                                            ? t('files.upload.resume')
+                                                            : t('files.upload.retry')
+                                                    }
+                                                    className='text-muted-foreground hover:text-foreground h-7 w-7'
+                                                >
+                                                    <Play className='h-4 w-4' />
+                                                </Button>
+                                            )}
+                                            <Button
+                                                variant='ghost'
+                                                size='icon'
+                                                onClick={() => removeUploadFromQueue(item.id)}
+                                                title={t('files.upload.cancel')}
+                                                aria-label={t('files.upload.cancel')}
+                                                className='text-muted-foreground h-7 w-7 hover:text-red-500'
+                                            >
+                                                <X className='h-4 w-4' />
+                                            </Button>
+                                        </div>
                                     </div>
-                                    {(item.status === 'uploading' || item.status === 'pending') && (
+                                    {(item.status === 'uploading' ||
+                                        item.status === 'pending' ||
+                                        item.status === 'paused') && (
                                         <div className='space-y-1.5'>
                                             <div className='text-muted-foreground flex justify-between text-[10px] font-bold tracking-tighter uppercase'>
-                                                <span>{t('files.toolbar.upload')}</span>
+                                                <span>
+                                                    {item.status === 'paused'
+                                                        ? t('files.upload.paused')
+                                                        : t('files.toolbar.upload')}
+                                                </span>
                                                 <span className='text-primary'>{item.progress}%</span>
                                             </div>
                                             <div className='border-border/50 bg-muted/40 h-1.5 w-full overflow-hidden rounded-full border'>
@@ -1026,6 +1120,19 @@ function WebSpaceFilesPageInner({ uuidShort }: { uuidShort: string }) {
                                                     style={{ width: `${item.progress}%` }}
                                                 />
                                             </div>
+                                            {item.status === 'uploading' && (item.speed ?? 0) > 0 && (
+                                                <div className='text-muted-foreground flex justify-between text-[10px] tabular-nums'>
+                                                    <span>
+                                                        {formatUploadSpeed(item.speed ?? 0)}
+                                                        {item.resumed ? ` · ${t('files.upload.resumed')}` : ''}
+                                                    </span>
+                                                    {item.eta != null && (
+                                                        <span>
+                                                            {t('files.upload.eta', { time: formatUploadEta(item.eta) })}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                     {item.status === 'done' && (
@@ -1127,8 +1234,20 @@ function WebSpaceFilesPageInner({ uuidShort }: { uuidShort: string }) {
                     currentDirectory={currentDirectory || '/'}
                     anchorName={anchorName}
                     isSearching={Boolean(searchQuery.trim()) || searchResults !== null}
+                    view={viewPrefs.view}
                 />
             </div>
+
+            <FileInfoSheet
+                file={infoFile}
+                directory={currentDirectory || '/'}
+                open={infoFile !== null}
+                onOpenChange={(open) => !open && setInfoFile(null)}
+                onChecksum={(file) => {
+                    setInfoFile(null);
+                    handleAction('hash', file);
+                }}
+            />
 
             <CreateFolderDialog
                 open={createFolderOpen}
@@ -1314,7 +1433,7 @@ function WebSpaceFilesPageInner({ uuidShort }: { uuidShort: string }) {
             </Dialog>
 
             {isDragging && canCreate && (
-                <div className='pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm'>
+                <div className='pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-black/40'>
                     <div className='bg-muted/60 rounded-2xl border border-dashed border-white/30 px-10 py-8 text-center shadow-2xl'>
                         <Download className='text-primary mx-auto mb-3 h-10 w-10' />
                         <p className='text-lg font-semibold text-white'>{t('files.messages.drop_to_upload')}</p>

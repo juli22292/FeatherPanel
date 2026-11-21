@@ -41,6 +41,9 @@ use Symfony\Component\HttpFoundation\Response;
 #[OA\Tag(name: 'User - VM Instances', description: 'User VM instance list, detail, status, power, console')]
 class VmUserInstanceController
 {
+    /** Legacy unrestricted ISO upload/fetch endpoints, replaced by the ISO library policy. */
+    private const LEGACY_ISO_ENDPOINTS = false;
+
     #[OA\Get(
         path: '/api/user/vm-instances',
         summary: 'List user VM instances',
@@ -185,7 +188,7 @@ class VmUserInstanceController
         }
         $vmInstance['is_subuser'] = $subuser !== null;
 
-        $fullPerms = ['power', 'console', 'backup', 'activity.read', 'reinstall', 'settings'];
+        $fullPerms = ['power', 'console', 'backup', 'activity.read', 'reinstall', 'settings', 'snapshot', 'iso.upload', 'firewall', 'schedules'];
         $isPanelVmAdmin = PermissionHelper::hasPermission($user['uuid'], Permissions::ADMIN_VM_INSTANCES_VIEW)
             || PermissionHelper::hasPermission($user['uuid'], Permissions::ADMIN_VM_INSTANCES_EDIT)
             || PermissionHelper::hasPermission($user['uuid'], Permissions::ADMIN_VM_INSTANCES_DELETE);
@@ -205,6 +208,15 @@ class VmUserInstanceController
         $vmInstance['access_password'] = $vmInstance['is_owner']
             ? self::resolveAccessPassword($vmInstance)
             : null;
+
+        // `notes` carries the cloud-init credentials ({notes, ci_user, ci_password}).
+        // Subusers must only see the free-text note, never the guest password.
+        if (empty($vmInstance['is_owner']) && isset($vmInstance['notes'])) {
+            $decodedNotes = json_decode((string) $vmInstance['notes'], true);
+            $vmInstance['notes'] = is_array($decodedNotes)
+                ? (string) ($decodedNotes['notes'] ?? '')
+                : (string) $vmInstance['notes'];
+        }
         $vmInstance['assigned_ips'] = VmInstanceIp::getByInstanceId((int) $vmInstance['id']);
 
         return ApiResponse::success([
@@ -1209,6 +1221,12 @@ class VmUserInstanceController
             return ApiResponse::error('You do not have permission to change settings for this VM', 'PERMISSION_DENIED', 403);
         }
 
+        if (!self::LEGACY_ISO_ENDPOINTS) {
+            // Superseded by the ISO library policy (/isos/upload, /isos/url), which enforces the admin
+            // ISO mode, user storage, size, quota, URL allowlist and approval.
+            return ApiResponse::error('Custom ISOs are managed through the ISO library (Console actions → Mount ISO).', 'ISO_LIBRARY_REQUIRED', 410);
+        }
+
         $vmType = ($vmInstance['vm_type'] ?? 'qemu') === 'qemu' ? 'qemu' : 'lxc';
         if ($vmType !== 'qemu') {
             return ApiResponse::error('ISO mounting is only supported for QEMU VMs', 'ISO_NOT_SUPPORTED', 400);
@@ -1401,6 +1419,12 @@ class VmUserInstanceController
         }
         if (!VmGateway::hasVmPermission($user['uuid'], $id, 'settings')) {
             return ApiResponse::error('You do not have permission to change settings for this VM', 'PERMISSION_DENIED', 403);
+        }
+
+        if (!self::LEGACY_ISO_ENDPOINTS) {
+            // Superseded by the ISO library policy (/isos/upload, /isos/url), which enforces the admin
+            // ISO mode, user storage, size, quota, URL allowlist and approval.
+            return ApiResponse::error('Custom ISOs are managed through the ISO library (Console actions → Mount ISO).', 'ISO_LIBRARY_REQUIRED', 410);
         }
 
         $vmType = ($vmInstance['vm_type'] ?? 'qemu') === 'qemu' ? 'qemu' : 'lxc';
@@ -1907,6 +1931,9 @@ class VmUserInstanceController
     )]
     public function reinstall(Request $request, int $id): Response
     {
+        if (($reauth = \App\Services\Vm\VdsReauth::check($request, 'reinstall')) !== null) {
+            return $reauth;
+        }
         $user = $request->attributes->get('user');
         $instance = $request->attributes->get('vmInstance');
 

@@ -358,7 +358,8 @@ export default function TicketsPage() {
                             placeholder={t('tickets.searchTickets')}
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className='bg-background/50 border-border/50 focus:border-primary/50 w-full md:w-64'
+                            variant='surface'
+                            className='w-full pr-10 md:w-72'
                         />
                         <Button type='submit' variant='ghost' size='icon' className='absolute top-1 right-1'>
                             <Search className='text-muted-foreground h-4 w-4' />
@@ -391,11 +392,8 @@ export default function TicketsPage() {
                     <h3 className='mb-2 text-xl font-medium'>{t('tickets.noTicketsFound')}</h3>
                     <p className='text-muted-foreground mx-auto mb-6 max-w-sm'>{t('tickets.createFirstTicket')}</p>
                     <Link href='/dashboard/tickets/create'>
-                        <Button
-                            variant='default'
-                            className='bg-primary hover:bg-primary/90 text-primary-foreground h-auto px-6 py-6 text-base'
-                        >
-                            <Plus className='mr-2 h-5 w-5' />
+                        <Button variant='default'>
+                            <Plus className='mr-2 h-4 w-4' />
                             {t('tickets.createTicket')}
                         </Button>
                     </Link>

@@ -15,6 +15,7 @@ See the LICENSE file or <https://www.gnu.org/licenses/>.
 
 'use client';
 
+import { AdminListToolbar } from '@/components/admin/AdminListToolbar';
 import { AdminPageTips } from '@/components/admin/AdminPageTips';
 import { useState, useEffect, useRef } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
@@ -23,7 +24,7 @@ import { getApiErrorMessage, getApiErrorMessageFromPayload } from '@/lib/api-err
 import { useDateFormatOptions } from '@/contexts/PreferencesContext';
 import axios from 'axios';
 import { usePersistedListFilters } from '@/hooks/usePersistedListFilters';
-import { Users as UsersIcon, Search, Pencil, Trash2, UserPlus, CheckCircle2 } from 'lucide-react';
+import { Users as UsersIcon, Pencil, Trash2, UserPlus, CheckCircle2 } from 'lucide-react';
 import { PageHeader } from '@/components/featherui/PageHeader';
 import { DataTable, RowActionsMenu, StatusDot, TableIdentity } from '@/components/featherui/DataTable';
 import { TableSkeleton } from '@/components/featherui/TableSkeleton';
@@ -41,6 +42,9 @@ import { getRoleBadgeStyles } from '@/components/RoleBadge';
 import { getRoleBadgeLabel } from '@/lib/role-utils';
 import { Sensitive } from '@/components/common/Sensitive';
 import { useIpMask } from '@/hooks/useIpMask';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { useSession } from '@/contexts/SessionContext';
+import Permissions from '@/lib/permissions';
 
 interface UserRole {
     name: string;
@@ -293,6 +297,10 @@ export default function UsersPage() {
 
     const [refreshKey, setRefreshKey] = useState(0);
     const [clearingAllDevices, setClearingAllDevices] = useState(false);
+    const [altResetOpen, setAltResetOpen] = useState(false);
+    const [resettingAlts, setResettingAlts] = useState(false);
+    const { hasPermission } = useSession();
+    const canManageUsers = hasPermission(Permissions.ADMIN_USERS_EDIT);
 
     const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
     const [debouncedIpFilter, setDebouncedIpFilter] = useState('');
@@ -496,8 +504,37 @@ export default function UsersPage() {
         }
     };
 
+    const handleResetAltDetection = async () => {
+        setResettingAlts(true);
+        try {
+            const { data } = await axios.post('/api/admin/users/alt-detection/reset');
+            if (data?.success) {
+                toast.success(t('admin.users.reset_alt_detection_success'));
+                setAltResetOpen(false);
+            } else {
+                toast.error(getApiErrorMessageFromPayload(data, t, 'admin.users.reset_alt_detection_failed'));
+            }
+        } catch (error: unknown) {
+            toast.error(getApiErrorMessage(error, t, 'admin.users.reset_alt_detection_failed'));
+        } finally {
+            setResettingAlts(false);
+        }
+    };
+
     return (
         <div className='space-y-6'>
+            <ConfirmDialog
+                open={altResetOpen}
+                onOpenChange={setAltResetOpen}
+                title={t('admin.users.reset_alt_detection')}
+                description={t('admin.users.reset_alt_detection_confirm')}
+                confirmLabel={t('admin.users.reset_alt_detection_action')}
+                cancelLabel={t('admin.users.reset_alt_detection_cancel')}
+                onConfirm={handleResetAltDetection}
+                loading={resettingAlts}
+                destructive
+                dangerFrame
+            />
             <WidgetRenderer widgets={getWidgets('admin-users', 'top-of-page')} />
 
             <PageHeader
@@ -510,6 +547,12 @@ export default function UsersPage() {
                             <Trash2 className='mr-2 h-4 w-4' />
                             {t('admin.users.clear_all_devices')}
                         </Button>
+                        {canManageUsers && (
+                            <Button variant='destructive' onClick={() => setAltResetOpen(true)}>
+                                <Trash2 className='mr-2 h-4 w-4' />
+                                {t('admin.users.reset_alt_detection')}
+                            </Button>
+                        )}
                         <Button onClick={() => router.push('/admin/users/create')}>
                             <UserPlus className='mr-2 h-4 w-4' />
                             {t('admin.users.create.title')}
@@ -520,16 +563,12 @@ export default function UsersPage() {
 
             <WidgetRenderer widgets={getWidgets('admin-users', 'after-header')} />
 
-            <div className='fp-surface flex flex-col gap-3 rounded-2xl border p-3 sm:p-4'>
-                <div className='group relative w-full min-w-0 flex-1'>
-                    <Search className='text-muted-foreground group-focus-within:text-primary absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 transition-colors' />
-                    <Input
-                        placeholder={t('admin.users.search_placeholder')}
-                        className='h-11 pl-10'
-                        value={searchQuery}
-                        onChange={(e) => patchFilters({ searchQuery: e.target.value })}
-                    />
-                </div>
+            <AdminListToolbar
+                stacked
+                searchPlaceholder={t('admin.users.search_placeholder')}
+                searchValue={searchQuery}
+                onSearchChange={(value) => patchFilters({ searchQuery: value })}
+            >
                 <div className='grid w-full grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5'>
                     <Input
                         placeholder={t('admin.users.filters.ip_placeholder')}
@@ -603,7 +642,7 @@ export default function UsersPage() {
                         </Select>
                     </div>
                 </div>
-            </div>
+            </AdminListToolbar>
 
             <WidgetRenderer widgets={getWidgets('admin-users', 'before-list')} />
 

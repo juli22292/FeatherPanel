@@ -22,6 +22,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { HeadlessSelect } from '@/components/ui/headless-select';
 import type { Database } from '@/types/server';
+import { BackupDestinationPicker } from './BackupDestinationPicker';
 import { type BackupFields, type BackupKind, type DatabaseScope, isMysqlLike } from './backup-payload';
 
 type Props = {
@@ -31,9 +32,18 @@ type Props = {
     disabled?: boolean;
     /** When set, hides the backup-type selector and keeps this kind. */
     lockKind?: BackupKind;
+    /** Hide the storage destination picker (when the page renders its own). */
+    hideDestination?: boolean;
 };
 
-export function BackupTaskFields({ fields, setFields, databases, disabled = false, lockKind }: Props) {
+export function BackupTaskFields({
+    fields,
+    setFields,
+    databases,
+    disabled = false,
+    lockKind,
+    hideDestination = false,
+}: Props) {
     const { t } = useTranslation();
     const mysqlDatabases = React.useMemo(() => databases.filter(isMysqlLike), [databases]);
     const effectiveKind = lockKind ?? fields.kind;
@@ -99,6 +109,15 @@ export function BackupTaskFields({ fields, setFields, databases, disabled = fals
                 </div>
             )}
 
+            {showIgnore && !hideDestination && (
+                <BackupDestinationPicker
+                    value={fields.destination_id}
+                    onChange={(destination_id) => setFields((prev) => ({ ...prev, destination_id }))}
+                    disabled={disabled}
+                    hint={t('serverBackups.storageTarget.scheduleHint')}
+                />
+            )}
+
             {showDatabasePicker && (
                 <>
                     <div className='space-y-2.5'>
@@ -132,7 +151,7 @@ export function BackupTaskFields({ fields, setFields, databases, disabled = fals
                                     {t('serverTasks.noDatabasesAvailable')}
                                 </p>
                             ) : (
-                                <div className='max-h-64 space-y-1 overflow-y-auto rounded-2xl border border-white/10 bg-black/10 p-3'>
+                                <div className='border-border/60 max-h-64 space-y-1 overflow-y-auto rounded-2xl border bg-black/10 p-3 dark:border-white/10'>
                                     {mysqlDatabases.map((db) => {
                                         const id = String(db.id);
                                         const checked = fields.database_ids.includes(id);
@@ -163,7 +182,7 @@ export function BackupTaskFields({ fields, setFields, databases, disabled = fals
             )}
 
             {showMetadata && (
-                <div className='space-y-3 rounded-2xl border border-white/10 bg-black/10 p-4'>
+                <div className='border-border/60 space-y-3 rounded-2xl border bg-black/10 p-4 dark:border-white/10'>
                     <p className='text-muted-foreground text-[9px] font-black tracking-[0.2em] uppercase'>
                         {t('serverTasks.fullMetadataSection')}
                     </p>

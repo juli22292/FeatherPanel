@@ -109,6 +109,8 @@ class PublicConfig extends ConfigFactory
             ConfigInterface::APP_PWA_DESCRIPTION => '',
             ConfigInterface::APP_PWA_THEME_COLOR => '#000000',
             ConfigInterface::APP_PWA_BG_COLOR => '#ffffff',
+            ConfigInterface::APP_PWA_PUSH_ENABLED => 'false',
+            ConfigInterface::APP_PWA_VAPID_PUBLIC => '',
 
             // Social Media Links
             ConfigInterface::LINKEDIN_URL => '',
@@ -132,13 +134,6 @@ class PublicConfig extends ConfigFactory
             ConfigInterface::RECAPTCHA_V3_ACTION => 'submit',
             ConfigInterface::FRIENDLY_CAPTCHA_SITE_KEY => 'XXXX',
 
-            ConfigInterface::REFORGE_CAPTCHA_SITE_KEY => '',
-            ConfigInterface::REFORGE_CAPTCHA_WIDGET_TYPE => 'checkbox',
-            ConfigInterface::REFORGE_CAPTCHA_THEME => 'auto',
-            ConfigInterface::REFORGE_CAPTCHA_SIZE => 'normal',
-            ConfigInterface::REFORGE_CAPTCHA_LANG => '',
-            ConfigInterface::REFORGE_CAPTCHA_MIN_SCORE => '0.5',
-
             // Legal links
             ConfigInterface::LEGAL_TOS => '/tos',
             ConfigInterface::LEGAL_PRIVACY => '/privacy',
@@ -156,6 +151,10 @@ class PublicConfig extends ConfigFactory
             // Discord OAuth settings
             ConfigInterface::DISCORD_OAUTH_ENABLED => 'false',
             ConfigInterface::DISCORD_OAUTH_CLIENT_ID => 'XXXX',
+
+            // Google / GitHub single sign-on (only the enabled flags are public)
+            ConfigInterface::SSO_GOOGLE_ENABLED => 'false',
+            ConfigInterface::SSO_GITHUB_ENABLED => 'false',
 
             // OIDC (generic OpenID Connect SSO) settings
             // Only non-sensitive values are exposed here.
@@ -185,6 +184,7 @@ class PublicConfig extends ConfigFactory
             ConfigInterface::SERVER_ALLOW_USER_MADE_IMPORT => 'false',
             ConfigInterface::SERVER_ALLOW_USER_MADE_FASTDL => 'false',
             ConfigInterface::SERVER_ALLOW_USER_MADE_SUBDOMAINS => 'false',
+            ConfigInterface::SERVER_REQUIRE_SUBDOMAIN => 'false',
             ConfigInterface::SERVER_AUTO_START_ON_NODE_RECONNECT => 'true',
             ConfigInterface::SERVER_AUTO_START_STAGGER_SECONDS => '5',
             ConfigInterface::SERVER_AUTO_START_INITIAL_DELAY_SECONDS => '15',
@@ -211,6 +211,7 @@ class PublicConfig extends ConfigFactory
 
             // Chatbot related settings
             ConfigInterface::CHATBOT_ENABLED => 'false',
+            ConfigInterface::CHATBOT_EDITOR_HELPER_ENABLED => 'true',
             ConfigInterface::CHATBOT_AI_PROVIDER => 'basic',
             ConfigInterface::CHATBOT_TEMPERATURE => '0.7',
             ConfigInterface::CHATBOT_MAX_TOKENS => '2048',
@@ -218,6 +219,8 @@ class PublicConfig extends ConfigFactory
 
             // Status page settings
             ConfigInterface::STATUS_PAGE_ENABLED => 'false',
+            ConfigInterface::MAINTENANCE_MODE_ENABLED => 'false',
+            ConfigInterface::MAINTENANCE_MODE_MESSAGE => '',
             ConfigInterface::STATUS_PAGE_PUBLIC_ENABLED => 'true',
             ConfigInterface::STATUS_PAGE_ALLOW_IFRAME => 'false',
             ConfigInterface::STATUS_PAGE_SHOW_RAW_VALUES => 'false',

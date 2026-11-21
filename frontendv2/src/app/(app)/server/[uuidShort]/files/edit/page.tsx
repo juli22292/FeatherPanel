@@ -20,11 +20,12 @@ import { useRouter } from 'next/navigation';
 import type { OnMount } from '@monaco-editor/react';
 import { filesApi, isFileNotFoundError } from '@/lib/files-api';
 import { toast } from 'sonner';
-import { Save, Loader2, FileCode, Lock, CheckCircle2, Boxes, Monitor, Smartphone } from 'lucide-react';
+import { Save, Loader2, Lock, CheckCircle2, Boxes, Monitor, Smartphone, Sparkles } from 'lucide-react';
 import { useServerPermissions } from '@/hooks/useServerPermissions';
 import { usePluginWidgets } from '@/hooks/usePluginWidgets';
 import { useFileEditorEngine } from '@/hooks/useFileEditorEngine';
-import { useSaveShortcut } from '@/hooks/useSaveShortcut';
+import { getSaveShortcutLabel, useSaveShortcut } from '@/hooks/useSaveShortcut';
+import { EditorFileInfo } from '@/components/server/files/EditorFileInfo';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Button } from '@/components/featherui/Button';
 import { ServerPageHeader } from '@/components/server/ServerPageHeader';
@@ -43,6 +44,8 @@ import { CommandsEditor } from '@/components/server/files/editors/CommandsEditor
 import { isBinaryLikeFileName } from '@/lib/binary-like-file-names';
 import { safeBack } from '@/lib/safe-back';
 import { joinServerFilePath } from '@/lib/server-switch';
+import { AiHelperDialog, useAiHelperAvailable } from '@/components/server/AiHelperDialog';
+import type { AiHelperRequest } from '@/lib/api/aiEditorHelper';
 
 export default function FileEditorPage({
     params,
@@ -72,6 +75,8 @@ export default function FileEditorPage({
     const [useBukkitEditor, setUseBukkitEditor] = useState(false);
     const [useCommandsEditor, setUseCommandsEditor] = useState(false);
     const [useRawEditor, setUseRawEditor] = useState(false);
+    const [aiOpen, setAiOpen] = useState(false);
+    const [aiRequest, setAiRequest] = useState<AiHelperRequest | null>(null);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const editorRef = useRef<any>(null);
@@ -80,6 +85,8 @@ export default function FileEditorPage({
 
     const { hasPermission } = useServerPermissions(uuidShort);
     const canEdit = hasPermission('file.update');
+    const canReadContent = hasPermission('file.read-content');
+    const aiHelperAvailable = useAiHelperAvailable();
 
     const { fetchWidgets, getWidgets } = usePluginWidgets('server-file-editor');
 
@@ -362,14 +369,9 @@ export default function FileEditorPage({
                 </div>
 
                 <div className='fp-surface relative flex min-h-[600px] flex-1 items-center justify-center overflow-hidden rounded-xl border p-1'>
-                    <div className='from-primary/5 absolute inset-0 bg-linear-to-br via-transparent to-transparent opacity-30' />
                     <div className='relative z-10 flex flex-col items-center gap-6'>
-                        <div className='relative'>
-                            <div className='bg-primary/10 border-primary/20 flex h-20 w-20 animate-pulse items-center justify-center rounded-3xl border'>
-                                <Loader2 className='text-primary h-10 w-10 animate-spin' />
-                            </div>
-                            <div className='bg-primary/5 absolute -top-4 -right-4 h-12 w-12 animate-pulse rounded-full blur-xl' />
-                            <div className='bg-primary/5 absolute -bottom-4 -left-4 h-12 w-12 animate-pulse rounded-full blur-xl delay-700' />
+                        <div className='bg-primary/10 border-primary/20 flex h-20 w-20 items-center justify-center rounded-3xl border'>
+                            <Loader2 className='text-primary h-10 w-10 animate-spin' />
                         </div>
                         <div className='space-y-2 text-center'>
                             <h3 className='text-foreground text-lg font-bold tracking-tight'>
@@ -466,21 +468,15 @@ export default function FileEditorPage({
                 />
             ) : (
                 <div className='fp-surface group hover:border-border/80 relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border p-1 transition-all'>
-                    <div className='border-border/10 bg-muted/30 flex shrink-0 items-center justify-between border-b p-3'>
-                        <div className='flex items-center gap-3'>
-                            <div className='bg-primary/10 text-primary border-primary/20 flex h-9 w-9 items-center justify-center rounded-xl border'>
-                                <FileCode className='h-5 w-5' />
-                            </div>
-                            <div className='flex flex-col'>
-                                <span className='text-foreground/80 text-xs font-bold tracking-widest uppercase'>
-                                    {fileName}
-                                </span>
-                                <span className='text-muted-foreground text-[10px] font-medium tracking-tighter uppercase'>
-                                    {editorEngineLabel}
-                                </span>
-                            </div>
-                        </div>
-                        <div className='flex flex-wrap items-center justify-end gap-2 sm:gap-3'>
+                    <div className='border-border/40 bg-muted/30 flex shrink-0 flex-col gap-3 border-b p-3 sm:flex-row sm:items-center sm:justify-between'>
+                        <EditorFileInfo
+                            fileName={fileName}
+                            directory={directory}
+                            engineLabel={editorEngineLabel}
+                            dirty={content !== originalContent}
+                            saving={saving}
+                        />
+                        <div className='flex flex-wrap items-center gap-2 sm:justify-end sm:gap-3'>
                             <Button
                                 size='sm'
                                 variant='outline'
@@ -550,6 +546,27 @@ export default function FileEditorPage({
                             >
                                 {t('files.editor.cancel')}
                             </Button>
+                            {aiHelperAvailable && canReadContent && (
+                                <Button
+                                    size='sm'
+                                    variant='outline'
+                                    className='gap-2'
+                                    disabled={loading || !content}
+                                    onClick={() => {
+                                        setAiRequest({
+                                            file_path: fullPath || fileName,
+                                            file_content: content,
+                                            question:
+                                                'Explain any issues in this file and suggest a safe fix as a full file body if needed.',
+                                        });
+                                        setAiOpen(true);
+                                    }}
+                                    title={t('servers.aiHelper.askAi')}
+                                >
+                                    <Sparkles className='h-4 w-4' />
+                                    <span className='hidden sm:inline'>{t('servers.aiHelper.askAi')}</span>
+                                </Button>
+                            )}
                             <Button
                                 className='bg-primary hover:bg-primary/90 text-primary-foreground transition-all active:scale-95'
                                 size='sm'
@@ -565,6 +582,9 @@ export default function FileEditorPage({
                                     <>
                                         <Save className='mr-2 h-4 w-4' />
                                         {t('files.editor.save_changes')}
+                                        <kbd className='ml-2 hidden rounded border border-current/25 px-1 font-mono text-[10px] leading-4 opacity-75 sm:inline'>
+                                            {getSaveShortcutLabel()}
+                                        </kbd>
                                     </>
                                 )}
                             </Button>
@@ -586,6 +606,17 @@ export default function FileEditorPage({
                 </div>
             )}
             <WidgetRenderer widgets={getWidgets('server-file-editor', 'bottom-of-page')} />
+            <AiHelperDialog
+                uuidShort={uuidShort}
+                open={aiOpen}
+                onOpenChange={setAiOpen}
+                request={aiRequest}
+                canApply={canEdit}
+                onApplySuggestion={(next) => {
+                    setContent(next);
+                }}
+            />
         </div>
     );
 }
+

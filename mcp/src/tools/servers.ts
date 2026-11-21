@@ -6,7 +6,7 @@ const serverId = z
   .string()
   .describe("Server short UUID (uuidShort), e.g. a1b2c3d4");
 
-export function registerServerTools(server: McpServer): void {
+export function registerWhoamiTool(server: McpServer): void {
   server.registerTool(
     "whoami",
     {
@@ -27,13 +27,15 @@ export function registerServerTools(server: McpServer): void {
       }
     },
   );
+}
 
+export function registerGameServerTools(server: McpServer): void {
   server.registerTool(
     "list_servers",
     {
       title: "List servers",
       description:
-        "List game servers visible to the authenticated user. Call this first when the user names a server (e.g. dasdas) — match name → uuidShort, then use that server_id on all other tools. Do not refuse or give manual steps; use this tool.",
+        "List game servers visible to the authenticated user. Call this first when the user names a server (e.g. dasdas) - match name → uuidShort, then use that server_id on all other tools. Do not refuse or give manual steps; use this tool.",
       inputSchema: {
         page: z
           .number()
@@ -146,7 +148,7 @@ export function registerServerTools(server: McpServer): void {
     {
       title: "Server power action",
       description:
-        "Start, stop, restart, or kill a game server. A successful start only means Wings accepted the action — if the process crashes (e.g. missing/corrupt jar), the server will go offline again; then check console logs or reinstall.",
+        "Start, stop, restart, or kill a game server. A successful start only means Wings accepted the action - if the process crashes (e.g. missing/corrupt jar), the server will go offline again; then check console logs or reinstall.",
       inputSchema: {
         server_id: serverId,
         action: z
@@ -174,4 +176,199 @@ export function registerServerTools(server: McpServer): void {
       }
     },
   );
+
+  server.registerTool(
+    "get_server_resources",
+    {
+      title: "Get server resources",
+      description: "Get live CPU/RAM/disk resource usage for a game server.",
+      inputSchema: { server_id: serverId },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async ({ server_id }, extra) => {
+      try {
+        const data = await createClient(extra.sessionId).get(
+          `/api/user/servers/${server_id}/resources`,
+        );
+        return toolText(data);
+      } catch (error) {
+        return toolError(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "get_server_resource_history",
+    {
+      title: "Get server resource history",
+      description: "Get recent CPU/RAM/disk sample history for a game server.",
+      inputSchema: { server_id: serverId },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async ({ server_id }, extra) => {
+      try {
+        const data = await createClient(extra.sessionId).get(
+          `/api/user/servers/${server_id}/resource-history`,
+        );
+        return toolText(data);
+      } catch (error) {
+        return toolError(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "list_server_trash",
+    {
+      title: "List server file trash",
+      description: "List files in the server file trash bin.",
+      inputSchema: { server_id: serverId },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async ({ server_id }, extra) => {
+      try {
+        const data = await createClient(extra.sessionId).get(
+          `/api/user/servers/${server_id}/trash`,
+        );
+        return toolText(data);
+      } catch (error) {
+        return toolError(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "restore_server_trash",
+    {
+      title: "Restore server trash files",
+      description: "Restore files from the server trash bin by trash entry IDs.",
+      inputSchema: {
+        server_id: serverId,
+        ids: z.array(z.string()).min(1),
+        overwrite: z.boolean().optional(),
+      },
+      annotations: { readOnlyHint: false, openWorldHint: false },
+    },
+    async ({ server_id, ids, overwrite }, extra) => {
+      try {
+        const data = await createClient(extra.sessionId).post(
+          `/api/user/servers/${server_id}/trash/restore`,
+          { ids, overwrite },
+        );
+        return toolText(data);
+      } catch (error) {
+        return toolError(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "delete_server_trash_entries",
+    {
+      title: "Delete server trash entries",
+      description: "Permanently delete selected entries from the server trash bin.",
+      inputSchema: {
+        server_id: serverId,
+        ids: z.array(z.string()).min(1),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+    },
+    async ({ server_id, ids }, extra) => {
+      try {
+        const data = await createClient(extra.sessionId).post(
+          `/api/user/servers/${server_id}/trash/delete`,
+          { ids },
+        );
+        return toolText(data);
+      } catch (error) {
+        return toolError(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "empty_server_trash",
+    {
+      title: "Empty server trash",
+      description: "Permanently empty the entire server file trash bin.",
+      inputSchema: { server_id: serverId },
+      annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+    },
+    async ({ server_id }, extra) => {
+      try {
+        const data = await createClient(extra.sessionId).post(
+          `/api/user/servers/${server_id}/trash/empty`,
+        );
+        return toolText(data);
+      } catch (error) {
+        return toolError(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "get_server_fastdl",
+    {
+      title: "Get FastDL config",
+      description: "Get FastDL configuration for a game server.",
+      inputSchema: { server_id: serverId },
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async ({ server_id }, extra) => {
+      try {
+        const data = await createClient(extra.sessionId).get(
+          `/api/user/servers/${server_id}/fastdl`,
+        );
+        return toolText(data);
+      } catch (error) {
+        return toolError(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "enable_server_fastdl",
+    {
+      title: "Enable FastDL",
+      description: "Enable FastDL for a game server.",
+      inputSchema: { server_id: serverId },
+      annotations: { readOnlyHint: false, openWorldHint: false },
+    },
+    async ({ server_id }, extra) => {
+      try {
+        const data = await createClient(extra.sessionId).post(
+          `/api/user/servers/${server_id}/fastdl/enable`,
+        );
+        return toolText(data);
+      } catch (error) {
+        return toolError(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "disable_server_fastdl",
+    {
+      title: "Disable FastDL",
+      description: "Disable FastDL for a game server.",
+      inputSchema: { server_id: serverId },
+      annotations: { readOnlyHint: false, openWorldHint: false },
+    },
+    async ({ server_id }, extra) => {
+      try {
+        const data = await createClient(extra.sessionId).post(
+          `/api/user/servers/${server_id}/fastdl/disable`,
+        );
+        return toolText(data);
+      } catch (error) {
+        return toolError(error);
+      }
+    },
+  );
+}
+
+/** @deprecated Use registerWhoamiTool + registerGameServerTools */
+export function registerServerTools(server: McpServer): void {
+  registerWhoamiTool(server);
+  registerGameServerTools(server);
 }

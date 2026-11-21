@@ -29,7 +29,7 @@ function generateApiDocsPage() {
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>API Reference — FeatherPanel Docs</title>
+  <title>API Reference - FeatherPanel Docs</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link rel="stylesheet" href="${DOCS_BASE}/assets/docs.css" />
   <style>
@@ -66,13 +66,38 @@ function generateApiDocsPage() {
       <a class="fp-badge" href="${DOCS_BASE}/api/index.json">index.json</a>
       <a class="fp-badge" href="${DOCS_BASE}/api/oauth2-playground.html">OAuth2 playground</a>
     </div>
-  <div id="redoc-container"></div>
+  <div id="redoc-container"><p id="redoc-status" style="color:#9ca3af;padding:24px 0">Loading API reference...</p></div>
   <footer class="fp-footer">Raw OpenAPI for RAG/tools: <a href="${DOCS_BASE}/api/openapi.json">openapi.json</a></footer>
   </div>
 
-  <script src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/redoc@2.5.0/bundles/redoc.standalone.js"></script>
   <script>
-    Redoc.init('./openapi.json', {
+    // The static spec only exists when the image was built with export:docs.
+    // Fall back to the live spec served by the panel backend so the viewer never stays blank.
+    async function fpResolveSpec() {
+      for (const url of ['./openapi.json', '/api/openapi.json']) {
+        try {
+          const res = await fetch(url, { credentials: 'same-origin' });
+          const type = res.headers.get('content-type') || '';
+          if (res.ok && type.includes('json')) {
+            return await res.json();
+          }
+        } catch (e) {}
+      }
+      return null;
+    }
+    function fpDocsError(message) {
+      const box = document.getElementById('redoc-container');
+      if (box) box.innerHTML = '<p style="color:#f87171;padding:24px 0">' + message + '</p>';
+    }
+    if (typeof Redoc === 'undefined') {
+      fpDocsError('The API viewer script could not be loaded (blocked CDN or Content Security Policy). Use the openapi.json link above.');
+    } else fpResolveSpec().then((fpSpec) => {
+    if (!fpSpec) {
+      fpDocsError('Could not load openapi.json. Use the openapi.json link above or /api/openapi.json.');
+      return;
+    }
+    Redoc.init(fpSpec, {
       theme: {
         colors: {
           primary: {
@@ -123,7 +148,10 @@ function generateApiDocsPage() {
       hideSingleRequestSampleTab: false,
       menuToggle: true,
       nativeScrollbars: true,
-    }, document.getElementById('redoc-container'));
+    }, document.getElementById('redoc-container'), (err) => {
+      if (err) fpDocsError('The API viewer failed to render the spec: ' + String(err && err.message ? err.message : err));
+    });
+    });
 
     // Apply custom styles to match dark theme
     const style = document.createElement('style');
@@ -216,7 +244,7 @@ function generateOAuth2DocsAndPlaygroundPage() {
         <thead><tr><th>Situation</th><th>Flow</th></tr></thead>
         <tbody>
           <tr><td>Web app with a redirect URL</td><td><strong>Callback</strong> <code>mode=user</code> (fragment) or <code>mode=server</code> (panel POSTs JSON)</td></tr>
-          <tr><td>CLI / TV / headless — <em>no</em> redirect URL</td><td><strong>Device</strong> — user enters a short code; client polls</td></tr>
+          <tr><td>CLI / TV / headless - <em>no</em> redirect URL</td><td><strong>Device</strong> - user enters a short code; client polls</td></tr>
         </tbody>
       </table>
       <p>Full guide (RAG): <a href="${DOCS_BASE}/api/oauth2.md">api/oauth2.md</a> · Login SSO is different: <a href="${DOCS_BASE}/auth/oidc-sso.md">auth/oidc-sso.md</a></p>
@@ -230,7 +258,7 @@ function generateOAuth2DocsAndPlaygroundPage() {
         <li><code>mode=user</code>: panel redirects user to <code>callbackurl</code> with result in URL fragment (<code>#...</code>).</li>
         <li><code>mode=server</code>: panel calls <code>callbackurl</code> server-to-server with JSON credentials, then shows success in panel UI.</li>
         <li>Optional: app exchanges one-time <code>authorization_code</code> via <code>POST /api/user/api-clients/oauth2/token</code>.</li>
-        <li>Do <strong>not</strong> pass <code>mode=device</code> on the callback URL — use the device endpoints below.</li>
+        <li>Do <strong>not</strong> pass <code>mode=device</code> on the callback URL - use the device endpoints below.</li>
       </ol>
     </div>
 
@@ -254,7 +282,7 @@ function generateOAuth2DocsAndPlaygroundPage() {
     </div>
 
     <div class="panel">
-      <h2>Playground — callback (with redirect URL)</h2>
+      <h2>Playground - callback (with redirect URL)</h2>
       <p>Generate, validate, and open consent URLs for <code>mode=user</code> / <code>mode=server</code>.</p>
       <div class="grid">
         <div><label>name *</label><input id="name" value="My Integration" /></div>
@@ -296,7 +324,7 @@ function generateOAuth2DocsAndPlaygroundPage() {
     </div>
 
     <div class="panel">
-      <h2>Playground — device (no redirect URL)</h2>
+      <h2>Playground - device (no redirect URL)</h2>
       <p>RFC 8628-style. Start a device grant, show the user the verification URI + code, then poll until keys arrive. Live calls need a running panel (same origin).</p>
       <div class="grid">
         <div><label>name *</label><input id="deviceName" value="My CLI" /></div>
@@ -536,10 +564,10 @@ Interactive docs: [HTML (Redoc)](./index.html)
 
 ## Machine-readable
 
-- [\`openapi.json\`](./openapi.json) — full OpenAPI 3 specification (preferred for RAG / codegen)
-- [\`index.json\`](./index.json) — pointers for this section
-- [OAuth2 API consent guide](./oauth2.md) — callback (\`mode=user|server\`) **and** device flow
-- [OAuth2 playground](./oauth2-playground.html) — browser helper for both flows (live calls need a running panel)
+- [\`openapi.json\`](./openapi.json) - full OpenAPI 3 specification (preferred for RAG / codegen)
+- [\`index.json\`](./index.json) - pointers for this section
+- [OAuth2 API consent guide](./oauth2.md) - callback (\`mode=user|server\`) **and** device flow
+- [OAuth2 playground](./oauth2-playground.html) - browser helper for both flows (live calls need a running panel)
 
 Related auth (login, not API keys): [../auth/README.md](../auth/README.md)
 

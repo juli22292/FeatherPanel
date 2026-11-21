@@ -27,10 +27,15 @@ namespace App\Cron;
 
 use App\App;
 use App\Chat\Server;
+use App\Chat\VmNode;
 use App\Chat\Database;
 use App\Chat\VmInstance;
+use App\Config\ConfigInterface;
+use App\Services\Vm\VmInstanceUtil;
 use App\Helpers\ModerationReasonHelper;
+use App\Services\Server\WingsSuspensionSync;
 use App\Cli\Utils\MinecraftColorCodeSupport;
+use App\Services\Notifications\InboxNotifier;
 
 class ZCheckExpiredServers implements TimeTask
 {
@@ -87,6 +92,15 @@ class ZCheckExpiredServers implements TimeTask
             MinecraftColorCodeSupport::sendOutputWithNewLine('&cFailed to check expired VM instances: ' . $e->getMessage());
         }
 
+        try {
+            $warned = $this->warnExpiringVmInstances();
+            if ($warned > 0) {
+                MinecraftColorCodeSupport::sendOutputWithNewLine('&aWarned ' . $warned . ' VDS owner(s) about upcoming expiry');
+            }
+        } catch (\Throwable $e) {
+            $logger->error('Failed to send VDS expiry warnings: ' . $e->getMessage());
+        }
+
         if ($suspendedServers === 0 && $suspendedVms === 0) {
             MinecraftColorCodeSupport::sendOutputWithNewLine('&7No expired servers or VMs found');
         }
@@ -124,6 +138,10 @@ class ZCheckExpiredServers implements TimeTask
 
                 if ($success) {
                     ++$suspendedCount;
+                    $fresh = Server::getServerById((int) $server['id']);
+                    if ($fresh && !WingsSuspensionSync::afterSuspend($fresh)) {
+                        $logger->warning('Auto-suspended expired server in the panel, but Wings could not be updated: ' . $server['name'] . ' (ID: ' . $server['id'] . ')');
+                    }
                     $logger->info('Auto-suspended expired server: ' . $server['name'] . ' (ID: ' . $server['id'] . ', Expired: ' . $server['expires_at'] . ')');
                 } else {
                     $logger->error('Failed to suspend expired server: ' . $server['name'] . ' (ID: ' . $server['id'] . ')');
@@ -148,7 +166,7 @@ class ZCheckExpiredServers implements TimeTask
 
         // Find VM instances that have expired and are not already suspended
         $stmt = $pdo->prepare('
-            SELECT id, vmid, hostname, user_uuid, expires_at
+            SELECT id, vmid, vm_node_id, vm_type, hostname, user_uuid, expires_at
             FROM featherpanel_vm_instances
             WHERE expires_at IS NOT NULL
               AND expires_at <= NOW()
@@ -170,6 +188,7 @@ class ZCheckExpiredServers implements TimeTask
 
                 if ($success) {
                     ++$suspendedCount;
+                    $this->stopExpiredVm($vm);
                     $logger->info('Auto-suspended expired VM: ' . ($vm['hostname'] ?? 'VM-' . $vm['vmid']) . ' (ID: ' . $vm['id'] . ', Expired: ' . $vm['expires_at'] . ')');
                 } else {
                     $logger->error('Failed to suspend expired VM: ' . ($vm['hostname'] ?? 'VM-' . $vm['vmid']) . ' (ID: ' . $vm['id'] . ')');
@@ -180,5 +199,50 @@ class ZCheckExpiredServers implements TimeTask
         }
 
         return $suspendedCount;
+    }
+
+    /** Power off an expired VDS (setting vds_expiry_stop_vm). Best effort: the suspension already applies. */
+    private function stopExpiredVm(array $vm): void
+    {
+        $config = App::getInstance(false, true)->getConfig();
+        if ($config->getSetting(ConfigInterface::VDS_EXPIRY_STOP_VM, 'true') !== 'true') {
+            return;
+        }
+        try {
+            $full = VmInstance::getById((int) $vm['id']);
+            $node = $full ? VmNode::getVmNodeById((int) $full['vm_node_id']) : null;
+            if (!$full || !$node || empty($full['pve_node'])) {
+                return;
+            }
+            $client = VmInstanceUtil::buildProxmoxClientForNode($node);
+            $client->stopVm((string) $full['pve_node'], (int) $full['vmid'], (string) ($full['vm_type'] ?? 'qemu'));
+        } catch (\Throwable $e) {
+            App::getInstance(false, true)->getLogger()->warning('Could not stop expired VDS ' . $vm['id'] . ': ' . $e->getMessage());
+        }
+    }
+
+    /** Notify owners N days (vds_expiry_warn_days) before a VDS expires; once per expiry date. */
+    private function warnExpiringVmInstances(): int
+    {
+        $config = App::getInstance(false, true)->getConfig();
+        $days = max(0, min(60, (int) $config->getSetting(ConfigInterface::VDS_EXPIRY_WARN_DAYS, '3')));
+        if ($days === 0) {
+            return 0;
+        }
+        $pdo = Database::getPdoConnection();
+        $now = gmdate('Y-m-d H:i:s');
+        $stmt = $pdo->prepare('SELECT id, vmid, hostname, user_uuid, expires_at FROM featherpanel_vm_instances
+            WHERE expires_at IS NOT NULL AND expires_at > :now AND expires_at <= :until AND suspended = 0 AND expiry_warned_at IS NULL');
+        $stmt->execute(['now' => $now, 'until' => gmdate('Y-m-d H:i:s', time() + $days * 86400)]);
+        $mark = $pdo->prepare('UPDATE featherpanel_vm_instances SET expiry_warned_at = :now WHERE id = :id');
+        $count = 0;
+        foreach ($stmt->fetchAll(\PDO::FETCH_ASSOC) as $vm) {
+            $left = max(0, (int) ceil((strtotime((string) $vm['expires_at'] . ' UTC') - time()) / 86400));
+            InboxNotifier::vdsExpiring($vm, (string) $vm['expires_at'], $left);
+            $mark->execute(['now' => $now, 'id' => $vm['id']]);
+            ++$count;
+        }
+
+        return $count;
     }
 }

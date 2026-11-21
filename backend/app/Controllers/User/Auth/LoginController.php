@@ -105,13 +105,30 @@ class LoginController
         }
         if ($discordToken) {
             $discordController = new DiscordController();
-            $userInfo = $discordController->authenticateWithToken($discordToken);
+            $userInfo = $discordController->authenticateWithToken($discordToken, $request);
 
             if (!$userInfo) {
                 return ApiResponse::error('Invalid or expired Discord token', 'INVALID_DISCORD_TOKEN', 400);
             }
 
-            // Use existing login flow to set session and return user data
+            // Same ban, deletion and 2FA rules as every other sign-in method
+            return $this->completeExternalLogin($userInfo);
+        }
+
+        // Handle Google / GitHub / OIDC sign-in handoff (same ban, deletion and 2FA rules as password login)
+        $ssoLoginToken = $data['sso_login_token'] ?? null;
+        if ($ssoLoginToken !== null) {
+            $handoff = is_string($ssoLoginToken) ? SsoController::consumeHandoff($ssoLoginToken, $request) : null;
+            $userInfo = $handoff !== null ? User::getUserByUuid((string) $handoff['user_uuid']) : null;
+            if ($userInfo === null) {
+                return ApiResponse::error('Invalid or expired sign-in token', 'INVALID_SSO_LOGIN_TOKEN', 400);
+            }
+            $gate = $this->externalLoginGate($userInfo);
+            if ($gate !== null) {
+                return $gate;
+            }
+            SsoController::audit($userInfo['uuid'], 'sso_login', 'Signed in with ' . SsoController::label((string) $handoff['provider']));
+
             return $this->completeLogin($userInfo);
         }
 
@@ -312,6 +329,48 @@ class LoginController
     }
 
     /**
+     * Finish a sign-in that was proven by another system (Discord, LDAP, ...).
+     *
+     * Applies the same ban, deletion and two-factor rules as the password form
+     * before a session is created.
+     */
+    public function completeExternalLogin(array $userInfo, ?string $redirectTo = null): Response
+    {
+        $gate = $this->externalLoginGate($userInfo);
+        if ($gate !== null) {
+            return $gate;
+        }
+
+        return $this->completeLogin($userInfo, $redirectTo);
+    }
+
+    /**
+     * Return an error response when the account may not sign in yet, or null to continue.
+     */
+    public function externalLoginGate(array $userInfo): ?Response
+    {
+        if (($userInfo['banned'] ?? 'false') === 'true') {
+            return ApiResponse::error('User is banned', 'USER_BANNED');
+        }
+        if (($userInfo['deleted'] ?? 'false') === 'true') {
+            return ApiResponse::error('Account is deleted', 'ACCOUNT_DELETED', 403);
+        }
+        if (($userInfo['two_fa_enabled'] ?? 'false') === 'true') {
+            $challenge = TwoFactorChallengeHelper::issue((string) $userInfo['uuid']);
+            if ($challenge === null) {
+                return ApiResponse::error('Two-factor authentication is temporarily unavailable. Please try again shortly.', '2FA_UNAVAILABLE', 503);
+            }
+
+            return ApiResponse::error('2FA required', 'TWO_FACTOR_REQUIRED', 401, [
+                'email' => $userInfo['email'],
+                'challenge' => $challenge,
+            ]);
+        }
+
+        return null;
+    }
+
+    /**
      * Complete login process - set session, log activity, emit event, and return user data.
      *
      * This method is public so that other authentication flows (e.g. OAuth/OIDC)
@@ -328,6 +387,13 @@ class LoginController
             $userInfo['deletion_scheduled_at'] = null;
             $userInfo['deletion_mode'] = null;
         }
+
+        // Security center: panel IP allow list, then a heads-up email for a new sign-in IP.
+        $loginIp = CloudFlareRealIP::getRealIP();
+        if (!\App\Services\Security\SecurityPolicy::ipAllowed($userInfo, $loginIp)) {
+            return ApiResponse::error('Signing in from this IP address is not allowed', 'IP_NOT_ALLOWED', 403);
+        }
+        \App\Services\Security\SecurityPolicy::maybeSendNewLoginAlert($userInfo, $loginIp, $_SERVER['HTTP_USER_AGENT'] ?? null);
 
         // Session cookie requires a non-empty remember_token; older rows may have NULL/empty.
         $token = User::ensureRememberToken($userInfo['uuid'], $userInfo['remember_token'] ?? null);

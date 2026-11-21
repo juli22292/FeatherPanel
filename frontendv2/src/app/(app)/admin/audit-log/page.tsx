@@ -37,6 +37,8 @@ import { usePersistedListFilters } from '@/hooks/usePersistedListFilters';
 interface AuditEntry {
     id: number;
     user_uuid: string;
+    actor_uuid?: string | null;
+    actor_username?: string | null;
     name: string;
     context: string | null;
     ip_address: string | null;
@@ -135,6 +137,14 @@ export default function AuditLogPage() {
 
     const targetLabel = (target: string) => t(`admin.audit_log.targets.${target}`);
     const userLabel = (row: AuditEntry) => row.username ?? t('admin.audit_log.deleted_user');
+    const actorLabel = (row: AuditEntry) => {
+        if (!row.actor_uuid || row.actor_uuid === row.user_uuid) return null;
+        return t('admin.audit_log.actor_as_user', {
+            admin: row.actor_username ?? row.actor_uuid,
+            user: userLabel(row),
+        });
+    };
+
 
     return (
         <div className='space-y-6'>
@@ -151,7 +161,7 @@ export default function AuditLogPage() {
             />
 
             <div className='fp-surface grid gap-3 rounded-2xl border p-4 sm:grid-cols-2 lg:grid-cols-6'>
-                <div className='group relative sm:col-span-2'>
+                <div className='group relative sm:col-span-2 lg:col-span-3'>
                     <Search className='text-muted-foreground group-focus-within:text-primary absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2' />
                     <Input
                         placeholder={t('admin.audit_log.search_placeholder')}
@@ -160,39 +170,45 @@ export default function AuditLogPage() {
                         className='h-11 w-full pl-10'
                     />
                 </div>
-                <Input
-                    placeholder={t('admin.audit_log.user_placeholder')}
-                    value={filters.user}
-                    onChange={(e) => patchFilters({ user: e.target.value, page: 1 })}
-                    className='h-11 w-full'
-                />
-                <Select
-                    value={filters.action}
-                    onChange={(e) => patchFilters({ action: e.target.value, page: 1 })}
-                    className='h-11 w-full rounded-xl'
-                    aria-label={t('admin.audit_log.action')}
-                >
-                    <option value=''>{t('admin.audit_log.all_actions')}</option>
-                    {actions.map((a) => (
-                        <option key={a.name} value={a.name}>
-                            {a.name} ({a.total})
-                        </option>
-                    ))}
-                </Select>
-                <Select
-                    value={filters.target}
-                    onChange={(e) => patchFilters({ target: e.target.value, page: 1 })}
-                    className='h-11 w-full rounded-xl'
-                    aria-label={t('admin.audit_log.target')}
-                >
-                    <option value=''>{t('admin.audit_log.all_targets')}</option>
-                    {targets.map((target) => (
-                        <option key={target} value={target}>
-                            {targetLabel(target)}
-                        </option>
-                    ))}
-                </Select>
-                <div className='flex items-center gap-2'>
+                <div className='sm:col-span-2 lg:col-span-3'>
+                    <Input
+                        placeholder={t('admin.audit_log.user_placeholder')}
+                        value={filters.user}
+                        onChange={(e) => patchFilters({ user: e.target.value, page: 1 })}
+                        className='h-11 w-full'
+                    />
+                </div>
+                <div className='lg:col-span-2'>
+                    <Select
+                        value={filters.action}
+                        onChange={(e) => patchFilters({ action: e.target.value, page: 1 })}
+                        className='h-11 w-full rounded-xl'
+                        aria-label={t('admin.audit_log.action')}
+                    >
+                        <option value=''>{t('admin.audit_log.all_actions')}</option>
+                        {actions.map((a) => (
+                            <option key={a.name} value={a.name}>
+                                {a.name} ({a.total})
+                            </option>
+                        ))}
+                    </Select>
+                </div>
+                <div className='lg:col-span-2'>
+                    <Select
+                        value={filters.target}
+                        onChange={(e) => patchFilters({ target: e.target.value, page: 1 })}
+                        className='h-11 w-full rounded-xl'
+                        aria-label={t('admin.audit_log.target')}
+                    >
+                        <option value=''>{t('admin.audit_log.all_targets')}</option>
+                        {targets.map((target) => (
+                            <option key={target} value={target}>
+                                {targetLabel(target)}
+                            </option>
+                        ))}
+                    </Select>
+                </div>
+                <div className='flex items-center gap-2 sm:col-span-2'>
                     <Input
                         type='date'
                         value={filters.from}
@@ -247,7 +263,14 @@ export default function AuditLogPage() {
                         {
                             key: 'user',
                             header: t('admin.audit_log.user'),
-                            cell: (row) => <span className='font-medium'>{userLabel(row)}</span>,
+                            cell: (row) => (
+                                <div className='min-w-0'>
+                                    <span className='font-medium'>{userLabel(row)}</span>
+                                    {actorLabel(row) && (
+                                        <p className='text-muted-foreground truncate text-xs'>{actorLabel(row)}</p>
+                                    )}
+                                </div>
+                            ),
                         },
                         {
                             key: 'action',
@@ -286,7 +309,7 @@ export default function AuditLogPage() {
                             </div>
                             <p className='text-muted-foreground truncate text-sm'>{row.context}</p>
                             <p className='text-muted-foreground text-xs'>
-                                {userLabel(row)} · {formatDateInTz(row.created_at, dateOpts)}
+                                {actorLabel(row) ?? userLabel(row)} · {formatDateInTz(row.created_at, dateOpts)}
                             </p>
                         </div>
                     )}
@@ -314,6 +337,18 @@ export default function AuditLogPage() {
                                     [t('admin.audit_log.user'), userLabel(selected)],
                                     [t('admin.audit_log.email'), <Sensitive key='e'>{selected.email}</Sensitive>],
                                     [t('admin.audit_log.user_uuid'), selected.user_uuid],
+                                    [
+                                        t('admin.audit_log.actor'),
+                                        selected.actor_uuid && selected.actor_uuid !== selected.user_uuid
+                                            ? (selected.actor_username ?? selected.actor_uuid)
+                                            : '-',
+                                    ],
+                                    [
+                                        t('admin.audit_log.actor_uuid'),
+                                        selected.actor_uuid && selected.actor_uuid !== selected.user_uuid
+                                            ? selected.actor_uuid
+                                            : '-',
+                                    ],
                                     [t('admin.audit_log.target'), targetLabel(selected.target)],
                                     [t('admin.audit_log.ip'), <Sensitive key='i'>{selected.ip_address}</Sensitive>],
                                     [t('admin.audit_log.event_id'), `#${selected.id}`],

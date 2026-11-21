@@ -38,6 +38,7 @@ use OpenApi\Attributes as OA;
 use App\Helpers\CaptchaHelper;
 use App\Config\ConfigInterface;
 use App\Helpers\PermissionHelper;
+use App\Helpers\UploadedFileType;
 use App\Middleware\AuthMiddleware;
 use App\CloudFlare\CloudFlareRealIP;
 use App\Helpers\EmailDomainValidator;
@@ -138,6 +139,22 @@ class SessionController
         $config = $app->getConfig();
         $data = json_decode($request->getContent(), true);
 
+        // The password, e-mail and 2FA are what the confirmation step checks, so
+        // changing them needs a confirmed session (a stolen session cannot swap them).
+        // Checked before the captcha so the retried request can still use its token.
+        $current = AuthMiddleware::getCurrentUser($request);
+        if (is_array($data) && $current !== null) {
+            $securityChange = (isset($data['password']) && is_scalar($data['password']) && (string) $data['password'] !== '')
+                || (isset($data['email']) && is_scalar($data['email']) && (string) $data['email'] !== (string) ($current['email'] ?? ''))
+                || (($data['two_fa_enabled'] ?? null) === false && ($current['two_fa_enabled'] ?? 'false') === 'true');
+            if ($securityChange) {
+                $reauth = \App\Helpers\StepUpAuth::require($request, \App\Helpers\StepUpAuth::ACTION_ACCOUNT_SECURITY);
+                if ($reauth !== null) {
+                    return $reauth;
+                }
+            }
+        }
+
         if ($config->getSetting(ConfigInterface::TURNSTILE_ENABLED, 'false') == 'true') {
             if (!isset($data['turnstile_token']) || !is_scalar($data['turnstile_token']) || trim((string) $data['turnstile_token']) === '') {
                 return ApiResponse::error('Captcha token is required', 'CAPTCHA_TOKEN_REQUIRED');
@@ -178,6 +195,12 @@ class SessionController
             // verifying a code. Turning the flag on here without a secret locks the account out.
             if ($data['two_fa_enabled'] && ($user['two_fa_enabled'] ?? 'false') !== 'true') {
                 return ApiResponse::error('Use the two-factor setup to enable 2FA', 'INVALID_2FA_VALUE', 400);
+            }
+            // Security center: a user the 2FA requirement applies to cannot switch it off.
+            if (!$data['two_fa_enabled'] && ($user['two_fa_enabled'] ?? 'false') === 'true'
+                && !$request->attributes->has('impersonator')
+                && \App\Services\Security\SecurityPolicy::twoFactorApplies($user)) {
+                return ApiResponse::error('Your role requires two-factor authentication, so it cannot be turned off', 'TWO_FACTOR_REQUIRED_BY_POLICY', 403);
             }
             $data['two_fa_enabled'] = $data['two_fa_enabled'] ? 'true' : 'false';
         }
@@ -299,6 +322,10 @@ class SessionController
 
         // Hash password if provided
         if ($passwordChanging) {
+            $policyError = \App\Services\Security\SecurityPolicy::validatePassword((string) $data['password']);
+            if ($policyError !== null) {
+                return ApiResponse::error($policyError, 'PASSWORD_POLICY_VIOLATION', 422);
+            }
             $data['password'] = password_hash($data['password'], PASSWORD_BCRYPT);
             $data['remember_token'] = User::generateAccountToken();
         }
@@ -391,7 +418,14 @@ class SessionController
             'color' => $role ? ($role['color'] ?? '#666666') : '#666666',
         ];
 
+        // Security center: the frontend sends users whose role needs 2FA to the setup page.
+        $impersonator = $request->attributes->get('impersonator');
+        $user['two_fa_required'] = !is_array($impersonator) && \App\Services\Security\SecurityPolicy::requiresTwoFactor($user);
+        $graceUntil = is_array($impersonator) ? null : \App\Services\Security\SecurityPolicy::twoFactorGraceRemaining($user);
+        $user['two_fa_grace_until'] = $graceUntil !== null ? gmdate('Y-m-d H:i:s', $graceUntil) : null;
+
         $user = User::stripSensitiveFields($user);
+        $user['impersonated_by'] = is_array($impersonator) ? ['uuid' => $impersonator['uuid'], 'username' => $impersonator['username']] : null;
 
         if ($app->isDemoMode()) {
             $user['first_ip'] = $app->getIPIntoFBIFormat();
@@ -402,6 +436,7 @@ class SessionController
             'user_info' => $user,
             'permissions' => $permissions,
             'preferences' => [],
+            'impersonator' => is_array($impersonator) ? ['uuid' => $impersonator['uuid'], 'username' => $impersonator['username']] : null,
         ];
 
         if (
@@ -709,8 +744,12 @@ class SessionController
             $detectedMimeType = $uploadedFile->getMimeType();
         }
 
-        // Validate MIME type
-        if (empty($detectedMimeType) || !in_array($detectedMimeType, $allowedMimeTypes, true)) {
+        // Validate MIME type (and that it matches the extension)
+        if (
+            empty($detectedMimeType)
+            || !in_array($detectedMimeType, $allowedMimeTypes, true)
+            || !UploadedFileType::matches($originalExtension, $detectedMimeType, UploadedFileType::IMAGE_TYPES)
+        ) {
             return ApiResponse::error(
                 'Invalid file type. Only JPEG, PNG, GIF, and WebP images are allowed.',
                 'INVALID_MIME_TYPE',
@@ -971,6 +1010,7 @@ class SessionController
         // Process mails to format them properly
         $mails = [];
         foreach ($mailList as $mail) {
+            $mail = MailQueue::redactOneTimeCode($mail);
             $mailData = [
                 'id' => (int) $mail['id'],
                 'subject' => $mail['subject'] ?? '',

@@ -55,34 +55,81 @@ class AuthMiddleware implements MiddlewareInterface
             UserDeviceTracker::trackFromRequest($request, $userInfo);
             // Attach user info to the request attributes for downstream use
             $request->attributes->set('user', $userInfo);
+            \App\Runtime\RequestContext::setUserUuid(isset($userInfo['uuid']) ? (string) $userInfo['uuid'] : null);
             $request->attributes->set('auth_type', 'session');
+
+            // Impersonation: swap in the target for this request, keep the admin for audit.
+            if (isset($_COOKIE[\App\Helpers\Impersonation::COOKIE])) {
+                $impersonation = \App\Helpers\Impersonation::resolve($userInfo);
+                $path = $request->getPathInfo();
+                if ($path === '/api/user/auth/logout') {
+                    // Ending the session also ends impersonation; log with the target when known.
+                    \App\Helpers\Impersonation::stop($userInfo, is_array($impersonation) ? $impersonation['target'] : null);
+                } elseif ($impersonation === null) {
+                    \App\Helpers\Impersonation::stop($userInfo, null);
+                } else {
+                    if (\App\Helpers\Impersonation::isBlockedAction($request->getMethod(), $path)) {
+                        $blocked = ApiResponse::error(
+                            'This action is not allowed while impersonating another user. Stop impersonating first.',
+                            'IMPERSONATION_ACTION_BLOCKED',
+                            403
+                        );
+                        $request->attributes->set('user', $impersonation['target']);
+                        \App\Runtime\RequestContext::setUserUuid(isset($impersonation['target']['uuid']) ? (string) $impersonation['target']['uuid'] : null);
+                        $request->attributes->set('impersonator', $userInfo);
+                        \App\Runtime\RequestContext::setImpersonation($userInfo, $impersonation['target']);
+                        try {
+                            \App\Helpers\Impersonation::logRequest($request, $blocked);
+                        } catch (\Throwable) {
+                        }
+
+                        return $blocked;
+                    }
+                    $request->attributes->set('user', $impersonation['target']);
+                    \App\Runtime\RequestContext::setUserUuid(isset($impersonation['target']['uuid']) ? (string) $impersonation['target']['uuid'] : null);
+                    $request->attributes->set('impersonator', $userInfo);
+                    \App\Runtime\RequestContext::setImpersonation($userInfo, $impersonation['target']);
+                }
+            }
         } else {
             // Check for Authorization header (Bearer token for API keys)
             $authHeader = $request->headers->get('Authorization');
             if ($authHeader && preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
-                $publicKey = $matches[1];
+                $bearerToken = $matches[1];
                 $apiClient = null;
 
-                // FP-5: the public_key of an API client is not a secret (it is
-                // handed out in redirect URLs), so it must not be accepted as a
-                // Bearer credential. Only kept for legacy clients when an operator
-                // explicitly opts in via `api_clients_allow_public_key_auth`.
-                if (self::publicKeyAuthAllowed()) {
-                    $apiClient = ApiClient::getApiClientByPublicKey($publicKey);
+                // Prefer the private key (secret). Public-key Bearer auth remains
+                // enabled by default for compatibility with billing/SSO integrations
+                // that historically stored the always-visible public_key; operators
+                // can harden with `api_clients_allow_public_key_auth=false`.
+                $apiClient = ApiClient::getApiClientByPrivateKey($bearerToken);
+
+                if ($apiClient == null && self::publicKeyAuthAllowed()) {
+                    $apiClient = ApiClient::getApiClientByPublicKey($bearerToken);
                     if ($apiClient !== null) {
                         App::getInstance(true)->getLogger()->warning(
-                            'API client authenticated with its public_key (api_clients_allow_public_key_auth=true) - client: '
+                            'API client authenticated with its public_key - client: '
                             . ($apiClient['uuid'] ?? $apiClient['id'] ?? 'unknown')
                         );
                     }
                 }
 
-                // Validate the API client using the private key
                 if ($apiClient == null) {
-                    $apiClient = ApiClient::getApiClientByPrivateKey($publicKey);
-                    if ($apiClient == null) {
-                        return ApiResponse::error('Invalid API key', 'INVALID_API_KEY', 401, []);
+                    // Helpful error when a real public_key was sent but public-key
+                    // Bearer auth has been explicitly disabled by the operator.
+                    if (
+                        !self::publicKeyAuthAllowed()
+                        && ApiClient::getApiClientByPublicKey($bearerToken) !== null
+                    ) {
+                        return ApiResponse::error(
+                            'Public API keys cannot be used as Bearer tokens. Use the private key, or set api_clients_allow_public_key_auth=true.',
+                            'PUBLIC_API_KEY_NOT_ALLOWED',
+                            401,
+                            []
+                        );
                     }
+
+                    return ApiResponse::error('Invalid API key', 'INVALID_API_KEY', 401, []);
                 }
 
                 // Get the user associated with this API client
@@ -115,6 +162,7 @@ class AuthMiddleware implements MiddlewareInterface
 
                 // Attach user info and API client info to the request attributes
                 $request->attributes->set('user', $userInfo);
+                \App\Runtime\RequestContext::setUserUuid(isset($userInfo['uuid']) ? (string) $userInfo['uuid'] : null);
                 $request->attributes->set('api_client', $apiClient);
                 $decodedPermissions = null;
                 if (array_key_exists('permissions', $apiClient) && $apiClient['permissions'] !== null) {
@@ -133,9 +181,30 @@ class AuthMiddleware implements MiddlewareInterface
             \App\Telemetry\SentryTelemetry::setUser((string) $user['uuid']);
             // The row was just loaded: permission checks in this request reuse its role.
             \App\Helpers\PermissionHelper::rememberUser($user);
+
+            $security = self::securityResponse($request, $user);
+            if ($security !== null) {
+                return $security;
+            }
+
+            $maintenance = self::maintenanceResponse($request, $user);
+            if ($maintenance !== null) {
+                return $maintenance;
+            }
         }
 
-        return $next($request);
+        $response = $next($request);
+
+        // Audit every mutating request made while impersonating (admin X as user Y).
+        if ($request->attributes->has('impersonator')) {
+            try {
+                \App\Helpers\Impersonation::logRequest($request, $response);
+            } catch (\Throwable) {
+                // Audit logging must never break the response.
+            }
+        }
+
+        return $response;
     }
 
     /**
@@ -179,19 +248,70 @@ class AuthMiddleware implements MiddlewareInterface
     }
 
     /**
-     * Whether an API client may still authenticate with its own public_key.
-     * Defaults to false; an operator can restore the legacy behaviour with a single
-     * config entry (`api_clients_allow_public_key_auth = true`).
+     * Whether an API client may authenticate with its own public_key as Bearer.
+     * Defaults to true for compatibility with existing integrations; set
+     * `api_clients_allow_public_key_auth=false` to require private keys only.
      */
     private static function publicKeyAuthAllowed(): bool
     {
         try {
             return App::getInstance(true)->getConfig()->getSetting(
                 ConfigInterface::API_CLIENTS_ALLOW_PUBLIC_KEY_AUTH,
-                'false'
-            ) === 'true';
+                'true'
+            ) !== 'false';
         } catch (\Throwable $e) {
-            return false;
+            // Fail open: matching pre-1.5.0 behaviour if config is unavailable.
+            return true;
         }
+    }
+
+    /**
+     * Maintenance mode: block everyone without admin dashboard access, except the
+     * session and auth endpoints the frontend needs to show the notice and log out.
+     */
+    private static function maintenanceResponse(Request $request, array $user): ?Response
+    {
+        $config = App::getInstance(true)->getConfig();
+        if ($config->getSetting(ConfigInterface::MAINTENANCE_MODE_ENABLED, 'false') !== 'true') {
+            return null;
+        }
+        $path = $request->getPathInfo();
+        foreach (['/api/user/session', '/api/user/auth/', '/api/user/status'] as $allowed) {
+            if ($path === $allowed || str_starts_with($path, rtrim($allowed, '/') . '/')) {
+                return null;
+            }
+        }
+        if (\App\Helpers\PermissionHelper::hasPermission((string) $user['uuid'], \App\Permissions::ADMIN_DASHBOARD_VIEW)) {
+            return null;
+        }
+        $message = trim((string) $config->getSetting(ConfigInterface::MAINTENANCE_MODE_MESSAGE, ''));
+
+        return ApiResponse::error(
+            $message !== '' ? $message : 'The panel is under maintenance. Please try again later.',
+            'MAINTENANCE_MODE',
+            503,
+            ['maintenance' => true]
+        );
+    }
+
+    /**
+     * Security center rules for signed-in users: IP allow list and required 2FA setup.
+     * Session and auth endpoints stay open so the user can set up 2FA or log out.
+     */
+    private static function securityResponse(Request $request, array $user): ?Response
+    {
+        $policy = \App\Services\Security\SecurityPolicy::class;
+        if (!$policy::ipAllowed($user, CloudFlareRealIP::getRealIP())) {
+            return ApiResponse::error('Access from this IP address is not allowed', 'IP_NOT_ALLOWED', 403);
+        }
+        if ($request->attributes->get('auth_type') !== 'session' || $request->attributes->has('impersonator') || !$policy::requiresTwoFactor($user)) {
+            return null;
+        }
+        $path = $request->getPathInfo();
+        if ($path === '/api/user/session' || str_starts_with($path, '/api/user/auth/')) {
+            return null;
+        }
+
+        return ApiResponse::error('Your role requires two-factor authentication. Set it up to continue.', 'TWO_FACTOR_SETUP_REQUIRED', 403);
     }
 }

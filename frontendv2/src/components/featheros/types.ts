@@ -35,7 +35,8 @@ export type OsAppId =
     | 'subusers'
     | 'startup'
     | 'spells'
-    | 'archive';
+    | 'archive'
+    | 'server';
 
 export type OsTheme = 'auto' | 'light' | 'dark';
 export type OsDockPosition = 'bottom' | 'left' | 'right';
@@ -114,13 +115,13 @@ export interface OsSettings {
     hotCorners: OsHotCorners;
     /** 0 = nearly solid, 50 = default, 100 = maximum glass. */
     glassTransparency: number;
-    /** Backdrop blur strength in percent of the default (0–200). */
+    /** Backdrop blur strength in percent of the default (0-200). */
     glassBlur: number;
     reduceTransparency: boolean;
     windowRadius: number;
     focusRing: boolean;
     dimInactive: boolean;
-    /** Darkens the wallpaper, 0–70 %. */
+    /** Darkens the wallpaper, 0-70 %. */
     wallpaperDim: number;
     /** After snapping a window, offer the other windows for the remaining zones. */
     snapAssist: boolean;
@@ -203,7 +204,9 @@ export interface OsContextMenuItem {
 export const DEFAULT_SETTINGS: OsSettings = {
     wallpaper: 'sonoma',
     customWallpaperUrl: '',
-    theme: 'light',
+    // Match the panel default (dark). Light was forcing the rest of the panel into
+    // light mode whenever FeatherOS booted with an unset / default theme.
+    theme: 'dark',
     accent: '',
     dockSize: 52,
     dockMagnification: true,

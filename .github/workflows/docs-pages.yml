@@ -33,10 +33,10 @@ jobs:
   build:
     if: github.repository == 'MythicalLTD/FeatherPanel'
     name: Build icanhasfeatherpanel site
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     steps:
       - name: Code Checkout
-        uses: useblacksmith/checkout@v1
+        uses: actions/checkout@v4
 
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
@@ -96,7 +96,7 @@ jobs:
     if: github.repository == 'MythicalLTD/FeatherPanel'
     name: Deploy to GitHub Pages
     needs: build
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

@@ -23,10 +23,22 @@ import api from '@/lib/api';
 import { Button } from '@/components/featherui/Button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { RefreshCw, Server, Check, AlertTriangle, Cpu, MemoryStick, HardDrive, Users } from 'lucide-react';
+import {
+    RefreshCw,
+    Server,
+    Check,
+    AlertTriangle,
+    Cpu,
+    MemoryStick,
+    HardDrive,
+    Users,
+    Archive,
+    Activity,
+    Timer,
+    MapPin,
+} from 'lucide-react';
 import { PageHeader } from '@/components/featherui/PageHeader';
 import { PageCard } from '@/components/featherui/PageCard';
-import { ResourceCard } from '@/components/featherui/ResourceCard';
 import { EmptyState } from '@/components/featherui/EmptyState';
 import { TableSkeleton } from '@/components/featherui/TableSkeleton';
 import { WidgetRenderer } from '@/components/server/WidgetRenderer';
@@ -34,6 +46,31 @@ import { usePluginWidgets } from '@/hooks/usePluginWidgets';
 import { formatBytes } from '@/lib/format';
 import { NodeServersList, type NodeStatusServer } from '@/components/admin/NodeServersList';
 import { useIpMask } from '@/hooks/useIpMask';
+import { NodeAlertsPanel, type NodeAlert } from '@/components/admin/node-alerts/NodeAlertsPanel';
+import { NodesMapDynamic } from '@/components/admin/nodes-map/NodesMapDynamic';
+import { LatencyBadge } from '@/components/admin/nodes-map/LatencyBadge';
+import { useDateFormatOptions } from '@/contexts/PreferencesContext';
+import { formatRelativeTime } from '@/lib/dateUtils';
+import Link from 'next/link';
+
+interface NodeHealth {
+    online: boolean;
+    consecutive_failures: number;
+    last_seen_at: string | null;
+    last_checked_at: string | null;
+}
+
+interface FailedBackups {
+    count: number;
+    recent: { id: number; name: string; server_name: string; server_uuid_short: string; completed_at: string }[];
+}
+
+interface AlertsOverview {
+    health: Record<string, NodeHealth>;
+    failed_backups: Record<string, FailedBackups>;
+    open_alerts: NodeAlert[];
+    monitor: { enabled: boolean; last_run_at: string | null };
+}
 
 interface GlobalStats {
     total_nodes: number;
@@ -44,6 +81,7 @@ interface GlobalStats {
     total_disk: number;
     used_disk: number;
     avg_cpu_percent: number;
+    avg_latency_ms?: number | null;
 }
 
 interface NodeUtilization {
@@ -65,6 +103,11 @@ interface NodeStatus {
     name: string;
     fqdn: string;
     location_id: number;
+    location_name?: string | null;
+    flag_code?: string | null;
+    latitude?: number | null;
+    longitude?: number | null;
+    latency_ms?: number | null;
     status: 'healthy' | 'unhealthy';
     server_count: number;
     total_players: number;
@@ -82,6 +125,17 @@ export default function NodeStatusPage() {
     const [nodes, setNodes] = useState<NodeStatus[]>([]);
 
     const { getWidgets } = usePluginWidgets('admin-nodes-status');
+    const dateOpts = useDateFormatOptions();
+    const [alerts, setAlerts] = useState<AlertsOverview | null>(null);
+
+    const fetchAlerts = useCallback(async () => {
+        try {
+            const res = await api.get('/admin/node-alerts/overview');
+            if (res.data.success) setAlerts(res.data.data);
+        } catch {
+            // The alerts overview is optional; the live status still renders without it.
+        }
+    }, []);
 
     const fetchData = useCallback(
         async (background = false) => {
@@ -117,13 +171,15 @@ export default function NodeStatusPage() {
 
     useEffect(() => {
         fetchData(false);
+        fetchAlerts();
 
         const interval = setInterval(() => {
             fetchData(true);
+            fetchAlerts();
         }, 10000);
 
         return () => clearInterval(interval);
-    }, [fetchData]);
+    }, [fetchData, fetchAlerts]);
 
     const getMemoryUsagePercent = () => {
         if (!globalStats || globalStats.total_memory === 0) return 0;
@@ -169,7 +225,15 @@ export default function NodeStatusPage() {
                 description={t('admin.nodes.subtitle')}
                 icon={Server}
                 actions={
-                    <Button variant='outline' size='sm' onClick={() => fetchData(false)} disabled={loading}>
+                    <Button
+                        variant='outline'
+                        size='sm'
+                        onClick={() => {
+                            fetchData(false);
+                            fetchAlerts();
+                        }}
+                        disabled={loading}
+                    >
                         <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
                         {t('admin.nodes.refresh')}
                     </Button>
@@ -182,35 +246,60 @@ export default function NodeStatusPage() {
                 <>
                     <WidgetRenderer widgets={getWidgets('admin-nodes-status', 'before-global-stats')} />
 
-                    <div className='grid gap-6 md:grid-cols-2 lg:grid-cols-4'>
-                        <ResourceCard
-                            title={globalStats.total_nodes.toString()}
-                            subtitle={t('admin.nodes.total')}
-                            icon={Server}
-                            className='fp-surface border'
-                        />
-                        <ResourceCard
-                            title={globalStats.healthy_nodes.toString()}
-                            subtitle={t('admin.nodes.healthy')}
-                            icon={Check}
-                            className='fp-surface border'
-                            iconClassName='text-green-500'
-                            iconWrapperClassName='bg-green-500/10 border-green-500/20'
-                        />
-                        <ResourceCard
-                            title={globalStats.unhealthy_nodes.toString()}
-                            subtitle={t('admin.nodes.unhealthy')}
-                            icon={AlertTriangle}
-                            className='fp-surface border'
-                            iconClassName='text-red-500'
-                            iconWrapperClassName='bg-red-500/10 border-red-500/20'
-                        />
-                        <ResourceCard
-                            title={`${globalStats.avg_cpu_percent.toFixed(1)}%`}
-                            subtitle={t('admin.nodes.avg_cpu')}
-                            icon={Cpu}
-                            className='fp-surface border'
-                        />
+                    <div className='grid grid-cols-2 gap-3 sm:gap-6 lg:grid-cols-4'>
+                        {[
+                            {
+                                value: globalStats.total_nodes.toString(),
+                                label: t('admin.nodes.total'),
+                                icon: Server,
+                                tone: 'text-primary bg-primary/10 border-primary/20',
+                            },
+                            {
+                                value: globalStats.healthy_nodes.toString(),
+                                label: t('admin.nodes.healthy'),
+                                icon: Check,
+                                tone: 'text-green-600 dark:text-green-500 bg-green-500/10 border-green-500/20',
+                            },
+                            {
+                                value: globalStats.unhealthy_nodes.toString(),
+                                label: t('admin.nodes.unhealthy'),
+                                icon: AlertTriangle,
+                                tone: 'text-red-600 dark:text-red-500 bg-red-500/10 border-red-500/20',
+                            },
+                            {
+                                value: `${globalStats.avg_cpu_percent.toFixed(1)}%`,
+                                label: t('admin.nodes.avg_cpu'),
+                                icon: Cpu,
+                                tone: 'text-primary bg-primary/10 border-primary/20',
+                            },
+                            {
+                                value:
+                                    globalStats.avg_latency_ms != null
+                                        ? `${globalStats.avg_latency_ms} ms`
+                                        : t('common.nA'),
+                                label: t('admin.nodes.avg_latency'),
+                                icon: Timer,
+                                tone: 'text-sky-600 dark:text-sky-400 bg-sky-500/10 border-sky-500/20',
+                            },
+                        ].map(({ value, label, icon: StatIcon, tone }, i) => (
+                            <div
+                                key={label}
+                                className='fp-surface animate-in fade-in-0 slide-in-from-bottom-1 fill-mode-both flex min-w-0 items-center gap-3 rounded-xl border p-3 duration-300 motion-reduce:animate-none sm:p-4'
+                                style={{ animationDelay: `${i * 50}ms` }}
+                            >
+                                <div
+                                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border ${tone}`}
+                                >
+                                    <StatIcon className='h-5 w-5' />
+                                </div>
+                                <div className='min-w-0'>
+                                    <div className='text-lg leading-tight font-semibold tabular-nums sm:text-xl'>
+                                        {value}
+                                    </div>
+                                    <div className='text-muted-foreground truncate text-xs sm:text-sm'>{label}</div>
+                                </div>
+                            </div>
+                        ))}
                     </div>
 
                     <WidgetRenderer widgets={getWidgets('admin-nodes-status', 'after-global-stats')} />
@@ -274,9 +363,22 @@ export default function NodeStatusPage() {
 
                     <WidgetRenderer widgets={getWidgets('admin-nodes-status', 'after-resource-usage')} />
 
+                    {alerts && (
+                        <NodeAlertsPanel
+                            openAlerts={alerts.open_alerts}
+                            lastRunAt={alerts.monitor.last_run_at}
+                            monitorEnabled={alerts.monitor.enabled}
+                            onChanged={fetchAlerts}
+                        />
+                    )}
+
+                    <NodesMapDynamic nodes={nodes} />
+
                     <div className='space-y-4'>
-                        <h2 className='text-2xl font-bold tracking-tight'>{t('admin.nodes.individual_nodes')}</h2>
-                        <div className='grid grid-cols-1 gap-6 xl:grid-cols-2'>
+                        <h2 className='text-lg font-bold tracking-tight sm:text-2xl'>
+                            {t('admin.nodes.individual_nodes')}
+                        </h2>
+                        <div className='grid grid-cols-1 gap-4 sm:gap-6 xl:grid-cols-2'>
                             {nodes.length === 0 ? (
                                 <div className='col-span-2'>
                                     <EmptyState
@@ -317,6 +419,34 @@ export default function NodeStatusPage() {
                                                     </span>
                                                     {t('dashboard.status.playersOnline')}
                                                 </span>
+                                                <span className='bg-muted-foreground/30 h-1 w-1 shrink-0 rounded-full' />
+                                                <span className='flex shrink-0 items-center gap-1'>
+                                                    <Timer className='h-3 w-3' />
+                                                    <LatencyBadge ms={node.latency_ms} />
+                                                </span>
+                                                {node.location_name && (
+                                                    <>
+                                                        <span className='bg-muted-foreground/30 h-1 w-1 shrink-0 rounded-full' />
+                                                        <span className='flex min-w-0 items-center gap-1'>
+                                                            <MapPin className='h-3 w-3 shrink-0' />
+                                                            <span className='truncate'>{node.location_name}</span>
+                                                        </span>
+                                                    </>
+                                                )}
+                                                {alerts?.health[node.id]?.last_seen_at && (
+                                                    <>
+                                                        <span className='bg-muted-foreground/30 h-1 w-1 shrink-0 rounded-full' />
+                                                        <span className='flex shrink-0 items-center gap-1'>
+                                                            <Activity className='h-3 w-3' />
+                                                            {t('adminNodeAlerts.heartbeat', {
+                                                                time: formatRelativeTime(
+                                                                    alerts.health[node.id].last_seen_at as string,
+                                                                    dateOpts,
+                                                                ),
+                                                            })}
+                                                        </span>
+                                                    </>
+                                                )}
                                             </div>
                                             {node.status === 'healthy' && node.utilization ? (
                                                 <div className='space-y-6'>
@@ -412,12 +542,41 @@ export default function NodeStatusPage() {
                                                     <AlertTriangle className='h-4 w-4' />
                                                     <div className='ml-2 min-w-0'>
                                                         <AlertTitle>{t('admin.nodes.offline')}</AlertTitle>
-                                                        <AlertDescription className='[overflow-wrap:anywhere]'>
+                                                        <AlertDescription
+                                                            className='line-clamp-3 [overflow-wrap:anywhere]'
+                                                            title={node.error || undefined}
+                                                        >
                                                             {node.error ||
                                                                 t('ui.admin.nodes.status.cannotConnectToWingsDaemon')}
                                                         </AlertDescription>
                                                     </div>
                                                 </Alert>
+                                            )}
+
+                                            {(alerts?.failed_backups[node.id]?.count ?? 0) > 0 && (
+                                                <div className='mt-4 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3'>
+                                                    <p className='flex items-center gap-2 text-sm font-medium text-amber-600 dark:text-amber-400'>
+                                                        <Archive className='h-4 w-4' />
+                                                        {t('adminNodeAlerts.failedBackups', {
+                                                            count: String(alerts!.failed_backups[node.id].count),
+                                                        })}
+                                                    </p>
+                                                    <ul className='mt-2 space-y-1 text-xs'>
+                                                        {alerts!.failed_backups[node.id].recent.map((b) => (
+                                                            <li key={b.id} className='flex justify-between gap-3'>
+                                                                <Link
+                                                                    href={`/server/${b.server_uuid_short}/backups`}
+                                                                    className='min-w-0 truncate underline-offset-2 hover:underline'
+                                                                >
+                                                                    {b.server_name} · {b.name}
+                                                                </Link>
+                                                                <span className='text-muted-foreground shrink-0'>
+                                                                    {formatRelativeTime(b.completed_at, dateOpts)}
+                                                                </span>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
                                             )}
 
                                             {node.servers !== undefined && (

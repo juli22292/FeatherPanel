@@ -1,6 +1,6 @@
 # Real Plugin Examples (Patterns, Not Clones)
 
-These are **real addons** that ship with / are developed against FeatherPanel. Use them as pattern references — copy structure and idioms, not entire products.
+These are **real addons** that ship with / are developed against FeatherPanel. Use them as pattern references - copy structure and idioms, not entire products.
 
 All paths are under `backend/storage/addons/{identifier}/`.
 
@@ -15,12 +15,12 @@ All paths are under `backend/storage/addons/{identifier}/`.
 | **bedrockaddoninstaller** | Server-scoped search API | `Controllers/Servers/`, server routes |
 | **fivemutils** | Server config APIs + curl deps | `php-ext=curl`, `Routes/fivem.php` |
 | **billinglinks** | Plugin dependency + Cron + Chat | `plugin=billingcore`, `Cron/LinkPurgeCron.php` |
-| **devutils** | CLI generators for plugin authors | `Commands/*` (`php fuse …`) |
+| **devutils** | CLI generators for plugin authors | `Commands/*` (`php cli …`) |
 | **billingplans** | Public pages with setting visibility | `Frontend/public.json` |
 
 ---
 
-## discordplus — settings + gate + widgets
+## discordplus - settings + gate + widgets
 
 **Why study it:** richest “panel integration” example that is still readable.
 
@@ -47,17 +47,17 @@ config:
 
 ### Frontend
 
-- `Frontend/widgets.json` — dashboard + account banners (`useRawRendering`, `borderless`) and `admin-users-edit` card
-- `Frontend/sidebar.json` — admin page `/discordplus` → `/discordplus/dist/admin.html`
-- `Frontend/index.js` — waits for `window.FeatherPanel.api`, polls `/api/user/discordplus/status`
+- `Frontend/widgets.json` - dashboard + account banners (`useRawRendering`, `borderless`) and `admin-users-edit` card
+- `Frontend/sidebar.json` - admin page `/discordplus` → `/discordplus/dist/admin.html`
+- `Frontend/index.js` - waits for `window.FeatherPanel.api`, polls `/api/user/discordplus/status`
 
 ### Middleware
 
-Folder is lowercase `middleware/`. Class implements `App\Middleware\MiddlewareInterface`. Not declared in `conf.yml` — wired from PHP on router ready.
+Folder is lowercase `middleware/`. Class implements `App\Middleware\MiddlewareInterface`. Not declared in `conf.yml` - wired from PHP on router ready.
 
 ---
 
-## featherimages — database + dual UI
+## featherimages - database + dual UI
 
 **Why study it:** clean Chat/Migration/Vite stack.
 
@@ -98,7 +98,7 @@ class Upload
 
 ---
 
-## minecraftutils — server routes + sidebar group
+## minecraftutils - server routes + sidebar group
 
 **Why study it:** server-scoped APIs and nav grouping.
 
@@ -109,12 +109,15 @@ App::getInstance(true)->registerServerRoute(
     $routes,
     'mcutils-player-manager',
     '/api/user/servers/{uuidShort}/addons/mcutils/playermanager',
-    /* controller */,
-    /* methods */
+    function (Request $request, array $args) { /* $args['uuidShort'] */ },
+    'uuidShort', // route parameter holding the server short UUID (required)
+    ['GET']
 );
 ```
 
-Sidebar (note: only `server` / `admin` / `client` / `vds` / `webspace` are merged — a top-level `"dashboard": {}` key is **ignored**):
+Full example and argument order: [backend.md](./backend.md#server-route-sketch-minecraftutils-style).
+
+Sidebar (note: only `server` / `admin` / `client` / `vds` / `webspace` are merged - a top-level `"dashboard": {}` key is **ignored**):
 
 ```json
 {
@@ -133,7 +136,7 @@ Sidebar (note: only `server` / `admin` / `client` / `vds` / `webspace` are merge
 
 ---
 
-## billinglinks — depends on another plugin + Cron
+## billinglinks - depends on another plugin + Cron
 
 ```yaml
 dependencies:
@@ -168,11 +171,11 @@ Namespace **must** be `App\Addons\{identifier}\Cron` for the addon cron runner.
 
 ---
 
-## minecraftpluginmanger — requiredConfigs
+## minecraftpluginmanger - requiredConfigs
 
 ```yaml
 plugin:
-  identifier: minecraftpluginmanger   # typo is historical — keep identifiers stable
+  identifier: minecraftpluginmanger   # typo is historical - keep identifiers stable
   requiredConfigs:
     - curseforge_api_key
 config:
@@ -181,11 +184,11 @@ config:
     required: true
 ```
 
-Until the setting exists in DB, the plugin is treated as not fully configured.
+Until `curseforge_api_key` has a non-empty value, the plugin stays loaded but the admin plugin list marks it "Not configured" and the settings tab shows a warning. See [conf-yml.md](./conf-yml.md#requiredconfigs).
 
 ---
 
-## billingplans — public.json
+## billingplans - public.json
 
 ```json
 {
@@ -211,13 +214,13 @@ See [public-pages.md](./public-pages.md) for reserved path rules.
 
 ---
 
-## devutils — author tooling
+## devutils - author tooling
 
 CLI commands under `Commands/` generate migrations, cron, plugin commands, frontend watch helpers, etc.
 
 ```bash
-php fuse makeplugincron
-php fuse exportpermissions
+php cli makeplugincron
+php cli exportpermissions
 ```
 
 Class `MakePluginCron` → invoke name is the lowercased class basename.
@@ -239,8 +242,8 @@ Create those via Admin → Dev → Plugins → template **theme** or **ui-pack**
 ## How to study a plugin efficiently (LLM checklist)
 
 1. Read `conf.yml` (identifier, flags, deps, config schema)
-2. Open root `*Plugin*.php` / entry class — lifecycle + events
-3. List `Routes/*.php` — API surface
-4. Skim `Frontend/{sidebar,widgets,public}.json` — UI surface
+2. Open root `*Plugin*.php` / entry class - lifecycle + events
+3. List `Routes/*.php` - API surface
+4. Skim `Frontend/{sidebar,widgets,public}.json` - UI surface
 5. Check `Migrations/`, `Cron/`, `Commands/`, `Chat/`, `middleware/`
 6. Note how Vite `Frontend/App` maps to `component` paths (`/{id}/dist/….html`)

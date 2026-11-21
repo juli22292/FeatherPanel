@@ -665,6 +665,16 @@ class FeatherQuilldClient
      *
      * @return array{ok: bool, status: int, body: mixed, error: ?string}
      */
+    public static function getWebSpaceUtilizationHistory(array $webNode, string $uuid, int $minutes): array
+    {
+        return self::request($webNode, 'GET', '/api/webspaces/' . $uuid . '/utilization/history?minutes=' . max(1, min(1440, $minutes)), null, 15);
+    }
+
+    /**
+     * @param array<string, mixed> $webNode
+     *
+     * @return array{ok: bool, status: int, body: mixed, error: ?string}
+     */
     public static function listWebSpaceBackups(array $webNode, string $uuid): array
     {
         return self::request($webNode, 'GET', '/api/webspaces/' . $uuid . '/backups');
@@ -1272,6 +1282,18 @@ class FeatherQuilldClient
         }
 
         return self::request($webNode, 'GET', '/api/webspaces/' . $uuid . '/proxy-logs?' . http_build_query($queryParams));
+    }
+
+    /**
+     * Firewall dashboard numbers (overview + recent events) computed by the daemon for one WebSpace.
+     *
+     * @return array{ok: bool, status: int, body: mixed, error: ?string}
+     */
+    public static function getWebSpaceWafStats(array $webNode, string $uuid, string $range = '24h', int $events = 50): array
+    {
+        $query = ['range' => $range, 'events' => max(1, min(200, $events))];
+
+        return self::request($webNode, 'GET', '/api/webspaces/' . $uuid . '/waf/stats?' . http_build_query($query), null, 20);
     }
 
     /** @return array{ok: bool, status: int, body: mixed, error: ?string} */

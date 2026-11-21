@@ -26,11 +26,11 @@ jobs:
   update:
     if: github.repository == 'MythicalLTD/FeatherPanel' && github.actor != 'github-actions[bot]'
     name: Update README stats
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     # Skip bot commits so a stats push cannot loop
     steps:
       - name: Checkout
-        uses: useblacksmith/checkout@v1
+        uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 

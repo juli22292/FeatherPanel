@@ -71,6 +71,9 @@ export interface KVPair {
     value: string;
 }
 
+/** Stored inside `additional_params` JSON; peeled into dedicated GUI fields. */
+export const VNC_UPSTREAM_PARAM_KEYS = ['vnc_upstream_host', 'vnc_upstream_port', 'vnc_upstream_scheme'] as const;
+
 export interface VdsNodeForm {
     name: string;
     description: string;
@@ -86,6 +89,16 @@ export interface VdsNodeForm {
     storage_tpm: string;
     storage_efi: string;
     storage_backups: string;
+    storage_iso_user: string;
+    storage_iso_allowed: string;
+    rescue_iso: string;
+    /** Direct PVE host for panel VNC proxy (bypass Cloudflare / Access on the API FQDN). Empty = use fqdn. */
+    vnc_upstream_host: string;
+    vnc_upstream_port: number;
+    vnc_upstream_scheme: 'http' | 'https' | '';
+    feathertail_enabled: boolean;
+    feathertail_url: string;
+    feathertail_tls_no_verify: boolean;
 }
 
 export default function EditVdsNodePage() {
@@ -109,6 +122,15 @@ export default function EditVdsNodePage() {
         storage_tpm: '',
         storage_efi: '',
         storage_backups: '',
+        storage_iso_user: '',
+        storage_iso_allowed: '',
+        rescue_iso: '',
+        vnc_upstream_host: '',
+        vnc_upstream_port: 8006,
+        vnc_upstream_scheme: '',
+        feathertail_enabled: false,
+        feathertail_url: '',
+        feathertail_tls_no_verify: false,
     });
     const { dirty: unsaved, markClean, restore: restoreForm } = useFormBaseline(form);
     const [errors, setErrors] = useState<Record<string, string>>({});
@@ -179,6 +201,33 @@ export default function EditVdsNodePage() {
                 }
 
                 setNodeName(node.name);
+                let vncHost = '';
+                let vncPort = 8006;
+                let vncScheme: 'http' | 'https' | '' = '';
+                const otherParams: KVPair[] = [];
+
+                if (node.additional_params) {
+                    try {
+                        const parsed = JSON.parse(node.additional_params);
+                        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                            for (const [key, value] of Object.entries(parsed)) {
+                                const str = String(value ?? '');
+                                if (key === 'vnc_upstream_host') {
+                                    vncHost = str;
+                                } else if (key === 'vnc_upstream_port') {
+                                    vncPort = parseInt(str, 10) || 8006;
+                                } else if (key === 'vnc_upstream_scheme') {
+                                    vncScheme = str === 'http' || str === 'https' ? str : '';
+                                } else {
+                                    otherParams.push({ key, value: str });
+                                }
+                            }
+                        }
+                    } catch {
+                        /* ignore */
+                    }
+                }
+
                 setForm({
                     name: node.name ?? '',
                     description: node.description ?? '',
@@ -194,7 +243,17 @@ export default function EditVdsNodePage() {
                     storage_tpm: node.storage_tpm ?? '',
                     storage_efi: node.storage_efi ?? '',
                     storage_backups: node.storage_backups ?? '',
+                    storage_iso_user: node.storage_iso_user ?? '',
+                    storage_iso_allowed: node.storage_iso_allowed ?? '',
+                    rescue_iso: node.rescue_iso ?? '',
+                    vnc_upstream_host: vncHost,
+                    vnc_upstream_port: vncPort,
+                    vnc_upstream_scheme: vncScheme,
+                    feathertail_enabled: Boolean(Number(node.feathertail_enabled ?? 0)),
+                    feathertail_url: node.feathertail_url ?? '',
+                    feathertail_tls_no_verify: Boolean(Number(node.feathertail_tls_no_verify ?? 0)),
                 });
+                setQueryParams(otherParams);
                 markClean();
 
                 if (node.addional_headers) {
@@ -203,17 +262,9 @@ export default function EditVdsNodePage() {
                         if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
                             setHeaders(Object.entries(parsed).map(([key, value]) => ({ key, value: String(value) })));
                         }
-                    } catch {}
-                }
-                if (node.additional_params) {
-                    try {
-                        const parsed = JSON.parse(node.additional_params);
-                        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-                            setQueryParams(
-                                Object.entries(parsed).map(([key, value]) => ({ key, value: String(value) })),
-                            );
-                        }
-                    } catch {}
+                    } catch {
+                        /* ignore */
+                    }
                 }
             } catch (error) {
                 toast.error(getApiErrorMessage(error, t, 'admin.vdsNodes.errors.fetch_failed'));
@@ -233,10 +284,22 @@ export default function EditVdsNodePage() {
             const headersMap: Record<string, string> = {};
             headers.filter((h) => h.key).forEach((h) => (headersMap[h.key] = h.value));
             const paramsMap: Record<string, string> = {};
-            queryParams.filter((p) => p.key).forEach((p) => (paramsMap[p.key] = p.value));
+            queryParams
+                .filter((p) => p.key && !(VNC_UPSTREAM_PARAM_KEYS as readonly string[]).includes(p.key))
+                .forEach((p) => (paramsMap[p.key] = p.value));
+            if (form.vnc_upstream_host.trim()) {
+                paramsMap.vnc_upstream_host = form.vnc_upstream_host.trim();
+                paramsMap.vnc_upstream_port = String(form.vnc_upstream_port || 8006);
+                if (form.vnc_upstream_scheme === 'http' || form.vnc_upstream_scheme === 'https') {
+                    paramsMap.vnc_upstream_scheme = form.vnc_upstream_scheme;
+                }
+            }
 
+            const { vnc_upstream_host: _vh, vnc_upstream_port: _vp, vnc_upstream_scheme: _vs, ...formRest } = form;
             const payload: Record<string, unknown> = {
-                ...form,
+                ...formRest,
+                feathertail_enabled: form.feathertail_enabled ? 1 : 0,
+                feathertail_tls_no_verify: form.feathertail_tls_no_verify ? 1 : 0,
                 addional_headers: Object.keys(headersMap).length ? JSON.stringify(headersMap) : null,
                 additional_params: Object.keys(paramsMap).length ? JSON.stringify(paramsMap) : null,
             };
@@ -305,7 +368,7 @@ export default function EditVdsNodePage() {
         { value: 'storage', label: t('admin.vdsNodes.tabs.storage'), icon: HardDrive },
         { value: 'ip-pool', label: t('admin.vdsNodes.tabs.ip_pool'), icon: Globe },
         { value: 'templates', label: t('admin.vdsNodes.tabs.templates'), icon: Layers },
-        { value: 'dhcp', label: t('admin.vdsNodes.tabs.dhcp'), icon: Zap },
+        { value: 'dhcp', label: t('admin.vdsNodes.tabs.feathertail'), icon: Zap },
         { value: 'firewall', label: t('admin.vdsNodes.tabs.firewall'), icon: Shield },
         { value: 'info', label: t('admin.vdsNodes.tabs.info'), icon: Activity },
     ] as const;
@@ -344,7 +407,7 @@ export default function EditVdsNodePage() {
 
             {connectionResult && (
                 <div
-                    className={`space-y-3 rounded-2xl border-2 px-5 py-4 ${
+                    className={`space-y-3 rounded-xl border-2 px-5 py-4 ${
                         connectionResult.ok ? 'border-green-500/40 bg-green-500/5' : 'border-red-500/40 bg-red-500/5'
                     }`}
                 >
@@ -375,7 +438,7 @@ export default function EditVdsNodePage() {
             <div className='block'>
                 <Tabs defaultValue='details' orientation='vertical' className='flex w-full flex-col gap-6 md:flex-row'>
                     <aside className='w-full shrink-0 md:sticky md:top-24 md:w-64 md:self-start'>
-                        <ScrollableTabsList className='fp-surface flex h-auto w-full flex-row gap-2 rounded-2xl border p-2 md:flex-col md:gap-1 md:overflow-visible'>
+                        <ScrollableTabsList className='fp-surface flex h-auto w-full flex-row gap-2 rounded-xl border p-2 md:flex-col md:gap-1 md:overflow-visible'>
                             {tabs.map((tab) => {
                                 const Icon = tab.icon;
 
@@ -439,11 +502,11 @@ export default function EditVdsNodePage() {
                         </TabsContent>
 
                         <TabsContent value='dhcp' className='mt-0 focus-visible:ring-0 focus-visible:outline-none'>
-                            <DhcpAgentTab />
+                            <DhcpAgentTab nodeId={id} form={form} setForm={setForm} />
                         </TabsContent>
 
                         <TabsContent value='firewall' className='mt-0 focus-visible:ring-0 focus-visible:outline-none'>
-                            <FirewallTab />
+                            <FirewallTab nodeId={id} />
                         </TabsContent>
 
                         <TabsContent value='templates' className='mt-0 focus-visible:ring-0 focus-visible:outline-none'>
@@ -476,7 +539,7 @@ export default function EditVdsNodePage() {
                         </div>
                         <div className='max-h-[60vh] space-y-2 overflow-y-auto'>
                             {filteredLocations.length === 0 ? (
-                                <p className='text-muted-foreground py-6 text-center text-sm italic'>
+                                <p className='text-muted-foreground py-6 text-center text-sm'>
                                     {t('admin.vdsNodes.form.no_locations')}
                                 </p>
                             ) : (

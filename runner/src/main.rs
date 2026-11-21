@@ -5,6 +5,7 @@ use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
 mod config;
 mod database;
 mod encryption;
+mod feathertail;
 mod mail;
 mod processor;
 mod proxmox;
@@ -15,7 +16,7 @@ mod vnc_proxy;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Initialize logging – file layer (no rotation) + stdout layer
+    // Initialize logging - file layer (no rotation) + stdout layer
     // LOG_DIR can be overridden via env var. Docker Compose mounts the backend log volume at
     // `/var/www/html/storage/logs` so the panel log viewer reads `runner.fplog`; bare-metal
     // dev falls back to paths next to this crate.
@@ -73,8 +74,9 @@ async fn main() -> Result<()> {
     // and bridges to the node vncwebsocket endpoint using single-use tickets.
     {
         let proxy_pool = pool.clone();
+        let encryption_key = config.encryption_key.clone();
         tokio::spawn(async move {
-            vnc_proxy::serve(proxy_pool).await;
+            vnc_proxy::serve(proxy_pool, encryption_key).await;
         });
         tokio::spawn(vnc_proxy::cleanup_loop(pool.clone()));
     }

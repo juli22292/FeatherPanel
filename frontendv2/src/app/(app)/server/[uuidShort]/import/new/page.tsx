@@ -185,7 +185,7 @@ export default function CreateServerImportPage() {
                 title={t('serverImport.createImport')}
                 description={t('serverImport.drawerDescription')}
                 actions={
-                    <div className='flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-3'>
+                    <div className='flex w-full flex-wrap gap-2 sm:w-auto sm:flex-nowrap sm:items-center sm:gap-3'>
                         <Button
                             variant='glass'
                             onClick={() => router.push(`/server/${uuidShort}/import`)}
@@ -197,7 +197,7 @@ export default function CreateServerImportPage() {
                         <Button
                             onClick={handleStartImport}
                             disabled={saving}
-                            className='order-1 w-full sm:order-2 sm:w-auto'
+                            className='order-1 min-w-0 flex-1 sm:order-2 sm:flex-none'
                         >
                             {saving ? (
                                 <>
@@ -352,7 +352,6 @@ export default function CreateServerImportPage() {
                     </div>
 
                     <FormSection className='relative space-y-8 overflow-hidden'>
-                        <div className='pointer-events-none absolute top-0 right-0 h-48 w-48 bg-emerald-500/5 blur-[80px]' />
                         <div className='border-border/10 flex items-center gap-5 border-b pb-8'>
                             <div className='flex h-12 w-12 items-center justify-center rounded-2xl border border-emerald-500/20 bg-emerald-500/10'>
                                 <FolderUp className='h-6 w-6 text-emerald-500' />
@@ -435,7 +434,6 @@ export default function CreateServerImportPage() {
 
                 <div className='space-y-8 lg:col-span-4'>
                     <FormSection className='group relative overflow-hidden'>
-                        <div className='bg-primary/5 group-hover:bg-primary/10 pointer-events-none absolute top-0 right-0 h-32 w-32 blur-2xl transition-all duration-700' />
                         <div className='border-border/10 relative z-10 flex items-center gap-4 border-b pb-6'>
                             <div className='bg-secondary/50 border-border/10 flex h-10 w-10 items-center justify-center rounded-xl border'>
                                 <Settings2 className='text-muted-foreground h-5 w-5' />
@@ -552,7 +550,6 @@ export default function CreateServerImportPage() {
                     </FormSection>
 
                     <FormSection className='group relative space-y-4 overflow-hidden border-blue-500/10 bg-blue-500/5'>
-                        <div className='pointer-events-none absolute -right-6 -bottom-6 h-24 w-24 bg-blue-500/10 blur-2xl transition-transform duration-1000 group-hover:scale-150' />
                         <div className='relative z-10 flex h-10 w-10 items-center justify-center rounded-xl border border-blue-500/20 bg-blue-500/10'>
                             <ShieldAlert className='h-5 w-5 text-blue-500' />
                         </div>
@@ -568,7 +565,6 @@ export default function CreateServerImportPage() {
                 </div>
             </div>
 
-            <div className='from-primary/5 pointer-events-none fixed inset-0 -z-10 bg-linear-to-br via-transparent to-blue-500/5' />
             <WidgetRenderer widgets={getWidgets('server-import-new', 'bottom-of-page')} />
         </div>
     );

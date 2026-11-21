@@ -453,7 +453,7 @@ class AServerScheduleProcessor implements TimeTask
      * Limit / FIFO handling and backup creation are shared with lifecycle hooks via
      * {@see ServerBackupTaskService}.
      */
-    private function executeBackupServer(array $server, string $ignoredFiles = '[]')
+    private function executeBackupServer(array $server, string $ignoredFiles = '[]', ?int $destinationId = null)
     {
         $app = App::getInstance(false, true);
         MinecraftColorCodeSupport::sendOutputWithNewLine('&aBacking up server: ' . $server['name']);
@@ -463,6 +463,7 @@ class AServerScheduleProcessor implements TimeTask
             $result = (new ServerBackupTaskService())->runFilesBackup($wings, $server, $ignoredFiles, [
                 'context' => 'schedule',
                 'name_prefix' => 'Scheduled',
+                'destination_id' => $destinationId,
             ]);
 
             if ($result['status'] === ServerBackupTaskService::STATUS_SKIPPED) {
@@ -499,18 +500,19 @@ class AServerScheduleProcessor implements TimeTask
         }
 
         $parsed = ServerDatabaseDumpService::parseBackupPayload($payload);
+        $destinationId = \App\Services\Storage\StorageDestinationService::destinationIdFromPayload($payload);
         if ($parsed['type'] === 'database') {
             $this->executeDatabaseBackup($server, $parsed);
 
             return;
         }
         if ($parsed['type'] === 'full') {
-            $this->executeFullBackup($server, $parsed);
+            $this->executeFullBackup($server, $parsed, $destinationId);
 
             return;
         }
 
-        $this->executeBackupServer($server, $parsed['ignored_files'] !== '' ? $parsed['ignored_files'] : '[]');
+        $this->executeBackupServer($server, $parsed['ignored_files'] !== '' ? $parsed['ignored_files'] : '[]', $destinationId);
     }
 
     /**
@@ -518,12 +520,11 @@ class AServerScheduleProcessor implements TimeTask
      *
      * @param array{type: string, ignored_files: string, databases: 'all'|list<int>, directory: string, include_metadata: bool, include_encrypted: bool, include_activities: bool} $parsed
      */
-    private function executeFullBackup(array $server, array $parsed)
+    private function executeFullBackup(array $server, array $parsed, ?int $destinationId = null)
     {
         $app = App::getInstance(false, true);
         MinecraftColorCodeSupport::sendOutputWithNewLine('&aStarting full backup for server: ' . $server['name']);
 
-        $currentBackups = count(Backup::getBackupsByServerId((int) $server['id']));
         $backupLimit = (int) ($server['backup_limit'] ?? 0);
 
         if ($backupLimit === 0) {
@@ -533,7 +534,23 @@ class AServerScheduleProcessor implements TimeTask
             return;
         }
 
-        $atBackupLimit = $currentBackups >= $backupLimit;
+        // Resolve the destination before FIFO eviction so an unusable destination never removes a backup.
+        try {
+            $destinationId = \App\Services\Storage\StorageDestinationService::resolveForServer($destinationId, $server);
+        } catch (\App\Services\Storage\StorageException $e) {
+            MinecraftColorCodeSupport::sendOutputWithNewLine('&eSkipping full backup (destination_unavailable) for server: ' . $server['name']);
+            ServerActivity::createActivity([
+                'server_id' => $server['id'],
+                'node_id' => $server['node_id'],
+                'event' => 'backup_skipped_destination',
+                'metadata' => json_encode(['context' => 'schedule', 'type' => 'full', 'destination_id' => $destinationId, 'reason' => $e->errorCode()]),
+            ]);
+
+            return;
+        }
+
+        // Only backups on host storage use the limit (BackupQuota); rotation stays in the same storage pool.
+        $atBackupLimit = \App\Services\Backup\BackupQuota::atLimit($server, $destinationId);
         if ($atBackupLimit && !BackupFifoEviction::isFifoRollingForServer($server)) {
             MinecraftColorCodeSupport::sendOutputWithNewLine('&eSkipping full backup: limit reached for server: ' . $server['name']);
 
@@ -544,7 +561,7 @@ class AServerScheduleProcessor implements TimeTask
             $wings = $this->getWingsConnection($server, 120);
 
             if ($atBackupLimit) {
-                $evict = BackupFifoEviction::evictOldestWingsBackup((int) $server['id'], (string) $server['uuid'], $wings);
+                $evict = BackupFifoEviction::evictOldestWingsBackup((int) $server['id'], (string) $server['uuid'], $wings, $destinationId);
                 if ($evict !== null) {
                     MinecraftColorCodeSupport::sendOutputWithNewLine('&eSkipping full backup: FIFO rotation failed for server: ' . $server['name']);
 
@@ -554,6 +571,7 @@ class AServerScheduleProcessor implements TimeTask
 
             $result = \App\Services\Backup\ServerFullBackupService::run($wings, $server, $parsed, [
                 'name' => 'Scheduled full backup at ' . date('Y-m-d H:i:s'),
+                'destination_id' => $destinationId,
             ]);
 
             foreach ($result['backed_up'] as $item) {

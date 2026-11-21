@@ -510,6 +510,9 @@ class VmUserBackupController
     )]
     public function restoreBackup(Request $request, int $id): Response
     {
+        if (($reauth = \App\Services\Vm\VdsReauth::check($request, 'restore')) !== null) {
+            return $reauth;
+        }
         $user = $request->attributes->get('user');
         $instance = $request->attributes->get('vmInstance');
         if (!$instance) {
@@ -540,6 +543,13 @@ class VmUserBackupController
 
         if ($volid === '' || $storage === '') {
             return ApiResponse::error('volid and storage are required', 'MISSING_PARAMS', 400);
+        }
+
+        // The volume must belong to this VM. The Proxmox restore runs with
+        // force=1, so an unchecked `volid` lets a customer boot another
+        // tenant's backup onto their own machine.
+        if (VmInstanceBackup::getByInstanceAndVolid((int) $instance['id'], $volid) === null) {
+            return ApiResponse::error('Backup not found for this instance', 'BACKUP_NOT_FOUND', 404);
         }
 
         $vmid = (int) $instance['vmid'];

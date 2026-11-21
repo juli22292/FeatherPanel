@@ -55,6 +55,13 @@ class VmNode
         'storage_tpm',
         'storage_efi',
         'storage_backups',
+        'storage_iso_user',
+        'storage_iso_allowed',
+        'rescue_iso',
+        'feathertail_enabled',
+        'feathertail_url',
+        'feathertail_token',
+        'feathertail_tls_no_verify',
     ];
 
     /**
@@ -167,6 +174,8 @@ class VmNode
 
         $data['token_id'] = App::getInstance(true)->encryptValue((string) $data['token_id']);
         $data['secret'] = App::getInstance(true)->encryptValue((string) $data['secret']);
+
+        $data = self::normalizeFeatherTailFieldsOnWrite($data, true);
 
         $hasId = isset($data['id']) && is_int($data['id']) && $data['id'] > 0;
 
@@ -328,21 +337,21 @@ class VmNode
     public static function updateVmNodeById(int $id, array $data): bool
     {
         if ($id <= 0) {
-            App::getInstance(true)->getLogger()->error('Invalid VM node ID: ' . $id . ' with data: ' . json_encode($data));
+            App::getInstance(true)->getLogger()->error('Invalid VM node ID: ' . $id . ' with data: ' . \App\Helpers\LogRedactor::json($data));
 
             return false;
         }
 
         if (isset($data['location_id'])) {
             if (!Location::getById((int) $data['location_id'])) {
-                App::getInstance(true)->getLogger()->error('Invalid location_id: ' . $data['location_id'] . ' for VM node with data: ' . json_encode($data));
+                App::getInstance(true)->getLogger()->error('Invalid location_id: ' . $data['location_id'] . ' for VM node with data: ' . \App\Helpers\LogRedactor::json($data));
 
                 return false;
             }
 
             $location = Location::getById((int) $data['location_id']);
             if (!$location || ($location['type'] ?? 'game') !== 'vps') {
-                App::getInstance(true)->getLogger()->error('Location is not marked as VPS/VDS location_id: ' . $data['location_id'] . ' for VM node with data: ' . json_encode($data));
+                App::getInstance(true)->getLogger()->error('Location is not marked as VPS/VDS location_id: ' . $data['location_id'] . ' for VM node with data: ' . \App\Helpers\LogRedactor::json($data));
 
                 return false;
             }
@@ -365,6 +374,8 @@ class VmNode
         if (isset($data['secret']) && is_string($data['secret']) && $data['secret'] !== '') {
             $data['secret'] = App::getInstance(true)->encryptValue($data['secret']);
         }
+
+        $data = self::normalizeFeatherTailFieldsOnWrite($data, false);
 
         $filteredData = array_intersect_key($data, array_flip(self::$allowedFields));
 
@@ -449,6 +460,48 @@ class VmNode
     }
 
     /**
+     * Generate a FeatherTail API Bearer token (64 alphanumeric chars).
+     */
+    public static function generateFeatherTailToken(): string
+    {
+        $chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+        $token = '';
+        $randomBytes = random_bytes(64);
+        for ($i = 0; $i < 64; ++$i) {
+            $token .= $chars[ord($randomBytes[$i]) % strlen($chars)];
+        }
+
+        return $token;
+    }
+
+    /**
+     * Strip FeatherTail token from admin list/show payloads (use setup-command / reset instead).
+     *
+     * @param array<string, mixed> $row
+     *
+     * @return array<string, mixed>
+     */
+    public static function sanitizeForAdminResponse(array $row): array
+    {
+        unset($row['feathertail_token']);
+
+        return $row;
+    }
+
+    /**
+     * Default public agent URL for a node FQDN.
+     */
+    public static function defaultFeatherTailUrl(string $fqdn): string
+    {
+        $host = trim($fqdn);
+        if ($host === '') {
+            return 'http://127.0.0.1:8686';
+        }
+
+        return 'http://' . $host . ':8686';
+    }
+
+    /**
      * Sanitize data for logging by excluding sensitive fields.
      *
      * @param array<string, mixed> $data
@@ -460,6 +513,7 @@ class VmNode
         $sensitiveFields = [
             'token_id',
             'secret',
+            'feathertail_token',
         ];
 
         $sanitized = $data;
@@ -470,6 +524,59 @@ class VmNode
         }
 
         return $sanitized;
+    }
+
+    /**
+     * Normalize / encrypt FeatherTail fields before INSERT/UPDATE.
+     *
+     * @param array<string, mixed> $data
+     *
+     * @return array<string, mixed>
+     */
+    private static function normalizeFeatherTailFieldsOnWrite(array $data, bool $isCreate): array
+    {
+        if ($isCreate) {
+            if (!isset($data['feathertail_enabled'])) {
+                $data['feathertail_enabled'] = 0;
+            }
+            if (!isset($data['feathertail_tls_no_verify'])) {
+                $data['feathertail_tls_no_verify'] = 0;
+            }
+            if (!isset($data['feathertail_url']) || trim((string) $data['feathertail_url']) === '') {
+                $data['feathertail_url'] = self::defaultFeatherTailUrl((string) ($data['fqdn'] ?? ''));
+            }
+            if (!isset($data['feathertail_token']) || trim((string) $data['feathertail_token']) === '') {
+                $data['feathertail_token'] = self::generateFeatherTailToken();
+            }
+        }
+
+        if (array_key_exists('feathertail_enabled', $data)) {
+            $data['feathertail_enabled'] = self::toTinyIntBool($data['feathertail_enabled']);
+        }
+        if (array_key_exists('feathertail_tls_no_verify', $data)) {
+            $data['feathertail_tls_no_verify'] = self::toTinyIntBool($data['feathertail_tls_no_verify']);
+        }
+        if (isset($data['feathertail_url']) && is_string($data['feathertail_url'])) {
+            $data['feathertail_url'] = rtrim(trim($data['feathertail_url']), '/');
+        }
+        if (isset($data['feathertail_token']) && is_string($data['feathertail_token']) && $data['feathertail_token'] !== '') {
+            $data['feathertail_token'] = App::getInstance(true)->encryptValue($data['feathertail_token']);
+        }
+
+        return $data;
+    }
+
+    private static function toTinyIntBool(mixed $value): int
+    {
+        if (is_bool($value)) {
+            return $value ? 1 : 0;
+        }
+        if (is_numeric($value)) {
+            return ((int) $value) !== 0 ? 1 : 0;
+        }
+        $normalized = strtolower(trim((string) $value));
+
+        return in_array($normalized, ['1', 'true', 'yes', 'on'], true) ? 1 : 0;
     }
 
     /**
@@ -488,8 +595,18 @@ class VmNode
             if (isset($row['secret']) && is_string($row['secret']) && $row['secret'] !== '') {
                 $row['secret'] = App::getInstance(true)->decryptValue($row['secret']);
             }
+            if (isset($row['feathertail_token']) && is_string($row['feathertail_token']) && $row['feathertail_token'] !== '') {
+                $row['feathertail_token'] = App::getInstance(true)->decryptValue($row['feathertail_token']);
+            }
         } catch (\Throwable $e) {
             App::getInstance(true)->getLogger()->error('Failed to decrypt VM node sensitive fields: ' . $e->getMessage());
+        }
+
+        if (isset($row['feathertail_enabled'])) {
+            $row['feathertail_enabled'] = (int) $row['feathertail_enabled'];
+        }
+        if (isset($row['feathertail_tls_no_verify'])) {
+            $row['feathertail_tls_no_verify'] = (int) $row['feathertail_tls_no_verify'];
         }
 
         return $row;

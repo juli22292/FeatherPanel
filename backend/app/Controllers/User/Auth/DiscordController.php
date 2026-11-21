@@ -24,6 +24,7 @@ use App\Chat\Activity;
 use App\Helpers\UUIDUtils;
 use App\Helpers\ApiResponse;
 use App\Config\ConfigInterface;
+use App\Helpers\OAuthStateCookie;
 use App\Helpers\PanelIpBlockGuard;
 use App\CloudFlare\CloudFlareRealIP;
 use App\Helpers\EmailDomainValidator;
@@ -39,6 +40,9 @@ class DiscordController
      * Initiate Discord OAuth login.
      * GET /api/user/auth/discord/login.
      */
+    /** Binds Discord hand-off tokens to the browser that finished the callback. */
+    private const HANDOFF_COOKIE = 'fp_discord_handoff';
+
     public function login(Request $request): RedirectResponse
     {
         return $this->startDiscordFlow($request);
@@ -77,7 +81,7 @@ class DiscordController
 
         // Validate state
         $cachedState = $state ? Cache::get('discord_oauth_state_' . $state) : null;
-        if (!$state || $cachedState === null) {
+        if (!$state || $cachedState === null || !OAuthStateCookie::matches($request, $state)) {
             return new RedirectResponse('/auth/login?error=invalid_state');
         }
 
@@ -142,7 +146,8 @@ class DiscordController
         $discordUsername = $discordUser['username'] ?? '';
         $discordDiscriminator = $discordUser['discriminator'] ?? '0000';
         $discordName = $discordUsername . '#' . $discordDiscriminator;
-        $discordEmail = $discordUser['email'] ?? '';
+        // Only an address Discord has confirmed may be used to find or create panel accounts
+        $discordEmail = self::verifiedEmail($discordUser);
 
         if ($isLinkFlow) {
             return $this->completeAccountLink(
@@ -167,7 +172,7 @@ class DiscordController
             );
         }
 
-        // Discord OAuth proves email ownership auto-link and log in existing accounts
+        // Discord confirmed this address (see verifiedEmail) so it can sign in the matching account
         if (!empty($discordEmail) && filter_var($discordEmail, FILTER_VALIDATE_EMAIL)) {
             $emailUser = User::getUserByEmail($discordEmail);
             if ($emailUser !== null && ($emailUser['deleted'] ?? 'false') !== 'true') {
@@ -195,10 +200,11 @@ class DiscordController
                 'discord_username' => $discordUsername,
                 'discord_name' => $discordName,
                 'discord_email' => $discordEmail,
+                'discord_email_verified' => $discordEmail !== '',
                 'is_registration' => true,
             ], 10);
 
-            return new RedirectResponse('/auth/register?discord_link_token=' . $tempToken);
+            return $this->handoffRedirect('/auth/register?discord_link_token=' . $tempToken, $tempToken);
         }
 
         // Registration is disabled or a matching account already exists link to existing account
@@ -213,15 +219,18 @@ class DiscordController
             'discord_email' => $discordEmail,
         ], 10);
 
-        return new RedirectResponse('/auth/login?discord_link_token=' . $tempToken);
+        return $this->handoffRedirect('/auth/login?discord_link_token=' . $tempToken, $tempToken);
     }
 
     /**
      * Authenticate user with Discord token.
      * Called by LoginController to complete Discord login.
      */
-    public function authenticateWithToken(string $token): ?array
+    public function authenticateWithToken(string $token, ?Request $request = null): ?array
     {
+        if ($request !== null && !OAuthStateCookie::matches($request, $token, self::HANDOFF_COOKIE)) {
+            return null;
+        }
         $data = Cache::get('discord_login_token_' . $token);
         if (!$data) {
             return null;
@@ -270,7 +279,7 @@ class DiscordController
         }
 
         // Get pending Discord data
-        $pendingData = Cache::get('discord_link_token_' . $token);
+        $pendingData = OAuthStateCookie::matches($request, $token, self::HANDOFF_COOKIE) ? Cache::get('discord_link_token_' . $token) : null;
         if (!$pendingData) {
             return ApiResponse::error('Invalid or expired link token', 'INVALID_TOKEN', 400);
         }
@@ -328,6 +337,10 @@ class DiscordController
             return ApiResponse::error('Unauthorized', 'UNAUTHORIZED', 401);
         }
 
+        if (!empty($user['id']) && SsoController::isLastLoginMethod($user, 'discord')) {
+            return ApiResponse::error('Set a password or link another provider before removing your last sign-in method', 'SSO_LAST_LOGIN_METHOD', 409);
+        }
+
         // Unlink Discord account
         $updated = User::updateUser($user['uuid'], [
             'discord_oauth2_id' => null,
@@ -360,7 +373,7 @@ class DiscordController
             return ApiResponse::error('Missing registration token', 'MISSING_TOKEN', 400);
         }
 
-        $cached = Cache::get('discord_link_token_' . $token);
+        $cached = OAuthStateCookie::matches($request, $token, self::HANDOFF_COOKIE) ? Cache::get('discord_link_token_' . $token) : null;
         if (!$cached || !is_array($cached)) {
             return ApiResponse::error('Invalid or expired registration token', 'INVALID_TOKEN', 400);
         }
@@ -383,10 +396,10 @@ class DiscordController
         if ($existingUser !== null) {
             Cache::forget('discord_link_token_' . $token);
 
-            return (new LoginController())->completeLogin($existingUser);
+            return (new LoginController())->completeExternalLogin($existingUser);
         }
 
-        if (!empty($cached['discord_email']) && filter_var($cached['discord_email'], FILTER_VALIDATE_EMAIL)) {
+        if (($cached['discord_email_verified'] ?? false) === true && !empty($cached['discord_email']) && filter_var($cached['discord_email'], FILTER_VALIDATE_EMAIL)) {
             $emailUser = User::getUserByEmail($cached['discord_email']);
             if ($emailUser !== null && ($emailUser['deleted'] ?? 'false') !== 'true') {
                 $this->applyDiscordLink(
@@ -400,7 +413,7 @@ class DiscordController
                 Cache::forget('discord_link_token_' . $token);
                 $linkedUser = User::getUserByUuid($emailUser['uuid']);
 
-                return (new LoginController())->completeLogin($linkedUser ?? $emailUser);
+                return (new LoginController())->completeExternalLogin($linkedUser ?? $emailUser);
             }
         }
 
@@ -408,7 +421,7 @@ class DiscordController
             $cached['discord_id'],
             $cached['discord_username'],
             $cached['discord_name'],
-            $cached['discord_email'],
+            ($cached['discord_email_verified'] ?? false) === true ? (string) $cached['discord_email'] : '',
             $cached['discord_access_token']
         );
 
@@ -428,7 +441,26 @@ class DiscordController
 
         $loginController = new LoginController();
 
-        return $loginController->completeLogin($newUser);
+        return $loginController->completeExternalLogin($newUser);
+    }
+
+    /**
+     * The Discord account email, but only when Discord reports it as confirmed.
+     *
+     * @param array<string, mixed> $discordUser Response of GET /users/@me
+     */
+    public static function verifiedEmail(array $discordUser): string
+    {
+        if (($discordUser['verified'] ?? false) !== true) {
+            return '';
+        }
+        $email = $discordUser['email'] ?? '';
+        if (!is_string($email)) {
+            return '';
+        }
+        $email = trim($email);
+
+        return filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : '';
     }
 
     /**
@@ -641,8 +673,10 @@ class DiscordController
         $redirectUri = urlencode(rtrim($app->getConfig()->getSetting(ConfigInterface::APP_URL, ''), '/') . '/api/user/auth/discord/callback');
         $scopes = urlencode('identify email');
         $url = "https://discord.com/api/oauth2/authorize?client_id={$clientId}&redirect_uri={$redirectUri}&response_type=code&scope={$scopes}&state={$state}";
+        $response = new RedirectResponse($url);
+        OAuthStateCookie::attach($response, $state);
 
-        return new RedirectResponse($url);
+        return $response;
     }
 
     private function completeAccountLink(
@@ -706,6 +740,18 @@ class DiscordController
         return null;
     }
 
+    /**
+     * Redirect with a hand-off token that only works in this browser, so a link
+     * containing it cannot be used to sign someone else in or link an account.
+     */
+    private function handoffRedirect(string $url, string $token): RedirectResponse
+    {
+        $response = new RedirectResponse($url);
+        OAuthStateCookie::attach($response, $token, self::HANDOFF_COOKIE);
+
+        return $response;
+    }
+
     private function createDiscordLoginRedirect(
         array $user,
         string $discordId,
@@ -724,7 +770,7 @@ class DiscordController
             'discord_name' => $discordName,
         ], 5);
 
-        return new RedirectResponse('/auth/login?discord_token=' . $tempToken);
+        return $this->handoffRedirect('/auth/login?discord_token=' . $tempToken, $tempToken);
     }
 
     private function applyDiscordLink(

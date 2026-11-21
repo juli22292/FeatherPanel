@@ -47,6 +47,8 @@ import { getApiErrorMessageFromPayload } from '@/lib/api-errors';
 import { resolveServerSpellBannerStyle } from '@/lib/server-spell-banner';
 import { useServerResourceHistory } from '@/lib/resource-history';
 import { ResourceTrendStrip } from '@/components/dashboard/ResourceTrends';
+import { ServerResourceGraphs } from '@/components/server/ServerResourceGraphs';
+import { ServerCrashCard } from '@/components/server/ServerCrashCard';
 
 interface WingsStats {
     uptime?: number;
@@ -139,7 +141,7 @@ export default function ServerConsolePage() {
     const [memoryData, setMemoryData] = useState<Array<{ timestamp: number; value: number }>>([]);
     const [diskData, setDiskData] = useState<Array<{ timestamp: number; value: number }>>([]);
     const [networkData, setNetworkData] = useState<Array<{ timestamp: number; value: number }>>([]);
-    const [, setDiskIoData] = useState<Array<{ timestamp: number; value: number }>>([]);
+    const [diskIoData, setDiskIoData] = useState<Array<{ timestamp: number; value: number }>>([]);
     const maxDataPoints = 60;
 
     const [currentCpu, setCurrentCpu] = useState(0);
@@ -153,10 +155,11 @@ export default function ServerConsolePage() {
     const [currentNetworkTx, setCurrentNetworkTx] = useState(0);
     const [networkRxTotal, setNetworkRxTotal] = useState(0);
     const [networkTxTotal, setNetworkTxTotal] = useState(0);
-    const [, setCurrentDiskIoRead] = useState(0);
-    const [, setCurrentDiskIoWrite] = useState(0);
-    const [, setDiskIoReadTotal] = useState(0);
-    const [, setDiskIoWriteTotal] = useState(0);
+    const [currentDiskIoRead, setCurrentDiskIoRead] = useState(0);
+    const [currentDiskIoWrite, setCurrentDiskIoWrite] = useState(0);
+    const [diskIoReadTotal, setDiskIoReadTotal] = useState(0);
+    const [diskIoWriteTotal, setDiskIoWriteTotal] = useState(0);
+    const [diskIoReported, setDiskIoReported] = useState(false);
 
     const [consoleFilters, setConsoleFilters] = useState<ConsoleFilterRule[]>([]);
     const hasLoadedFilters = useRef(false);
@@ -421,6 +424,7 @@ export default function ServerConsolePage() {
                 const currentWriteBytes = Number(stats.disk_io.write_bytes);
                 const now = new Date().getTime();
 
+                setDiskIoReported(true);
                 setDiskIoReadTotal(Math.max(0, currentReadBytes));
                 setDiskIoWriteTotal(Math.max(0, currentWriteBytes));
 
@@ -689,7 +693,7 @@ export default function ServerConsolePage() {
                     icon: AlertTriangle,
                     message: t('servers.console.connection.error'),
                     hint: t('servers.console.connection.error_hint'),
-                    color: 'text-amber-500',
+                    color: 'text-amber-600 dark:text-amber-400',
                     bgColor: 'bg-amber-500/10 border-amber-500/20',
                     iconClass: '',
                 };
@@ -698,7 +702,7 @@ export default function ServerConsolePage() {
                     icon: WifiOff,
                     message: t('servers.console.connection.disconnected'),
                     hint: t('servers.console.connection.disconnected_hint'),
-                    color: 'text-amber-500',
+                    color: 'text-amber-600 dark:text-amber-400',
                     bgColor: 'bg-amber-500/10 border-amber-500/20',
                     iconClass: '',
                 };
@@ -732,7 +736,9 @@ export default function ServerConsolePage() {
     const serverHost =
         server.subdomain && server.subdomain.domain && server.subdomain.subdomain
             ? `${server.subdomain.subdomain}.${server.subdomain.domain}`
-            : server.allocation?.ip_alias || server.allocation?.ip || '';
+            : server.subdomain_requirement?.enforced
+              ? ''
+              : server.allocation?.ip_alias || server.allocation?.ip || '';
 
     if (isPopout) {
         return (
@@ -756,10 +762,10 @@ export default function ServerConsolePage() {
                             <CardContent className='p-4'>
                                 <div className='flex items-center gap-4'>
                                     <div className='flex h-12 w-12 items-center justify-center rounded-lg border-yellow-500/20 bg-yellow-500/10'>
-                                        <AlertTriangle className='h-6 w-6 text-yellow-500' />
+                                        <AlertTriangle className='h-6 w-6 text-yellow-600 dark:text-yellow-400' />
                                     </div>
                                     <div className='flex-1'>
-                                        <p className='font-semibold text-yellow-500'>
+                                        <p className='font-semibold text-yellow-600 dark:text-yellow-400'>
                                             {t('serverConsole.subuserNoAccess')}
                                         </p>
                                     </div>
@@ -798,6 +804,7 @@ export default function ServerConsolePage() {
                 address={serverHost}
                 port={server.allocation?.port || null}
                 uptime={connectionStatus === 'connected' && serverStatus === 'running' ? wingsUptime : undefined}
+                expiresAt={server.expires_at}
                 nodeLocation={server.location?.name}
                 nodeLocationFlag={server.location?.flag_code}
                 nodeName={server.node?.name}
@@ -863,10 +870,10 @@ export default function ServerConsolePage() {
                             <CardContent className='p-4'>
                                 <div className='flex items-center gap-4'>
                                     <div className='flex h-12 w-12 items-center justify-center rounded-lg border-yellow-500/20 bg-yellow-500/10'>
-                                        <AlertTriangle className='h-6 w-6 text-yellow-500' />
+                                        <AlertTriangle className='h-6 w-6 text-yellow-600 dark:text-yellow-400' />
                                     </div>
                                     <div className='flex-1'>
-                                        <p className='font-semibold text-yellow-500'>
+                                        <p className='font-semibold text-yellow-600 dark:text-yellow-400'>
                                             {t('serverConsole.subuserNoAccess')}
                                         </p>
                                     </div>
@@ -882,10 +889,12 @@ export default function ServerConsolePage() {
                             <CardContent className='p-4'>
                                 <div className='flex items-center gap-4'>
                                     <div className='flex h-12 w-12 items-center justify-center rounded-lg border-yellow-500/20 bg-yellow-500/10'>
-                                        <AlertTriangle className='h-6 w-6 text-yellow-500' />
+                                        <AlertTriangle className='h-6 w-6 text-yellow-600 dark:text-yellow-400' />
                                     </div>
                                     <div className='flex-1'>
-                                        <p className='font-semibold text-yellow-500'>{t('servers.status.suspended')}</p>
+                                        <p className='font-semibold text-yellow-600 dark:text-yellow-400'>
+                                            {t('servers.status.suspended')}
+                                        </p>
                                         <p className='text-muted-foreground text-sm'>
                                             {t('servers.console.connection.disconnected')}
                                         </p>
@@ -939,6 +948,17 @@ export default function ServerConsolePage() {
                             memoryData={memoryData}
                             diskData={diskData}
                             networkData={networkData}
+                            diskIo={
+                                diskIoReported
+                                    ? {
+                                          read: currentDiskIoRead,
+                                          write: currentDiskIoWrite,
+                                          readTotal: diskIoReadTotal,
+                                          writeTotal: diskIoWriteTotal,
+                                          data: diskIoData,
+                                      }
+                                    : null
+                            }
                         />
                     )}
 
@@ -948,7 +968,22 @@ export default function ServerConsolePage() {
                 </div>
             </div>
 
+            {hasPermission('control.console') && (
+                <ServerCrashCard
+                    uuidShort={serverUuid}
+                    status={serverStatus}
+                    canToggle={hasPermission('control.restart')}
+                />
+            )}
             <WidgetRenderer widgets={getWidgets('server-console', 'before-performance')} />
+            {shouldConnectToWings && (
+                <ServerResourceGraphs
+                    uuidShort={serverUuid}
+                    cpuLimit={server.cpu || 0}
+                    memoryLimit={server.memory || 0}
+                    diskLimit={server.disk || 0}
+                />
+            )}
             <WidgetRenderer widgets={getWidgets('server-console', 'after-performance')} />
 
             <WidgetRenderer widgets={getWidgets('server-console', 'bottom-of-page')} />

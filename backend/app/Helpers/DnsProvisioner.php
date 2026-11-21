@@ -93,38 +93,30 @@ class DnsProvisioner
     }
 
     /**
+     * Domains that get web records (A/AAAA): every route except redirects, which the node does not serve.
+     *
      * @param array<string, mixed> $space
      *
      * @return list<string>
      */
     public static function collectProvisionDomains(array $space): array
     {
-        $domains = [];
-        $routes = is_array($space['domain_routes'] ?? null) ? $space['domain_routes'] : [];
-        if ($routes !== []) {
-            foreach ($routes as $route) {
-                if (!is_array($route)) {
-                    continue;
-                }
-                $type = strtolower(trim((string) ($route['type'] ?? 'alias')));
-                if ($type === 'redirect') {
-                    continue;
-                }
-                $domain = strtolower(trim((string) ($route['domain'] ?? '')));
-                if ($domain !== '') {
-                    $domains[] = $domain;
-                }
-            }
-        } else {
-            foreach (is_array($space['domains'] ?? null) ? $space['domains'] : [] as $domain) {
-                $domain = strtolower(trim((string) $domain));
-                if ($domain !== '') {
-                    $domains[] = $domain;
-                }
-            }
-        }
+        return self::collectRouteDomains($space, false);
+    }
 
-        return array_values(array_unique($domains));
+    /**
+     * Domains that can receive mail: every domain of the WebSpace, redirect routes included. Mail is addressed to the
+     * domain of the mailbox whatever its web route does (for example `example.com` redirecting to `www.example.com`).
+     *
+     * @param array<string, mixed> $space
+     *
+     * @return list<string>
+     */
+    public static function collectMailDomains(array $space): array
+    {
+        // Routes are the source of truth when they exist; the flat list is only the fallback for spaces without
+        // routes (it can still hold a legacy domain that another WebSpace owns).
+        return self::collectRouteDomains($space, true);
     }
 
     /**
@@ -239,10 +231,14 @@ class DnsProvisioner
      *
      * @param array<string, mixed> $webSpace
      * @param array<string, mixed> $mailHost
+     * @param array{provider: DnsProviderInterface, zone_id: string, source?: string}|null $context
+     *                                                                                              a DNS zone to write to instead of the linked one (customer API token)
+     * @param bool $overwrite when false an existing different SPF/DKIM/DMARC/MX value is kept and reported as a conflict
+     * @param bool $dryRun only report what would change
      *
      * @return array{ok: bool, results: list<array{type: string, name: string, ok: bool, action?: string, error?: string}>, skipped?: bool, error?: string}
      */
-    public static function provisionMailRecords(array $webSpace, array $mailHost, string $domain): array
+    public static function provisionMailRecords(array $webSpace, array $mailHost, string $domain, ?array $context = null, bool $overwrite = true, bool $dryRun = false): array
     {
         $mode = strtolower(trim((string) ($mailHost['provision_mode'] ?? '')));
         if ($mode !== 'node') {
@@ -254,7 +250,7 @@ class DnsProvisioner
             return ['ok' => false, 'results' => [], 'error' => 'domain is required'];
         }
 
-        $context = self::resolveProvisionerContext($webSpace);
+        $context ??= self::resolveProvisionerContext($webSpace);
         if ($context === null) {
             return ['ok' => false, 'results' => [], 'error' => 'No linked DNS zone for this WebSpace'];
         }
@@ -278,6 +274,10 @@ class DnsProvisioner
         /** @var DnsProviderInterface $provider */
         $provider = $context['provider'];
         $zoneId = (string) $context['zone_id'];
+        $apiProvider = $provider instanceof \App\Services\Dns\MailRecordCapableInterface;
+        if ($apiProvider && method_exists($provider, 'setDryRun')) {
+            $provider->setDryRun($dryRun);
+        }
 
         $results = [];
         $allOk = true;
@@ -298,12 +298,16 @@ class DnsProvisioner
             if ($type === 'MX') {
                 $upsert = $provider instanceof \App\Services\Dns\NodeDnsProvider
                     ? $provider->upsertMxRecord($zoneId, $name === '@' ? $domain : $name, $value, $priority)
-                    : ['ok' => false, 'error' => 'MX provisioning requires node DNS provider'];
+                    : ($apiProvider
+                        ? $provider->upsertMxRecord($zoneId, $name === '@' ? $domain : ($name . '.' . $domain), $value, $priority, 300, $overwrite)
+                        : ['ok' => false, 'error' => 'MX provisioning requires node DNS provider']);
             } elseif ($type === 'TXT') {
                 $txtName = $name === '@' ? $domain : ($name . '.' . $domain);
-                $upsert = $provider instanceof \App\Services\Dns\AcmeDnsCapableInterface
-                    ? $provider->createTxtRecord($zoneId, $txtName, $value)
-                    : $provider->createRecord($zoneId, ['type' => 'TXT', 'name' => $txtName, 'content' => $value, 'ttl' => 120]);
+                $upsert = $apiProvider
+                    ? $provider->upsertTxtRecord($zoneId, $txtName, $value, 300, $overwrite)
+                    : ($provider instanceof \App\Services\Dns\AcmeDnsCapableInterface
+                        ? $provider->createTxtRecord($zoneId, $txtName, $value)
+                        : $provider->createRecord($zoneId, ['type' => 'TXT', 'name' => $txtName, 'content' => $value, 'ttl' => 120]));
             } else {
                 continue;
             }
@@ -326,7 +330,7 @@ class DnsProvisioner
         $dkimReady = !empty($hints['body']['dkim_ready']);
         $dkimSelector = trim((string) ($hints['body']['dkim_selector'] ?? ''));
         $dkimRecord = trim((string) ($hints['body']['dkim_record'] ?? ''));
-        if ($mailHostId > 0) {
+        if ($mailHostId > 0 && !$dryRun) {
             $update = [];
             if ($mxHost !== '') {
                 $update['mx_host'] = rtrim($mxHost, '.');
@@ -351,16 +355,19 @@ class DnsProvisioner
                 if (
                     ($result['type'] ?? '') === 'TXT'
                     && ($result['name'] ?? '') === '_dmarc'
-                    && !empty($result['ok'])
+                    // API token providers already reported this record (written, unchanged or kept as a conflict).
+                    && ($apiProvider || !empty($result['ok']))
                 ) {
                     $hasDmarc = true;
                     break;
                 }
             }
             if (!$hasDmarc) {
-                $upsert = $provider instanceof \App\Services\Dns\AcmeDnsCapableInterface
-                    ? $provider->createTxtRecord($zoneId, '_dmarc.' . $domain, $dmarcValue)
-                    : $provider->createRecord($zoneId, ['type' => 'TXT', 'name' => '_dmarc.' . $domain, 'content' => $dmarcValue, 'ttl' => 120]);
+                $upsert = $apiProvider
+                    ? $provider->upsertTxtRecord($zoneId, '_dmarc.' . $domain, $dmarcValue, 300, $overwrite)
+                    : ($provider instanceof \App\Services\Dns\AcmeDnsCapableInterface
+                        ? $provider->createTxtRecord($zoneId, '_dmarc.' . $domain, $dmarcValue)
+                        : $provider->createRecord($zoneId, ['type' => 'TXT', 'name' => '_dmarc.' . $domain, 'content' => $dmarcValue, 'ttl' => 120]));
                 if (empty($upsert['ok'])) {
                     $allOk = false;
                 }
@@ -378,6 +385,7 @@ class DnsProvisioner
             'ok' => $allOk && $results !== [],
             'results' => $results,
             'dkim_ready' => $dkimReady,
+            'dry_run' => $dryRun,
         ];
     }
 
@@ -389,6 +397,41 @@ class DnsProvisioner
     public static function provisionMailForWebSpace(array $space): array
     {
         return MailDeliverabilityChecker::provisionMailForWebSpace($space);
+    }
+
+    /**
+     * @param array<string, mixed> $space
+     *
+     * @return list<string>
+     */
+    private static function collectRouteDomains(array $space, bool $withRedirects): array
+    {
+        $domains = [];
+        $routes = is_array($space['domain_routes'] ?? null) ? $space['domain_routes'] : [];
+        if ($routes !== []) {
+            foreach ($routes as $route) {
+                if (!is_array($route)) {
+                    continue;
+                }
+                $type = strtolower(trim((string) ($route['type'] ?? 'alias')));
+                if ($type === 'redirect' && !$withRedirects) {
+                    continue;
+                }
+                $domain = strtolower(trim((string) ($route['domain'] ?? '')));
+                if ($domain !== '') {
+                    $domains[] = $domain;
+                }
+            }
+        } else {
+            foreach (is_array($space['domains'] ?? null) ? $space['domains'] : [] as $domain) {
+                $domain = strtolower(trim((string) $domain));
+                if ($domain !== '') {
+                    $domains[] = $domain;
+                }
+            }
+        }
+
+        return array_values(array_unique($domains));
     }
 
     /**

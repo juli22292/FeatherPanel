@@ -17,7 +17,9 @@ COPY frontendv2/ .
 RUN pnpm build
 
 # ============================================================================
-FROM rust:1.93-slim AS runner-builder
+# FrankenPHP final image is still Bookworm-based — keep the runner on Bookworm glibc.
+# The standalone runner image (runner/Dockerfile) uses Trixie; this all-in-one cannot yet.
+FROM rust:slim-bookworm AS runner-builder
 
 # Build the Rust async runner
 WORKDIR /build
@@ -38,7 +40,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
     cp /build/target/release/async-runner /build/async-runner
 
 # ============================================================================
-FROM dunglas/frankenphp:php8.5 AS final
+FROM dunglas/frankenphp:latest AS final
 
 # Prevent interactive prompts
 ENV DEBIAN_FRONTEND=noninteractive

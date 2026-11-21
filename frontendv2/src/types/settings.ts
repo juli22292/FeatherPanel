@@ -22,6 +22,8 @@ export interface AppSettings {
     cache_driver: string;
     chatbot_ai_provider: string;
     chatbot_enabled: string;
+    /** Optional AI helper in file editor / crash console. Default true when chatbot is on. */
+    chatbot_editor_helper_enabled?: string;
     knowledgebase_enabled: string;
     knowledgebase_public_enabled: string;
     /** Panel modules, 'false' turns a module off. Missing means enabled. */
@@ -37,6 +39,8 @@ export interface AppSettings {
     server_allow_user_made_proxy: string;
     server_allow_user_made_fastdl: string;
     server_allow_user_made_subdomains: string;
+    /** When true, users must set a panel subdomain before start/restart; IPs are redacted until then. */
+    server_require_subdomain?: string;
     server_auto_start_on_node_reconnect?: string;
     server_auto_start_stagger_seconds?: string;
     server_auto_start_initial_delay_seconds?: string;
@@ -45,6 +49,8 @@ export interface AppSettings {
     server_hide_ips: string;
     smtp_enabled: string;
     status_page_enabled: string;
+    maintenance_mode_enabled?: string;
+    maintenance_mode_message?: string;
     status_page_public_enabled: string;
     status_page_allow_iframe?: string;
     status_page_show_raw_values?: string;
@@ -52,23 +58,16 @@ export interface AppSettings {
     ticket_system_enabled: string;
     turnstile_enabled: string;
     turnstile_key_pub: string;
-    captcha_provider: 'turnstile' | 'hcaptcha' | 'recaptcha' | 'friendlycaptcha' | 'reforge';
+    captcha_provider: 'turnstile' | 'hcaptcha' | 'recaptcha' | 'friendlycaptcha';
     hcaptcha_site_key: string;
     recaptcha_site_key: string;
     /** Google reCAPTCHA: v2 (checkbox) or v3 (score). */
     recaptcha_version?: string;
-    /** Minimum acceptable v3 score (0–1); server-enforced. */
+    /** Minimum acceptable v3 score (0-1); server-enforced. */
     recaptcha_v3_min_score?: string;
     /** v3 action name; must match server setting. */
     recaptcha_v3_action?: string;
     friendly_captcha_site_key: string;
-    /** reForge Captcha (https://reforgecaptcha.cloud/) */
-    reforge_captcha_site_key?: string;
-    reforge_captcha_widget_type?: string;
-    reforge_captcha_theme?: string;
-    reforge_captcha_size?: string;
-    reforge_captcha_lang?: string;
-    reforge_captcha_min_score?: string;
     app_url: string;
     branding_show_powered_by?: string;
     /** Premium: when false, hide the version badge in the sidebar */
@@ -84,6 +83,7 @@ export interface AppSettings {
     app_support_url: string;
     app_sso_redirect_path?: string;
     app_sso_token_lifetime_minutes?: string;
+    api_clients_allow_public_key_auth?: string;
     linkedin_url: string;
     telegram_url: string;
     tiktok_url: string;
@@ -101,6 +101,8 @@ export interface AppSettings {
     require_two_fa_admins: string;
     telemetry: string;
     discord_oauth_enabled: string;
+    sso_google_enabled?: string;
+    sso_github_enabled?: string;
     discord_oauth_client_id: string;
     oidc_enabled: string;
     oidc_provider_name?: string;
@@ -151,6 +153,8 @@ export interface AppSettings {
     app_pwa_description: string;
     app_pwa_theme_color: string;
     app_pwa_bg_color: string;
+    app_pwa_push_enabled: string;
+    app_pwa_vapid_public: string;
     /** Optional: default background image URL for all users (used as a starting point, users can still customize unless locked). */
     app_background_image_url?: string;
     /** When 'true', force the configured background image URL for all users. */
@@ -181,15 +185,15 @@ export interface AppSettings {
     app_ui_pack_default?: string;
     /** When 'true', force the configured UI pack for all users. */
     app_ui_pack_lock?: string;
-    /** Optional default background type (aurora, gradient, solid, image, pattern). */
+    /** Optional default background type (aurora, gradient, solid, image). */
     app_background_type_default?: string;
     /** When 'true', force the configured background type for all users. */
     app_background_type_lock?: string;
-    /** Optional default backdrop blur in pixels (0–24). */
+    /** Optional default backdrop blur in pixels (0-24). */
     app_backdrop_blur_default?: string;
     /** When 'true', force the configured backdrop blur for all users. */
     app_backdrop_blur_lock?: string;
-    /** Optional default backdrop darken in percent (0–100). */
+    /** Optional default backdrop darken in percent (0-100). */
     app_backdrop_darken_default?: string;
     /** When 'true', force the configured backdrop darken for all users. */
     app_backdrop_darken_lock?: string;

@@ -15,6 +15,7 @@ See the LICENSE file or <https://www.gnu.org/licenses/>.
 
 'use client';
 
+import { AdminListToolbar } from '@/components/admin/AdminListToolbar';
 import { AdminPageTips } from '@/components/admin/AdminPageTips';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from '@/contexts/TranslationContext';
@@ -270,21 +271,16 @@ export default function BlockedIpsPage() {
 
             {beforeListWidgets.length > 0 ? <WidgetRenderer widgets={beforeListWidgets} /> : null}
 
-            <div className='fp-surface flex flex-col items-center gap-4 rounded-2xl border p-4 sm:flex-row'>
-                <div className='group relative w-full flex-1'>
-                    <Search className='text-muted-foreground group-focus-within:text-primary absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 transition-colors' />
-                    <Input
-                        placeholder={t('admin.blocked_ips.search_placeholder')}
-                        value={searchInput}
-                        onChange={(e) => setSearchInput(e.target.value)}
-                        className='h-11 w-full pl-10'
-                    />
-                </div>
+            <AdminListToolbar
+                searchPlaceholder={t('admin.blocked_ips.search_placeholder')}
+                searchValue={searchInput}
+                onSearchChange={(value) => setSearchInput(value)}
+            >
                 <div className='flex shrink-0 items-center gap-2'>
                     <Switch id='active-only' checked={activeOnly} onCheckedChange={setActiveOnly} />
                     <Label htmlFor='active-only'>{t('admin.blocked_ips.active_only')}</Label>
                 </div>
-            </div>
+            </AdminListToolbar>
 
             {loading ? (
                 <TableSkeleton count={4} />
@@ -301,11 +297,11 @@ export default function BlockedIpsPage() {
                     description={t('admin.blocked_ips.empty_search_hint')}
                 />
             ) : (
-                <ResourceTable>
+                <div className='space-y-4'>
                     <p className='text-muted-foreground text-sm'>
                         {t('admin.blocked_ips.list_summary', { total: String(total) })}
                     </p>
-                    <ResourceTable>
+                    <ResourceTable className='lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)_auto]'>
                         {rows.map((row) => {
                             const badges: ResourceBadge[] = [
                                 {
@@ -331,7 +327,7 @@ export default function BlockedIpsPage() {
                                     key={row.id}
                                     icon={ShieldBan}
                                     title={row.ip}
-                                    titleClassName='font-mono'
+                                    titleClassName='font-mono break-all'
                                     subtitle={row.reason || t('admin.blocked_ips.no_reason')}
                                     description={t('admin.blocked_ips.added_at', {
                                         date: formatWhen(row.created_at),
@@ -354,7 +350,7 @@ export default function BlockedIpsPage() {
                         })}
                     </ResourceTable>
                     <ListPagination page={page} totalPages={totalPages} disabled={loading} onPageChange={setPage} />
-                </ResourceTable>
+                </div>
             )}
 
             {bottomWidgets.length > 0 ? <WidgetRenderer widgets={bottomWidgets} /> : null}

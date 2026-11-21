@@ -313,9 +313,7 @@ export default function CreateVdsNodePage() {
                                         error={!!errors.name}
                                     />
                                     {errors.name && (
-                                        <p className='mt-1 text-[10px] font-bold text-red-500 uppercase'>
-                                            {errors.name}
-                                        </p>
+                                        <p className='mt-1 text-xs font-medium text-red-500'>{errors.name}</p>
                                     )}
                                 </div>
                                 <div className='space-y-2'>
@@ -356,9 +354,7 @@ export default function CreateVdsNodePage() {
                                         </Button>
                                     </div>
                                     {errors.location_id && (
-                                        <p className='mt-1 text-[10px] font-bold text-red-500 uppercase'>
-                                            {errors.location_id}
-                                        </p>
+                                        <p className='mt-1 text-xs font-medium text-red-500'>{errors.location_id}</p>
                                     )}
                                 </div>
                             </div>
@@ -366,12 +362,8 @@ export default function CreateVdsNodePage() {
 
                         <PageCard title={t('admin.vdsNodes.form.proxmox')} icon={Server}>
                             <div className='space-y-6'>
-                                <div className='rounded-xl border border-amber-500/25 bg-amber-500/[0.06] p-4 text-sm text-amber-100'>
-                                    {t('ui.admin.vdsNodes.create.forVDSConsoleAccessOverVNC')}
-                                    <div className='bg-muted mt-2 rounded-md px-3 py-2 font-mono text-xs break-all'>
-                                        curl -sSL https://get.featherpanel.com/installer.sh | bash
-                                    </div>
-                                    {t('ui.admin.vdsNodes.create.thenSelectTheVNCOptionDuring')}
+                                <div className='fp-surface rounded-xl border p-4 text-sm'>
+                                    {t('ui.admin.vdsNodes.create.afterCreateOpenFeatherTail')}
                                 </div>
                                 <div className='space-y-2'>
                                     <Label className='text-sm font-semibold'>{t('admin.vdsNodes.form.user')}</Label>
@@ -382,9 +374,7 @@ export default function CreateVdsNodePage() {
                                         error={!!errors.user}
                                     />
                                     {errors.user && (
-                                        <p className='mt-1 text-[10px] font-bold text-red-500 uppercase'>
-                                            {errors.user}
-                                        </p>
+                                        <p className='mt-1 text-xs font-medium text-red-500'>{errors.user}</p>
                                     )}
                                 </div>
                                 <div className='space-y-2'>
@@ -404,9 +394,7 @@ export default function CreateVdsNodePage() {
                                         error={!!errors.token_id}
                                     />
                                     {errors.token_id && (
-                                        <p className='mt-1 text-[10px] font-bold text-red-500 uppercase'>
-                                            {errors.token_id}
-                                        </p>
+                                        <p className='mt-1 text-xs font-medium text-red-500'>{errors.token_id}</p>
                                     )}
                                 </div>
                                 <div className='space-y-2'>
@@ -420,9 +408,7 @@ export default function CreateVdsNodePage() {
                                         error={!!errors.secret}
                                     />
                                     {errors.secret && (
-                                        <p className='mt-1 text-[10px] font-bold text-red-500 uppercase'>
-                                            {errors.secret}
-                                        </p>
+                                        <p className='mt-1 text-xs font-medium text-red-500'>{errors.secret}</p>
                                     )}
                                 </div>
                             </div>
@@ -442,9 +428,7 @@ export default function CreateVdsNodePage() {
                                         error={!!errors.fqdn}
                                     />
                                     {errors.fqdn && (
-                                        <p className='mt-1 text-[10px] font-bold text-red-500 uppercase'>
-                                            {errors.fqdn}
-                                        </p>
+                                        <p className='mt-1 text-xs font-medium text-red-500'>{errors.fqdn}</p>
                                     )}
                                 </div>
                                 <div className='grid grid-cols-2 gap-4'>
@@ -479,9 +463,7 @@ export default function CreateVdsNodePage() {
                                             error={!!errors.port}
                                         />
                                         {errors.port && (
-                                            <p className='mt-1 text-[10px] font-bold text-red-500 uppercase'>
-                                                {errors.port}
-                                            </p>
+                                            <p className='mt-1 text-xs font-medium text-red-500'>{errors.port}</p>
                                         )}
                                     </div>
                                 </div>
@@ -516,9 +498,7 @@ export default function CreateVdsNodePage() {
                                         error={!!errors.timeout}
                                     />
                                     {errors.timeout && (
-                                        <p className='mt-1 text-[10px] font-bold text-red-500 uppercase'>
-                                            {errors.timeout}
-                                        </p>
+                                        <p className='mt-1 text-xs font-medium text-red-500'>{errors.timeout}</p>
                                     )}
                                 </div>
                             </div>

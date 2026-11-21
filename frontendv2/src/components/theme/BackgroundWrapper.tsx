@@ -65,9 +65,9 @@ export default function BackgroundWrapper({
         isServerRoute && spellBgMode !== 'off' ? resolveSpellBannerUrl(serverCtx?.server?.spell?.banner) : null;
     const useSpellReplace = Boolean(spellBannerUrl && spellBgMode === 'replace');
     const useSpellBlend = Boolean(spellBannerUrl && spellBgMode === 'blend');
-    // Light mode only paints pattern/solid; never aurora/image/gradient canvases.
-    const effectiveBackgroundType =
-        isLight && backgroundType !== 'pattern' && backgroundType !== 'solid' ? 'pattern' : backgroundType;
+    // Light mode only paints solid; never aurora/image/gradient canvases. Dot-grid is retired.
+    const resolvedBackgroundType = backgroundType === 'pattern' ? 'solid' : backgroundType;
+    const effectiveBackgroundType = isLight && resolvedBackgroundType !== 'solid' ? 'solid' : resolvedBackgroundType;
 
     useEffect(() => {
         if (!mounted) return;
@@ -136,14 +136,6 @@ export default function BackgroundWrapper({
             };
         }
 
-        if (effectiveBackgroundType === 'pattern') {
-            return {
-                ...opaqueBase,
-                backgroundImage: 'radial-gradient(circle, hsl(var(--muted-foreground) / 0.1) 1px, transparent 1px)',
-                backgroundSize: '16px 16px',
-            };
-        }
-
         if (effectiveBackgroundType === 'solid' && backgroundImage) {
             if (backgroundImage.startsWith('#')) {
                 return {
@@ -156,6 +148,15 @@ export default function BackgroundWrapper({
     };
 
     const useAurora = !isLight && !useSpellReplace && effectiveBackgroundType === 'aurora';
+    // A uniform page colour makes card backdrop blur pixel-identical to no blur while still costing a
+    // compositing pass per card on every scroll frame; globals.css skips it for this case.
+    const plainBackground =
+        mounted &&
+        !useAurora &&
+        !useSpellReplace &&
+        !useSpellBlend &&
+        effectiveBackgroundType !== 'gradient' &&
+        !(effectiveBackgroundType === 'image' && backgroundImage);
     // Darken veil breaks light-mode contrast; keep blur only when useful.
     const effectiveDarken = isLight ? 0 : backdropDarken;
     const effectiveBlur = isLight ? 0 : backdropBlur;
@@ -177,6 +178,7 @@ export default function BackgroundWrapper({
                 // which pushed the top bar out of view on mobile.
                 fillViewport ? 'flex h-svh max-h-svh flex-col overflow-clip' : 'min-h-svh',
             )}
+            data-fp-bg={plainBackground ? 'plain' : undefined}
         >
             {/* Background layer: Aurora or gradient/solid/pattern/image (or spell replace on server pages).
                 Painted only after mount (theme prefs live in localStorage), but the wrapper and the

@@ -55,7 +55,7 @@ export function ResourceTable({
             <div
                 role='table'
                 className={cn(
-                    'lg:fp-surface space-y-2 lg:grid lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)_auto] lg:space-y-0 lg:divide-y lg:divide-[var(--fp-surface-border)] lg:overflow-hidden lg:rounded-xl lg:border',
+                    'lg:fp-surface-solid space-y-2 lg:grid lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)_auto] lg:space-y-0 lg:divide-y lg:divide-[var(--fp-surface-border)] lg:overflow-hidden lg:rounded-xl lg:border',
                     className,
                 )}
             >
@@ -150,7 +150,7 @@ export function ResourceCard({
 
     if (inTable) {
         const rowClassName = cn(
-            'group relative max-lg:fp-surface max-lg:rounded-xl max-lg:border lg:col-span-3 lg:grid lg:grid-cols-subgrid lg:transition-colors lg:hover:bg-primary/[0.04]',
+            'group relative max-lg:fp-surface-solid max-lg:rounded-xl max-lg:border lg:col-span-3 lg:grid lg:grid-cols-subgrid lg:transition-colors lg:hover:bg-primary/[0.04]',
             (href || onClick) && 'cursor-pointer max-lg:fp-surface-interactive',
             className,
         );
@@ -187,7 +187,7 @@ export function ResourceCard({
                                     titleClassName,
                                 )}
                             >
-                                {titleClassName ? title : <OverflowText>{title}</OverflowText>}
+                                {titleClassName?.includes('break-') ? title : <OverflowText>{title}</OverflowText>}
                             </div>
                             {subtitle ? (
                                 <div className='text-muted-foreground mt-0.5 min-w-0 truncate text-xs'>{subtitle}</div>
@@ -241,7 +241,7 @@ export function ResourceCard({
     }
 
     const cardClassName = cn(
-        'group fp-surface relative overflow-hidden rounded-xl border',
+        'group fp-surface-solid relative overflow-hidden rounded-xl border',
         (href || onClick) && 'fp-surface-interactive cursor-pointer',
         className,
     );
@@ -281,7 +281,7 @@ export function ResourceCard({
                                 titleClassName,
                             )}
                         >
-                            {titleClassName ? title : <OverflowText>{title}</OverflowText>}
+                            {titleClassName?.includes('break-') ? title : <OverflowText>{title}</OverflowText>}
                         </h3>
                         {renderBadges()}
                     </div>

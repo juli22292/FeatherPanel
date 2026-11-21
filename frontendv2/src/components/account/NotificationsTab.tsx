@@ -1,0 +1,366 @@
+/*
+This file is part of FeatherPanel.
+
+Copyright (C) 2025 MythicalSystems Studios
+Copyright (C) 2025 FeatherPanel Contributors
+Copyright (C) 2025 Cassian Gherman (aka NaysKutzu)
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published
+by the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+See the LICENSE file or <https://www.gnu.org/licenses/>.
+*/
+
+'use client';
+
+import { useCallback, useEffect, useState } from 'react';
+import axios from 'axios';
+import { toast } from 'sonner';
+import { Bell, Mail, Send, Smartphone } from 'lucide-react';
+import { useTranslation } from '@/contexts/TranslationContext';
+import { useSettings } from '@/contexts/SettingsContext';
+import { Button } from '@/components/featherui/Button';
+import { Input } from '@/components/featherui/Input';
+import { Switch } from '@/components/ui/switch';
+import { getApiErrorMessage } from '@/lib/api-errors';
+import {
+    getLocalPushSubscription,
+    pushSupported,
+    registerPanelServiceWorker,
+    subscribeWebPush,
+    unsubscribeWebPush,
+} from '@/lib/web-push';
+
+type EventKey =
+    | 'server_crashed'
+    | 'backup_completed'
+    | 'backup_failed'
+    | 'file_transfer'
+    | 'resource_limit'
+    | 'transfer_power'
+    | 'vds_down'
+    | 'vds_high_cpu'
+    | 'vds_backup_failed'
+    | 'vds_bandwidth'
+    | 'vds_expiring'
+    | 'storage_disconnected'
+    | 'webspace_install'
+    | 'webspace_backup_completed'
+    | 'webspace_backup_failed'
+    | 'webspace_limit'
+    | 'webspace_malware';
+
+interface NotificationSettings {
+    email_enabled: boolean;
+    discord_enabled: boolean;
+    push_enabled: boolean;
+    discord_webhook_url: string;
+    events: Record<EventKey, boolean>;
+}
+
+const EVENTS: EventKey[] = [
+    'server_crashed',
+    'backup_completed',
+    'backup_failed',
+    'file_transfer',
+    'resource_limit',
+    'transfer_power',
+    'vds_down',
+    'vds_high_cpu',
+    'vds_backup_failed',
+    'vds_bandwidth',
+    'vds_expiring',
+    'storage_disconnected',
+    'webspace_install',
+    'webspace_backup_completed',
+    'webspace_backup_failed',
+    'webspace_limit',
+    'webspace_malware',
+];
+
+const DEFAULTS: NotificationSettings = {
+    email_enabled: true,
+    discord_enabled: true,
+    push_enabled: false,
+    discord_webhook_url: '',
+    events: {
+        server_crashed: true,
+        backup_completed: true,
+        backup_failed: true,
+        file_transfer: true,
+        resource_limit: true,
+        transfer_power: true,
+        vds_down: true,
+        vds_high_cpu: true,
+        vds_backup_failed: true,
+        vds_bandwidth: true,
+        vds_expiring: true,
+        storage_disconnected: true,
+        webspace_install: true,
+        webspace_backup_completed: true,
+        webspace_backup_failed: true,
+        webspace_limit: true,
+        webspace_malware: true,
+    },
+};
+
+function Row({
+    title,
+    description,
+    checked,
+    onChange,
+    id,
+    disabled,
+}: {
+    title: string;
+    description?: string;
+    checked: boolean;
+    onChange: (v: boolean) => void;
+    id: string;
+    disabled?: boolean;
+}) {
+    return (
+        <div className='flex items-start justify-between gap-4 py-3'>
+            <label htmlFor={id} className='min-w-0'>
+                <span className='text-foreground block text-sm font-medium'>{title}</span>
+                {description && <span className='text-muted-foreground block text-xs'>{description}</span>}
+            </label>
+            <Switch id={id} checked={checked} onCheckedChange={onChange} disabled={disabled} />
+        </div>
+    );
+}
+
+export default function NotificationsTab() {
+    const { t } = useTranslation();
+    const { settings: panelSettings } = useSettings();
+    const pushAdminEnabled =
+        panelSettings?.app_pwa_enabled === 'true' && panelSettings?.app_pwa_push_enabled === 'true';
+
+    const [settings, setSettings] = useState<NotificationSettings>(DEFAULTS);
+    const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [testing, setTesting] = useState(false);
+    const [pushBusy, setPushBusy] = useState(false);
+    const [pushTesting, setPushTesting] = useState(false);
+    const [hasLocalSub, setHasLocalSub] = useState(false);
+    const supported = pushSupported();
+
+    const refreshLocalSub = useCallback(async () => {
+        if (!supported) {
+            setHasLocalSub(false);
+            return;
+        }
+        const sub = await getLocalPushSubscription();
+        setHasLocalSub(Boolean(sub));
+    }, [supported]);
+
+    const load = useCallback(async () => {
+        try {
+            const { data } = await axios.get('/api/user/notification-settings');
+            if (data?.data) setSettings({ ...DEFAULTS, ...data.data, events: { ...DEFAULTS.events, ...(data.data.events || {}) } });
+        } catch (err) {
+            toast.error(getApiErrorMessage(err, t, 'account.notifications.loadFailed'));
+        } finally {
+            setLoading(false);
+        }
+    }, [t]);
+
+    useEffect(() => {
+        void load();
+        void refreshLocalSub();
+        if (pushAdminEnabled && supported && process.env.NODE_ENV === 'production') {
+            void registerPanelServiceWorker();
+        }
+    }, [load, refreshLocalSub, pushAdminEnabled, supported]);
+
+    const save = async () => {
+        setSaving(true);
+        try {
+            const { data } = await axios.put('/api/user/notification-settings', settings);
+            if (data?.data) setSettings({ ...DEFAULTS, ...data.data, events: { ...DEFAULTS.events, ...(data.data.events || {}) } });
+            toast.success(t('account.notifications.saved'));
+        } catch (err) {
+            toast.error(getApiErrorMessage(err, t, 'account.notifications.saveFailed'));
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const test = async () => {
+        setTesting(true);
+        try {
+            await axios.post('/api/user/notification-settings/test-discord');
+            toast.success(t('account.notifications.testSent'));
+        } catch (err) {
+            toast.error(getApiErrorMessage(err, t, 'account.notifications.testFailed'));
+        } finally {
+            setTesting(false);
+        }
+    };
+
+    const enablePush = async () => {
+        setPushBusy(true);
+        try {
+            const sub = await subscribeWebPush();
+            if (!sub) {
+                toast.error(t('account.notifications.pushPermissionDenied'));
+                return;
+            }
+            setSettings((s) => ({ ...s, push_enabled: true }));
+            setHasLocalSub(true);
+            toast.success(t('account.notifications.pushEnabled'));
+        } catch (err) {
+            toast.error(getApiErrorMessage(err, t, 'account.notifications.pushEnableFailed'));
+        } finally {
+            setPushBusy(false);
+        }
+    };
+
+    const disablePush = async () => {
+        setPushBusy(true);
+        try {
+            await unsubscribeWebPush();
+            setSettings((s) => ({ ...s, push_enabled: false }));
+            setHasLocalSub(false);
+            toast.success(t('account.notifications.pushDisabled'));
+        } catch (err) {
+            toast.error(getApiErrorMessage(err, t, 'account.notifications.pushDisableFailed'));
+        } finally {
+            setPushBusy(false);
+        }
+    };
+
+    const testPush = async () => {
+        setPushTesting(true);
+        try {
+            await axios.post('/api/user/push/test');
+            toast.success(t('account.notifications.pushTestSent'));
+        } catch (err) {
+            toast.error(getApiErrorMessage(err, t, 'account.notifications.pushTestFailed'));
+        } finally {
+            setPushTesting(false);
+        }
+    };
+
+    const setEvent = (key: EventKey, value: boolean) =>
+        setSettings((s) => ({ ...s, events: { ...s.events, [key]: value } }));
+
+    const pushActive = settings.push_enabled || hasLocalSub;
+
+    return (
+        <div className='space-y-6'>
+            <div className='flex items-start gap-3'>
+                <div className='bg-primary/10 text-primary rounded-xl p-2.5'>
+                    <Bell className='h-5 w-5' />
+                </div>
+                <div>
+                    <h3 className='text-foreground text-lg font-semibold'>{t('account.notifications.title')}</h3>
+                    <p className='text-muted-foreground text-sm'>{t('account.notifications.description')}</p>
+                </div>
+            </div>
+
+            <section className='border-border/60 bg-card/40 divide-border/50 divide-y rounded-xl border px-4'>
+                <Row
+                    id='notif-email'
+                    title={t('account.notifications.email')}
+                    description={t('account.notifications.emailDescription')}
+                    checked={settings.email_enabled}
+                    onChange={(v) => setSettings((s) => ({ ...s, email_enabled: v }))}
+                />
+                <div className='space-y-3 py-3'>
+                    <Row
+                        id='notif-discord'
+                        title={t('account.notifications.discord')}
+                        description={t('account.notifications.discordDescription')}
+                        checked={settings.discord_enabled}
+                        onChange={(v) => setSettings((s) => ({ ...s, discord_enabled: v }))}
+                    />
+                    <div className='flex flex-col gap-2 sm:flex-row'>
+                        <Input
+                            className='min-w-0 flex-1'
+                            type='url'
+                            placeholder='https://discord.com/api/webhooks/...'
+                            value={settings.discord_webhook_url}
+                            onChange={(e) => setSettings((s) => ({ ...s, discord_webhook_url: e.target.value }))}
+                        />
+                        <Button
+                            type='button'
+                            variant='outline'
+                            onClick={test}
+                            disabled={testing || !settings.discord_webhook_url}
+                            className='gap-1.5'
+                        >
+                            <Send className='h-4 w-4' />
+                            {t('account.notifications.sendTest')}
+                        </Button>
+                    </div>
+                </div>
+
+                {pushAdminEnabled ? (
+                    <div className='space-y-3 py-3'>
+                        <div className='flex items-start justify-between gap-4'>
+                            <div className='min-w-0'>
+                                <p className='text-foreground flex items-center gap-2 text-sm font-medium'>
+                                    <Smartphone className='h-4 w-4 shrink-0' />
+                                    {t('account.notifications.push')}
+                                </p>
+                                <p className='text-muted-foreground mt-0.5 text-xs'>
+                                    {!supported
+                                        ? t('account.notifications.pushUnsupported')
+                                        : t('account.notifications.pushDescription')}
+                                </p>
+                            </div>
+                            <Switch
+                                id='notif-push'
+                                checked={pushActive}
+                                disabled={!supported || pushBusy}
+                                onCheckedChange={(v) => {
+                                    if (v) void enablePush();
+                                    else void disablePush();
+                                }}
+                            />
+                        </div>
+                        {pushActive ? (
+                            <Button
+                                type='button'
+                                variant='outline'
+                                onClick={() => void testPush()}
+                                disabled={pushTesting || pushBusy}
+                                className='gap-1.5'
+                            >
+                                <Send className='h-4 w-4' />
+                                {t('account.notifications.pushSendTest')}
+                            </Button>
+                        ) : null}
+                    </div>
+                ) : null}
+            </section>
+
+            <section className='border-border/60 bg-card/40 rounded-xl border px-4 py-2'>
+                <h4 className='text-foreground flex items-center gap-2 pt-2 text-sm font-semibold'>
+                    <Mail className='h-4 w-4' />
+                    {t('account.notifications.events')}
+                </h4>
+                <div className='divide-border/50 divide-y'>
+                    {EVENTS.map((key) => (
+                        <Row
+                            key={key}
+                            id={`notif-event-${key}`}
+                            title={t(`account.notifications.event.${key}`)}
+                            checked={settings.events[key]}
+                            onChange={(v) => setEvent(key, v)}
+                        />
+                    ))}
+                </div>
+            </section>
+
+            <div className='flex justify-end'>
+                <Button type='button' onClick={save} disabled={saving || loading}>
+                    {t('account.notifications.save')}
+                </Button>
+            </div>
+        </div>
+    );
+}

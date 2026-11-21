@@ -28,6 +28,7 @@ use App\Config\ConfigInterface;
 use App\Plugins\PluginSettings;
 use Symfony\Component\Yaml\Yaml;
 use App\Plugins\PluginDependencies;
+use App\Plugins\PluginSettingsSchema;
 use App\Plugins\PluginRequiredConfigs;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -680,6 +681,14 @@ class PluginManagerController
 
             if (!isset($data['settings']) || !is_array($data['settings'])) {
                 return ApiResponse::error('Settings data is required', 'BAD_REQUEST', 400);
+            }
+
+            // Enforce `required` and `validation` from the conf.yml `config:` block before saving anything.
+            $errors = PluginSettingsSchema::validate(PluginConfig::getPluginRequiredAdminConfig($identifier), $data['settings']);
+            if ($errors !== []) {
+                return ApiResponse::error(implode(' ', array_merge(...array_values($errors))), 'PLUGIN_SETTING_INVALID', 400, [
+                    'errors' => $errors,
+                ]);
             }
 
             // Update each setting
@@ -1674,7 +1683,7 @@ VALUES ('Plugin {$identifier} initialized successfully', 'info');";
         // Create simple cron job example
         $cronContent = "<?php
 
-namespace App\Cron;
+namespace App\\Addons\\{$identifier}\\Cron;
 
 use App\Cron\Cron;
 use App\Cron\TimeTask;
@@ -2918,8 +2927,8 @@ class AppReadyEvent
             "# {$name} Theme Pack\n\n"
             . "Selectable FeatherPanel theme pack.\n\n"
             . "## Files\n\n"
-            . "- `Frontend/theme.json` — light/dark design tokens\n"
-            . "- `Frontend/theme.css` — CSS applied only while this pack is active\n\n"
+            . "- `Frontend/theme.json` - light/dark design tokens\n"
+            . "- `Frontend/theme.css` - CSS applied only while this pack is active\n\n"
             . "Users pick this pack under Preferences → Appearance → Theme packs.\n"
             . "Admin defaults/locks: `app_theme_pack_default` / `app_theme_pack_lock`.\n"
         );
@@ -3001,7 +3010,7 @@ class AppReadyEvent
       priority: 100,
       handler: async function (ctx, next) {
         if (ctx.action === 'kill') {
-          var ok = window.confirm('Plugin intercepted kill — continue?');
+          var ok = window.confirm('Plugin intercepted kill - continue?');
           if (!ok) {
             ctx.cancel('user-aborted-by-plugin');
             return;
@@ -3038,10 +3047,10 @@ JS;
             "# {$name} UI Pack\n\n"
             . "FeatherPanel layout takeover pack + Power SDK examples.\n\n"
             . "## Files\n\n"
-            . "- `Frontend/ui.json` — shell/page replace, hide, actions\n"
-            . "- `Frontend/overrides.json` — surgical hide/replace/actions\n"
-            . "- `Frontend/index.js` — Power SDK: events, actions, search, shortcuts\n"
-            . "- `Frontend/Components/` — HTML for iframe slots\n\n"
+            . "- `Frontend/ui.json` - shell/page replace, hide, actions\n"
+            . "- `Frontend/overrides.json` - surgical hide/replace/actions\n"
+            . "- `Frontend/index.js` - Power SDK: events, actions, search, shortcuts\n"
+            . "- `Frontend/Components/` - HTML for iframe slots\n\n"
             . "## Power SDK\n\n"
             . "See `/icanhasfeatherpanel/plugin-power.html`\n"
         );

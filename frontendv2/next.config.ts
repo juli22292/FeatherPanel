@@ -62,12 +62,26 @@ const nextConfig: NextConfig = {
 
     // Prevent caching of HTML so users always get fresh chunk references after deploys
     async headers() {
+        // Baseline response headers for panel pages. No script-src: plugins, custom JS and captcha
+        // providers load scripts from other hosts. The status page sets its own frame-ancestors (src/proxy.ts).
+        const pageHeaders = [
+            {
+                key: 'Content-Security-Policy',
+                value: "frame-ancestors 'self'; object-src 'none'; base-uri 'self'",
+            },
+            { key: 'X-Content-Type-Options', value: 'nosniff' },
+            { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+        ];
+        const pageSource =
+            '/((?!_next/static)(?!_next/image)(?!api)(?!mcp)(?!attachments)(?!addons)(?!components)(?!pma)(?!status$)(?!status/).*)';
+
         if (process.env.NODE_ENV === 'development') {
             return [
                 {
                     source: '/:path*',
                     headers: [{ key: 'Cache-Control', value: 'no-store, no-cache, max-age=0, must-revalidate' }],
                 },
+                { source: pageSource, headers: pageHeaders },
             ];
         }
         return [
@@ -81,6 +95,7 @@ const nextConfig: NextConfig = {
                     },
                 ],
             },
+            { source: pageSource, headers: pageHeaders },
         ];
     },
 
@@ -101,7 +116,15 @@ const nextConfig: NextConfig = {
     async rewrites() {
         const mcpOrigin = process.env.MCP_DEV_URL?.replace(/\/+$/, '') || 'http://127.0.0.1:3001';
 
+        // Prefer nginx/Caddy in front for /vnc-proxy (WebSocket upgrades).
+        // Rewrite helps plain HTTP probes; WS should hit async-runner :9100 via the edge proxy.
+        const vncProxyOrigin = process.env.VNC_PROXY_DEV_URL?.replace(/\/+$/, '') || 'http://127.0.0.1:9100';
+
         return [
+            {
+                source: '/vnc-proxy/:path*',
+                destination: `${vncProxyOrigin}/vnc-proxy/:path*`,
+            },
             {
                 source: '/api/:path*',
                 destination: 'http://localhost:8721/api/:path*',

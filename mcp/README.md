@@ -1,6 +1,6 @@
 # FeatherPanel MCP Server
 
-Model Context Protocol server for [FeatherPanel](https://github.com/mythicalltd/FeatherPanel). Lets Claude, Cursor, and other MCP clients manage servers, files, console, networking, VDS, and more through the panel REST API.
+Model Context Protocol server for [FeatherPanel](https://github.com/mythicalltd/FeatherPanel). Lets Claude, Cursor, and other MCP clients manage servers, files, console, networking, VDS, and (for admin API keys) the full admin area through the panel REST API.
 
 ## Auth (everything)
 
@@ -18,7 +18,7 @@ OAuth implements DCR + PKCE (`/authorize`, `/token`, `/register`) so Claude’s 
 # once
 pnpm --dir mcp install
 
-# from frontendv2 — starts Next (:3000) + MCP (:3001); /mcp + OAuth proxied like prod
+# from frontendv2 - starts Next (:3000) + MCP (:3001); /mcp + OAuth proxied like prod
 cd frontendv2 && pnpm dev
 ```
 
@@ -35,7 +35,7 @@ MCP calls the PHP API at `http://127.0.0.1:8721` by default (same as Next `/api`
 
 ## Modes
 
-### Remote (Docker Compose — recommended)
+### Remote (Docker Compose - recommended)
 
 Proxied at `https://<your-panel>/mcp`. Claude uses OAuth; other clients can send a Bearer API key.
 
@@ -54,7 +54,7 @@ pnpm start:stdio
 | Variable                                    | Default                                                                      | Description                                                 |
 | ------------------------------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------- |
 | `FEATHERPANEL_URL`                          | `http://backend:80` (Docker) / `http://127.0.0.1:8721` (frontend `pnpm dev`) | Panel API base URL                                          |
-| `FEATHERPANEL_API_KEY`                      | —                                                                            | Required for stdio; remote can use OAuth or per-request key |
+| `FEATHERPANEL_API_KEY`                      | -                                                                            | Required for stdio; remote can use OAuth or per-request key |
 | `MCP_HOST`                                  | `0.0.0.0` (Docker) / `127.0.0.1` (frontend `pnpm dev`)                       | HTTP bind address                                           |
 | `MCP_PORT`                                  | `3001`                                                                       | HTTP listen port                                            |
 | `MCP_DEV_URL`                               | `http://127.0.0.1:3001`                                                      | Next rewrite target for `/mcp` in local dev                 |
@@ -67,24 +67,57 @@ pnpm start:stdio
 | Workflow | When | What |
 | -------- | ---- | ---- |
 | `MCP Jobs` (`.github/workflows/mcp.yml`) | `mcp/**` push/PR | typecheck + build (Node 22/24), tool inventory, Docker smoke `/health` |
-| `Docker Build & Publish (Dev)` | `develop` | multi-arch push `ghcr.io/mythicalltd/featherpanel-mcp:dev*` |
+| `Docker Build & Publish (Dev)` | `develop`, `main` | multi-arch push `ghcr.io/mythicalltd/featherpanel-mcp:dev*` |
 | `Docker Build & Publish (Release)` | `v*` tags | multi-arch push version + `latest` |
 
 ## Tools
 
-- **Account:** `whoami`
-- **Servers:** `list_servers`, `get_server_details`, `get_server_status`, `get_server_activities`, `server_power_action`
-- **Console / live:** `send_console_command`, `get_console_websocket`, `get_server_logs`, `get_install_logs`, `get_server_players`
-- **Files:** `get_files`, `get_file_content`, `write_file`, `search_files`, `create_directory`, `delete_files`, `rename_file`, `copy_files`, `compress_files`, `decompress_archive`, `pull_file`, `change_file_permissions`
-- **Startup / danger:** `get_server_startup`, `update_server`, `reinstall_server`, `wipe_server_files`, `abort_server_install`
-- **Allocations:** `get_server_allocations`, `get_available_allocations`, `auto_allocate`, `set_primary_allocation`, `delete_allocation`
-- **Subusers:** `get_server_subusers`, `get_subuser_permissions`, `create_subuser`, `update_subuser`, `delete_subuser`
-- **Network:** firewall / proxy / subdomain tools
-- **Backups / DBs / schedules:** full CRUD packs
-- **Knowledgebase:** `search_knowledgebase`, `get_knowledgebase_article`, `list_knowledgebase_categories`
-- **VDS:** list/details/status/power/backups/restore
+Tools are registered from panel public settings (`GET /api/system/settings`, see `mcp/src/features.ts`). A setting value of `"false"` disables that pack; missing values count as enabled. Disabled packs are omitted from `tools/list`.
 
-Permissions match the API key’s user.
+**Not exposed (by design):** FeatherOS, panel plugins/addons, webspace/VDS chatbots, multipart file uploads.
+
+### Always available
+
+- **Account:** `whoami`, notifications / inbox, SSH keys, sessions
+
+### Game servers (`module_game_enabled`)
+
+- **Servers:** list/details/status/activities/power, resources + resource history, trash, FastDL
+- **Console / live:** command, websocket, logs, install logs, players
+- **Files:** browse/read/write/search/compress/pull/permissions
+- **Startup / danger:** startup, update, reinstall, wipe, abort install
+- **Allocations, subusers, network** (firewall / proxy / subdomains)
+- **Backups:** list/create/delete/restore/lock/unlock/download/recover
+- **Databases / schedules:** CRUD packs
+
+### Web hosting (`module_web_enabled`)
+
+- **Webspaces (core):** list/catalog/get/update, utilization, transfer, infrastructure readiness, PHP ini/extensions, Redis, malware scan, power/status/logs, SSL, proxy logs, analytics, activities, JWT, DNS check/provision
+- **Files:** list/read/write, trash, pull/upload-url/download URLs, share jobs, search, archives (no raw multipart upload)
+- **Databases, mail, DNS zones/records, backups, cron schedules, SFTP, subusers**
+- **Apps:** WordPress (install/update/staging/auto-update), Laravel, Ghost, Joomla, Drupal, Magento, PrestaShop, Node/Python starters, git deploy + webhook + deploy key (WordPress *plugin* install excluded)
+
+### VDS (`module_vds_enabled`)
+
+- Full user VDS/VM pack: list/details/status/power, QEMU hardware, networking/DNS, ISO fetch/unmount (no multipart ISO upload), templates, VNC ticket, reinstall + task polling, backups create/list/restore/delete/recover + status polling, activities, subusers (`mcp/src/tools/vds.ts`)
+
+### Tickets (`ticket_system_enabled`)
+
+- categories/priorities/statuses/servers helpers, list/get/create/reply/delete message/close
+
+### Knowledgebase (`knowledgebase_enabled`)
+
+- `search_knowledgebase`, `get_knowledgebase_article`, `list_knowledgebase_categories`
+
+Permissions match the API key’s user and webspace/server/VDS subuser ACLs.
+
+### Admin (`admin.*` on the API key)
+
+Registered only when `GET /api/user/session` returns at least one `admin.*` permission (including `admin.root`). Non-admin keys never see these in `tools/list`. Every call still goes through the existing `/api/admin/*` PHP routes and `AdminMiddleware` permission checks.
+
+- **Discovery:** `admin_capabilities`, `admin_list_routes` (catalog generated from `backend/app/routes/admin`, regenerate with `python3 mcp/scripts/generate-admin-routes.py`)
+- **Full coverage:** `admin_api` — `method` + `/api/admin/...` path (+ query/body). Prefer this for anything without a named helper.
+- **Named helpers:** dashboard, health, users CRUD, roles, Wings nodes (+ global status), servers CRUD, settings get/update, database hosts, webspaces, locations, allocations, audit log, node alerts (overview/history/settings/test), user sessions, permission nodes
 
 ## Security
 

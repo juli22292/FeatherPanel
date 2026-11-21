@@ -77,13 +77,23 @@ export function OsWindowFrame({ win, children }: { win: OsWindow; children: Reac
     } = useFeatherOs();
     const def = OS_APPS[win.app];
     const focused = focusedId === win.id;
-    const finderChrome = win.app === 'finder';
+    const finderChrome = win.app === 'finder' || win.app === 'server';
     const settingsChrome = win.app === 'settings';
     const serversChrome = win.app === 'servers';
     const terminalChrome = win.app === 'terminal';
     const unifiedChrome = finderChrome || settingsChrome || serversChrome || terminalChrome;
     const [drag, setDrag] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
     const [animateGeometry, setAnimateGeometry] = useState(false);
+    const [closing, setClosing] = useState(false);
+    // Fade and shrink like macOS before the window is removed.
+    const requestClose = () => {
+        if (settings.reduceMotion) {
+            closeWindow(win.id);
+            return;
+        }
+        setClosing(true);
+        window.setTimeout(() => closeWindow(win.id), 170);
+    };
     const [snapPreview, setSnapPreview] = useState<Rect | null>(null);
     const [snapMenu, setSnapMenu] = useState<DOMRect | null>(null);
     const snapMenuTimer = useRef<number | null>(null);
@@ -91,7 +101,7 @@ export function OsWindowFrame({ win, children }: { win: OsWindow; children: Reac
 
     const server = getServer(win.serverUuid);
     const customTitle = typeof win.props?.title === 'string' ? (win.props.title as string) : '';
-    const title = [customTitle || t(def.nameKey), server?.name].filter(Boolean).join(' — ');
+    const title = [customTitle || t(def.nameKey), server?.name].filter(Boolean).join(' · ');
 
     const [viewport, setViewport] = useState(() => ({
         w: typeof window !== 'undefined' ? window.innerWidth : 1440,
@@ -354,6 +364,7 @@ export function OsWindowFrame({ win, children }: { win: OsWindow; children: Reac
                 data-minimized={win.minimized ? 'true' : 'false'}
                 data-maximized={win.maximized ? 'true' : 'false'}
                 data-anim={animateGeometry ? 'geometry' : undefined}
+                data-closing={closing ? '1' : undefined}
                 onPointerDownCapture={() => !focused && focusWindow(win.id)}
                 className={cn(
                     'fos-window absolute flex flex-col overflow-visible',
@@ -394,7 +405,7 @@ export function OsWindowFrame({ win, children }: { win: OsWindow; children: Reac
                             <TrafficLights
                                 focused={focused}
                                 t={t}
-                                onClose={() => closeWindow(win.id)}
+                                onClose={requestClose}
                                 onMinimize={() => {
                                     void (async () => {
                                         const node = frameRef.current;
@@ -421,7 +432,7 @@ export function OsWindowFrame({ win, children }: { win: OsWindow; children: Reac
                             <TrafficLights
                                 focused={focused}
                                 t={t}
-                                onClose={() => closeWindow(win.id)}
+                                onClose={requestClose}
                                 onMinimize={() => {
                                     void (async () => {
                                         const node = frameRef.current;
