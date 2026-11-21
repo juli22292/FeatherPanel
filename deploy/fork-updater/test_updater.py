@@ -47,6 +47,20 @@ class ForkUpdaterTests(unittest.TestCase):
         with patch.object(updater.urllib.request, "urlopen", return_value=io.BytesIO(json.dumps(releases).encode())):
             self.assertEqual(self.instance.latest_release(), "v1.4.3.1")
 
+    def test_installed_version_reads_current_and_legacy_backend_layouts(self):
+        with patch.object(updater, "run", return_value="define('APP_VERSION', 'v1.5.6');") as run:
+            self.assertEqual(self.instance.installed_version(), "v1.5.6")
+            run.assert_called_once_with(
+                ["docker", "exec", "featherpanel_backend", "cat", "/var/www/html/boot/constants.php"]
+            )
+
+        legacy_files = [RuntimeError("Missing boot/constants.php"), "define('APP_VERSION', 'v1.4.3.1');"]
+        with patch.object(updater, "run", side_effect=legacy_files) as run:
+            self.assertEqual(self.instance.installed_version(), "v1.4.3.1")
+            run.assert_called_with(
+                ["docker", "exec", "featherpanel_backend", "cat", "/var/www/html/public/index.php"]
+            )
+
     def test_three_and_four_part_versions_sort_numerically(self):
         self.assertLess(updater.version_parts("v1.4.3"), updater.version_parts("v1.4.3.1"))
         self.assertLess(updater.version_parts("v1.4.3.9"), updater.version_parts("v1.4.3.10"))

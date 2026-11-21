@@ -1,11 +1,15 @@
 # Changelog
 
-## v1.5.5.1 STABLE (juli22292 fork)
+## v1.5.6 STABLE (juli22292 fork)
 
 ### Updated
 
 - Synced this fork with upstream FeatherPanel v1.5.5, including releases v1.5.1 through v1.5.5.
 - Preserved the fork's self-hosted Premium customization and GitHub-based update path.
+
+### Fixed
+
+- The host updater reads the installed version from the new backend bootstrap file and still supports older images.
 
 ## v1.5.5 STABLE
 

@@ -69,11 +69,15 @@ class Updater:
                 "--env-file", str(self.env_file), "-f", str(self.compose_file)]
 
     def installed_version(self) -> str:
-        source = run(["docker", "exec", "featherpanel_backend", "cat", "/var/www/html/public/index.php"])
-        match = INSTALLED_VERSION_PATTERN.search(source)
-        if not match:
-            raise RuntimeError("Could not read the installed panel version")
-        return match.group(1)
+        for path in ("boot/constants.php", "public/index.php"):
+            try:
+                source = run(["docker", "exec", "featherpanel_backend", "cat", f"/var/www/html/{path}"])
+            except RuntimeError:
+                continue
+            match = INSTALLED_VERSION_PATTERN.search(source)
+            if match:
+                return match.group(1)
+        raise RuntimeError("Could not read APP_VERSION from boot/constants.php or public/index.php")
 
     def latest_release(self) -> str:
         request = urllib.request.Request(
