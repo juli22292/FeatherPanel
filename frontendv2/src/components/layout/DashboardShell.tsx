@@ -26,8 +26,11 @@ import { useChromeLayout } from '@/hooks/useChromeLayout';
 import { NavbarHoverDock } from '@/components/layout/NavbarHoverDock';
 import BackgroundWrapper from '@/components/theme/BackgroundWrapper';
 import { ConfiguredLinks } from '@/components/branding/ConfiguredLinks';
+import { MaintenanceGate } from '@/components/layout/MaintenanceGate';
+import { ImpersonationBanner } from '@/components/layout/ImpersonationBanner';
 import { AdminOpenTicketsBanner } from '@/components/dashboard/AdminOpenTicketsBanner';
 import GlobalSearchDialog from '@/components/global-search/GlobalSearchDialog';
+import KeyboardShortcuts from '@/components/global-search/KeyboardShortcuts';
 import PanelDebugConsole from '@/components/global-search/PanelDebugConsole';
 import { GlobalSearchProvider } from '@/contexts/GlobalSearchContext';
 import { PanelDebugProvider } from '@/contexts/PanelDebugContext';
@@ -40,6 +43,7 @@ import { readSidebarCollapsed, subscribeSidebarCollapsed } from '@/lib/sidebarCh
 import { useSidebarPreferences } from '@/hooks/useSidebarPreferences';
 import { getShellContentInset } from '@/lib/sidebarLayout';
 import { useNavbarSticky } from '@/hooks/useNavbarSticky';
+import { MobileBottomNav } from '@/components/layout/MobileBottomNav';
 
 export default function DashboardShell({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
@@ -110,6 +114,8 @@ export default function DashboardShell({ children }: { children: React.ReactNode
     const { sidebarPosition, dockDisplay, dockSize } = useSidebarPreferences();
     const { navbarSticky } = useNavbarSticky();
     const navbarHoverDockActive = navbarHoverReveal && chromeLayout === 'modern';
+    // Phone bottom bar only in the user dashboard area (not server/admin/plugin pages).
+    const showBottomNav = !hideAppChrome && !useFullBleedLayout && pathSegments[0] === 'dashboard';
 
     return (
         <GlobalSearchProvider>
@@ -124,9 +130,11 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                         />
                     </PluginSlot>
                 )}
+                {showBottomNav && <MobileBottomNav pathname={pathname} onMenuClick={() => setMobileOpen(true)} />}
                 <PluginSlot id='shell.background' className='contents' collapseWhenHidden={false}>
                     <BackgroundWrapper fillViewport>
                         <GlobalSearchDialog />
+                        <KeyboardShortcuts />
                         <PanelDebugConsole />
                         <div
                             className={cn(
@@ -140,6 +148,14 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                             <div
                                 className={cn(
                                     'fp-chrome-motion flex min-h-0 min-w-0 flex-1 flex-col',
+                                    // One width token shared by the page column and the navbar so their edges line up.
+                                    useFullBleedLayout
+                                        ? '[--fp-content-max:none]'
+                                        : isServerOrWebSpacePage
+                                          ? '[--fp-content-max:100rem]'
+                                          : isTicketDetailPage
+                                            ? '[--fp-content-max:112rem]'
+                                            : '[--fp-content-max:80rem]',
                                     !hideAppChrome &&
                                         getShellContentInset({
                                             chromeLayout,
@@ -174,7 +190,10 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                                             useFullBleedLayout
                                                 ? 'overflow-hidden p-0'
                                                 : cn(
-                                                      'px-3 py-5 sm:px-6 sm:py-6 lg:px-8',
+                                                      'px-3 pt-5 sm:px-6 sm:py-6 lg:px-8',
+                                                      showBottomNav
+                                                          ? 'pb-[calc(5.5rem+env(safe-area-inset-bottom))]'
+                                                          : 'pb-[max(1.25rem,env(safe-area-inset-bottom))]',
                                                       navbarSticky
                                                           ? 'custom-scrollbar overflow-x-hidden overflow-y-auto overscroll-y-contain'
                                                           : 'overflow-visible',
@@ -185,12 +204,7 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                                             className={cn(
                                                 'flex w-full flex-col',
                                                 useFullBleedLayout ? 'h-full min-h-0 flex-1' : 'min-h-full flex-1',
-                                                !useFullBleedLayout &&
-                                                    (isServerOrWebSpacePage
-                                                        ? 'mx-auto max-w-[min(100rem,calc(100vw-1.5rem))] sm:max-w-[min(100rem,calc(100vw-2rem))]'
-                                                        : isTicketDetailPage
-                                                          ? 'mx-auto max-w-[min(112rem,calc(100vw-1.5rem))] sm:max-w-[min(112rem,calc(100vw-2rem))]'
-                                                          : 'mx-auto max-w-7xl'),
+                                                !useFullBleedLayout && 'mx-auto max-w-(--fp-content-max)',
                                             )}
                                         >
                                             <PluginSlot id='shell.page-header' className='contents'>
@@ -198,8 +212,11 @@ export default function DashboardShell({ children }: { children: React.ReactNode
                                                     <AdminOpenTicketsBanner className='mb-5 shrink-0' />
                                                 )}
                                             </PluginSlot>
+                                            <ImpersonationBanner />
                                             <ModuleRouteGuard>
-                                                <PluginPageOverrideGate>{children}</PluginPageOverrideGate>
+                                                <MaintenanceGate>
+                                                    <PluginPageOverrideGate>{children}</PluginPageOverrideGate>
+                                                </MaintenanceGate>
                                             </ModuleRouteGuard>
                                             {!useFullBleedLayout ? (
                                                 <footer className='border-border/40 mt-6 shrink-0 border-t pt-4 pb-2'>

@@ -15,12 +15,19 @@ See the LICENSE file or <https://www.gnu.org/licenses/>.
 
 'use client';
 
+import { SubuserInviteManager } from '@/components/server/SubuserInviteManager';
+import { SubuserPresetPicker } from '@/components/server/SubuserPresetPicker';
+import { WEBSPACE_SUBUSER_PRESETS } from '@/lib/subuser-presets';
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import axios from 'axios';
 import { toast } from 'sonner';
-import { Plus, Trash2, Users, Mail, Loader2, RefreshCw, Shield } from 'lucide-react';
-import { PageHeader } from '@/components/featherui/PageHeader';
+import { Plus, Trash2, Users, Mail, Loader2, RefreshCw, Shield, Lock } from 'lucide-react';
+import { ResourceTable } from '@/components/featherui/ResourceCard';
+import { ListPagination } from '@/components/featherui/ListPagination';
+import { useClientPagination } from '@/hooks/useClientPagination';
+import { WebSpacePageHeader as PageHeader } from '@/components/webspace/WebSpacePageHeader';
+import { WebSpacePageTips } from '@/components/webspace/WebSpacePageTips';
 import { Button } from '@/components/featherui/Button';
 import { Input } from '@/components/featherui/Input';
 import { EmptyState } from '@/components/featherui/EmptyState';
@@ -48,6 +55,7 @@ export default function WebSpaceUsersPage() {
     const canUpdate = !permissionsLoading && hasPermission(WebSpaceSubuserPermissions['user.update']);
     const canCreate = !permissionsLoading && hasPermission(WebSpaceSubuserPermissions['user.create']);
     const canDelete = !permissionsLoading && hasPermission(WebSpaceSubuserPermissions['user.delete']);
+    const canRead = !permissionsLoading && hasPermission(WebSpaceSubuserPermissions['user.read']);
     const [loading, setLoading] = useState(true);
     const [subusers, setSubusers] = useState<SubuserRow[]>([]);
     const [email, setEmail] = useState('');
@@ -59,6 +67,10 @@ export default function WebSpaceUsersPage() {
     const [isAddOpen, setIsAddOpen] = useState(false);
 
     const load = useCallback(async () => {
+        if (!canRead) {
+            setLoading(false);
+            return;
+        }
         try {
             const { data } = await axios.get(`/api/user/webspaces/${uuidShort}/users`);
             setSubusers((data.data?.subusers || []) as SubuserRow[]);
@@ -74,11 +86,12 @@ export default function WebSpaceUsersPage() {
         } finally {
             setLoading(false);
         }
-    }, [uuidShort, t]);
+    }, [uuidShort, t, canRead]);
 
     useEffect(() => {
+        if (permissionsLoading) return;
         void load();
-    }, [load]);
+    }, [load, permissionsLoading]);
 
     const addUser = async () => {
         if (!email.includes('@')) {
@@ -143,11 +156,24 @@ export default function WebSpaceUsersPage() {
         setEditPermissions((prev) => (prev.includes(perm) ? prev.filter((p) => p !== perm) : [...prev, perm]));
     };
 
+    const pageSubusers = useClientPagination(subusers);
     if (loading || permissionsLoading) {
         return (
             <div className='flex flex-col items-center justify-center py-24'>
                 <Loader2 className='text-primary h-12 w-12 animate-spin opacity-50' />
                 <p className='text-muted-foreground mt-4 font-medium'>{t('common.loading')}</p>
+            </div>
+        );
+    }
+
+    if (!canRead) {
+        return (
+            <div className='flex flex-col items-center justify-center py-24 text-center'>
+                <div className='mb-6 flex h-20 w-20 items-center justify-center rounded-3xl bg-red-500/10'>
+                    <Lock className='h-10 w-10 text-red-500' />
+                </div>
+                <h1 className='text-2xl font-semibold tracking-tight'>{t('common.accessDenied')}</h1>
+                <p className='text-muted-foreground mt-2'>{t('common.noPermission')}</p>
             </div>
         );
     }
@@ -160,6 +186,7 @@ export default function WebSpaceUsersPage() {
                     description={t('webSpaces.users.description')}
                     actions={
                         <div className='flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-3'>
+                            {canCreate && <SubuserInviteManager uuidShort={uuidShort} kind='webspace' />}
                             {canCreate && subusers.length > 0 && (
                                 <Button onClick={() => setIsAddOpen(true)}>
                                     <Plus className='mr-2 h-5 w-5' />
@@ -173,6 +200,7 @@ export default function WebSpaceUsersPage() {
                         </div>
                     }
                 />
+                <WebSpacePageTips page='users' />
 
                 {subusers.length === 0 ? (
                     <EmptyState
@@ -193,49 +221,58 @@ export default function WebSpaceUsersPage() {
                         }
                     />
                 ) : (
-                    <div className='grid grid-cols-1 gap-4'>
-                        {subusers.map((su) => (
-                            <ResourceCard
-                                key={su.id}
-                                icon={Users}
-                                iconWrapperClassName='bg-primary/10 border-primary/20 text-primary'
-                                title={su.username || su.email || ''}
-                                description={
-                                    <div className='text-muted-foreground flex items-center gap-2 text-xs font-medium'>
-                                        <Mail className='h-3 w-3' />
-                                        <span>
-                                            <Sensitive>{su.email}</Sensitive>
-                                        </span>
-                                    </div>
-                                }
-                                actions={
-                                    <div className='flex items-center gap-3'>
-                                        {canUpdate && (
-                                            <Button
-                                                variant='ghost'
-                                                size='sm'
-                                                onClick={() => openEdit(su)}
-                                                className='hover:bg-muted/70 h-8 rounded-lg px-3 text-xs'
-                                            >
-                                                <Shield className='mr-1.5 h-3.5 w-3.5' />
-                                                {t('webSpaces.users.editPermissions')}
-                                            </Button>
-                                        )}
-                                        {canDelete && (
-                                            <Button
-                                                variant='destructive'
-                                                size='sm'
-                                                onClick={() => void removeUser(su.id)}
-                                                className='h-8 w-8 p-0'
-                                            >
-                                                <Trash2 className='h-3.5 w-3.5' />
-                                            </Button>
-                                        )}
-                                    </div>
-                                }
-                            />
-                        ))}
-                    </div>
+                    <>
+                        <ResourceTable>
+                            {pageSubusers.paged.map((su) => (
+                                <ResourceCard
+                                    key={su.id}
+                                    icon={Users}
+                                    iconWrapperClassName='bg-primary/10 border-primary/20 text-primary'
+                                    title={su.username || su.email || ''}
+                                    description={
+                                        <div className='text-muted-foreground flex items-center gap-2 text-xs font-medium'>
+                                            <Mail className='h-3 w-3' />
+                                            <span>
+                                                <Sensitive>{su.email}</Sensitive>
+                                            </span>
+                                        </div>
+                                    }
+                                    actions={
+                                        <div className='flex items-center gap-3'>
+                                            {canUpdate && (
+                                                <Button
+                                                    variant='ghost'
+                                                    size='sm'
+                                                    onClick={() => openEdit(su)}
+                                                    className='hover:bg-muted/70 h-8 rounded-lg px-3 text-xs'
+                                                >
+                                                    <Shield className='mr-1.5 h-3.5 w-3.5' />
+                                                    {t('webSpaces.users.editPermissions')}
+                                                </Button>
+                                            )}
+                                            {canDelete && (
+                                                <Button
+                                                    variant='destructive'
+                                                    size='sm'
+                                                    onClick={() => void removeUser(su.id)}
+                                                    className='h-8 w-8 p-0'
+                                                >
+                                                    <Trash2 className='h-3.5 w-3.5' />
+                                                </Button>
+                                            )}
+                                        </div>
+                                    }
+                                />
+                            ))}
+                        </ResourceTable>
+                        <ListPagination
+                            page={pageSubusers.page}
+                            totalPages={pageSubusers.totalPages}
+                            totalItems={pageSubusers.totalItems}
+                            pageSize={pageSubusers.pageSize}
+                            onPageChange={pageSubusers.setPage}
+                        />
+                    </>
                 )}
 
                 <Dialog
@@ -251,13 +288,22 @@ export default function WebSpaceUsersPage() {
                         <div className='relative'>
                             <Mail className='text-muted-foreground absolute top-1/2 left-4 z-10 h-5 w-5 -translate-y-1/2' />
                             <Input
-                                className='h-14 pl-12'
+                                variant='surface'
+                                className='h-14 pl-12 text-base'
                                 placeholder={t('webSpaces.users.emailPlaceholder')}
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
                                 onKeyDown={(e) => e.key === 'Enter' && void addUser()}
                             />
                         </div>
+                        {allPermissions.length > 0 && (
+                            <SubuserPresetPicker
+                                available={allPermissions}
+                                onApply={setSelectedPermissions}
+                                presets={WEBSPACE_SUBUSER_PRESETS}
+                                i18nPrefix='webSpaces.users.presets'
+                            />
+                        )}
                         {allPermissions.length > 0 && (
                             <div className='flex max-h-60 flex-wrap gap-2 overflow-y-auto'>
                                 {allPermissions.map((perm) => (
@@ -296,6 +342,12 @@ export default function WebSpaceUsersPage() {
                             <p className='text-sm'>
                                 {editUser.email ? <Sensitive>{editUser.email}</Sensitive> : editUser.username}
                             </p>
+                            <SubuserPresetPicker
+                                available={allPermissions}
+                                onApply={setEditPermissions}
+                                presets={WEBSPACE_SUBUSER_PRESETS}
+                                i18nPrefix='webSpaces.users.presets'
+                            />
                             <div className='flex max-h-60 flex-wrap gap-2 overflow-y-auto'>
                                 {allPermissions.map((perm) => (
                                     <label

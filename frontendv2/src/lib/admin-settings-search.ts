@@ -16,8 +16,10 @@ See the LICENSE file or <https://www.gnu.org/licenses/>.
 import type { OrganizedSettings, Setting } from '@/lib/admin-settings-api';
 import type { GlobalSearchResult } from '@/lib/global-search';
 import Permissions from '@/lib/permissions';
+import { groupSearchText, vdsGroupSearchText } from '@/lib/admin-settings-groups';
 
 const ADMIN_SETTING_DISPLAY_NAMES: Record<string, string> = {
+    server_require_subdomain: 'Require subdomain before server start',
     server_lifecycle_hooks_enabled: 'Lifecycle hooks (pre-start / pre-stop / post-start / crash)',
     server_lifecycle_hooks_container_shell_enabled: 'Container Shell (docker exec) for lifecycle hooks & schedules',
 };
@@ -40,6 +42,24 @@ function settingValueAsSearchText(setting: Setting): string {
     return String(value);
 }
 
+export function resolveAdminSettingLabel(
+    settingKey: string,
+    setting: Setting,
+    t: (key: string) => string,
+): { title: string; description: string } {
+    const labelKey = `admin.settings.fields.${settingKey}.label`;
+    const descriptionKey = `admin.settings.fields.${settingKey}.description`;
+    const translatedLabel = t(labelKey);
+    const translatedDescription = t(descriptionKey);
+
+    return {
+        title: translatedLabel !== labelKey ? translatedLabel : formatAdminSettingName(setting.name, settingKey),
+        description: translatedDescription !== descriptionKey ? translatedDescription : setting.description,
+    };
+}
+
+export { vdsGroupSearchText };
+
 export function matchesAdminSettingQuery(
     query: string,
     settingKey: string,
@@ -48,6 +68,7 @@ export function matchesAdminSettingQuery(
     categoryName: string,
     title: string,
     description: string,
+    extraHaystack = '',
 ): boolean {
     const trimmed = query.trim().toLowerCase();
     if (!trimmed) return true;
@@ -60,6 +81,7 @@ export function matchesAdminSettingQuery(
         settingValueAsSearchText(setting),
         categoryKey,
         categoryName,
+        extraHaystack,
     ]
         .join('\n')
         .toLowerCase();
@@ -76,14 +98,8 @@ export function adminSettingsToSearchResults(
 
     for (const [categoryKey, data] of Object.entries(organized)) {
         for (const [settingKey, setting] of Object.entries(data.settings)) {
-            const labelKey = `admin.settings.fields.${settingKey}.label`;
-            const descriptionKey = `admin.settings.fields.${settingKey}.description`;
-            const translatedLabel = t(labelKey);
-            const translatedDescription = t(descriptionKey);
-
-            const title =
-                translatedLabel !== labelKey ? translatedLabel : formatAdminSettingName(setting.name, settingKey);
-            const description = translatedDescription !== descriptionKey ? translatedDescription : setting.description;
+            const { title, description } = resolveAdminSettingLabel(settingKey, setting, t);
+            const groupText = groupSearchText(categoryKey, settingKey, t);
 
             results.push({
                 id: `admin-setting-${settingKey}`,
@@ -101,6 +117,7 @@ export function adminSettingsToSearchResults(
                     data.category.name,
                     categoryKey,
                     setting.placeholder,
+                    groupText,
                     'panel setting',
                     'admin setting',
                 ].filter(Boolean) as string[],

@@ -22,7 +22,23 @@ namespace App\Chat;
  */
 class MailQueue
 {
+    /** Marks a body that carries a live one-time code; such bodies are never shown back in the panel. */
+    public const ONE_TIME_CODE_MARKER = '<!-- fp:one-time-code -->';
     private static string $table = 'featherpanel_mail_queue';
+
+    /**
+     * Hide the body of a mail that carries a one-time code, so a signed-in
+     * session (or an admin viewing the account) cannot read the code back
+     * from the panel instead of the inbox.
+     */
+    public static function redactOneTimeCode(array $mail): array
+    {
+        if (isset($mail['body']) && is_string($mail['body']) && str_contains($mail['body'], self::ONE_TIME_CODE_MARKER)) {
+            $mail['body'] = '<p>This message contained a one-time code. It is only shown in your mailbox.</p>';
+        }
+
+        return $mail;
+    }
 
     /**
      * @return int|bool New queue row id on success, true when SMTP is disabled (nothing queued), false on validation or DB failure
@@ -32,7 +48,7 @@ class MailQueue
         $app = \App\App::getInstance(false, true);
         $config = new \App\Config\ConfigFactory($app->getDatabase()->getPdo());
         if ($config->getSetting(\App\Config\ConfigInterface::SMTP_ENABLED, 'false') !== 'true') {
-            $app->getLogger()->warning('SMTP disabled skipping enqueue/send');
+            $app->getLogger()->warning('Mail disabled skipping enqueue/send');
 
             return true;
         }

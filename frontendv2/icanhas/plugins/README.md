@@ -26,6 +26,7 @@ Index tip: crawl the raw `.md` files plus [`../catalog.json`](../catalog.json) /
 | 13  | [power-sdk.md](./power-sdk.md)                       | `window.FeatherPanel`                            |
 | 14  | [packaging.md](./packaging.md)                       | `.fpa`, install, Storage, symlinks               |
 | 15  | [recipes.md](./recipes.md)                           | Copy-paste starters                              |
+| 16  | [events.md](./events.md)                             | Complete PHP event list + listener example       |
 
 ## Related site references
 
@@ -39,8 +40,8 @@ Index tip: crawl the raw `.md` files plus [`../catalog.json`](../catalog.json) /
 
 A directory under `backend/storage/addons/{identifier}/` with:
 
-1. `conf.yml` — manifest
-2. `{EntryClass}.php` — implements `App\Plugins\AppPlugin`
+1. `conf.yml` - manifest
+2. `{EntryClass}.php` - implements `App\Plugins\AppPlugin`
 3. Optional backend + frontend pieces documented below
 
 PSR-4: `App\Addons\` → `backend/storage/addons/`.

@@ -99,7 +99,7 @@ interface ConfigInterface
     /**
      * Captcha Settings.
      */
-    public const CAPTCHA_PROVIDER = 'captcha_provider'; // turnstile, hcaptcha, recaptcha, friendlycaptcha, reforge
+    public const CAPTCHA_PROVIDER = 'captcha_provider'; // turnstile, hcaptcha, recaptcha, friendlycaptcha
     public const TURNSTILE_ENABLED = 'turnstile_enabled';
     public const TURNSTILE_KEY_PUB = 'turnstile_key_pub';
     public const TURNSTILE_KEY_PRIV = 'turnstile_key_priv';
@@ -109,28 +109,14 @@ interface ConfigInterface
     public const RECAPTCHA_SECRET_KEY = 'recaptcha_secret_key';
     /** reCAPTCHA widget type: v2 (checkbox) or v3 (score). */
     public const RECAPTCHA_VERSION = 'recaptcha_version';
-    /** Minimum v3 score (0.0–1.0); ignored for v2. */
+    /** Minimum v3 score (0.0-1.0); ignored for v2. */
     public const RECAPTCHA_V3_MIN_SCORE = 'recaptcha_v3_min_score';
     /** v3 action name sent to Google (must match frontend execute action). */
     public const RECAPTCHA_V3_ACTION = 'recaptcha_v3_action';
     public const FRIENDLY_CAPTCHA_SITE_KEY = 'friendly_captcha_site_key';
     public const FRIENDLY_CAPTCHA_SECRET_KEY = 'friendly_captcha_secret_key';
-    /** reForge Captcha (https://reforgecaptcha.cloud/) public site key. */
-    public const REFORGE_CAPTCHA_SITE_KEY = 'reforge_captcha_site_key';
-    /** reForge Captcha secret key (server-side verify only). */
-    public const REFORGE_CAPTCHA_SECRET_KEY = 'reforge_captcha_secret_key';
-    /** Widget type: checkbox, invisible, managed, image. */
-    public const REFORGE_CAPTCHA_WIDGET_TYPE = 'reforge_captcha_widget_type';
-    /** Theme: auto, dark, light. */
-    public const REFORGE_CAPTCHA_THEME = 'reforge_captcha_theme';
-    /** Size: normal, compact. */
-    public const REFORGE_CAPTCHA_SIZE = 'reforge_captcha_size';
-    /** Optional UI language (e.g. en, nl, de). Empty = widget default. */
-    public const REFORGE_CAPTCHA_LANG = 'reforge_captcha_lang';
-    /** Minimum verify score (0.0–1.0) when the API returns a score; extra check after success. */
-    public const REFORGE_CAPTCHA_MIN_SCORE = 'reforge_captcha_min_score';
     /**
-     * SMTP.
+     * SMTP / panel outbound mail.
      */
     public const SMTP_ENABLED = 'smtp_enabled';
     public const SMTP_HOST = 'smtp_host';
@@ -139,6 +125,15 @@ interface ConfigInterface
     public const SMTP_PASS = 'smtp_pass';
     public const SMTP_FROM = 'smtp_from';
     public const SMTP_ENCRYPTION = 'smtp_encryption';
+    /** smtp | resend | sendgrid | mailgun | postmark | brevo | mailersend | sparkpost | ses */
+    public const MAIL_TRANSPORT = 'mail_transport';
+    public const MAIL_API_KEY = 'mail_api_key';
+    /** Mailgun sending domain; unused by most other API transports. */
+    public const MAIL_API_DOMAIN = 'mail_api_domain';
+    /** Region/endpoint hint: us|eu, SES region (us-east-1), SparkPost host, etc. */
+    public const MAIL_API_REGION = 'mail_api_region';
+    /** UI-only preset id restored in admin settings (not read by async-runner). */
+    public const MAIL_PROVIDER_PRESET = 'mail_provider_preset';
     /**
      * Legal Values.
      */
@@ -229,11 +224,28 @@ interface ConfigInterface
     public const APP_PWA_BG_COLOR = 'app_pwa_bg_color';
 
     /**
+     * Web Push (requires PWA enabled). VAPID private key is never public.
+     */
+    public const APP_PWA_PUSH_ENABLED = 'app_pwa_push_enabled';
+    public const APP_PWA_VAPID_PUBLIC = 'app_pwa_vapid_public';
+    public const APP_PWA_VAPID_PRIVATE = 'app_pwa_vapid_private';
+    public const APP_PWA_VAPID_SUBJECT = 'app_pwa_vapid_subject';
+
+    /**
      * Discord OAuth.
      */
     public const DISCORD_OAUTH_ENABLED = 'discord_oauth_enabled';
     public const DISCORD_OAUTH_CLIENT_ID = 'discord_oauth_client_id';
     public const DISCORD_OAUTH_CLIENT_SECRET = 'discord_oauth_client_secret';
+    public const SSO_GOOGLE_ENABLED = 'sso_google_enabled';
+    public const SSO_GOOGLE_CLIENT_ID = 'sso_google_client_id';
+    public const SSO_GOOGLE_CLIENT_SECRET = 'sso_google_client_secret';
+    public const SSO_GITHUB_ENABLED = 'sso_github_enabled';
+    public const SSO_GITHUB_CLIENT_ID = 'sso_github_client_id';
+    public const SSO_GITHUB_CLIENT_SECRET = 'sso_github_client_secret';
+    public const SSO_ALLOWED_EMAIL_DOMAINS = 'sso_allowed_email_domains';
+    public const SSO_ALLOW_REGISTRATION = 'sso_allow_registration';
+    public const SSO_AUTO_LINK_VERIFIED_EMAIL = 'sso_auto_link_verified_email';
 
     /**
      * OpenID Connect (OIDC) - generic SSO provider.
@@ -256,14 +268,13 @@ interface ConfigInterface
     public const OIDC_DISABLE_LOCAL_LOGIN = 'oidc_disable_local_login';
 
     /**
-     * API clients: legacy compatibility switch.
+     * API clients: public-key Bearer auth switch.
      *
-     * When true an API client may also authenticate with its own `public_key` as a
-     * Bearer token (old behaviour). The public key is not a secret (it is printed
-     * in redirect URLs for Calagopus compatible integrations), which is why this is
-     * off by default and only exists to rescue a badly configured legacy client.
-     * Only private keys are accepted by default; the public_key redirect URL is not
-     * affected by this switch.
+     * When true (default) an API client may authenticate with either its
+     * `private_key` or its `public_key` as a Bearer token. Set to false to
+     * require the private key only, since the public key is not a secret (it appears
+     * in redirect URLs for Calagopus-compatible integrations). The public_key
+     * redirect URL itself is not affected by this switch.
      */
     public const API_CLIENTS_ALLOW_PUBLIC_KEY_AUTH = 'api_clients_allow_public_key_auth';
 
@@ -288,10 +299,18 @@ interface ConfigInterface
     public const SERVER_ALLOW_USER_MADE_FIREWALL = 'server_allow_user_made_firewall';
     public const SERVER_ALLOW_USER_MADE_PROXY = 'server_allow_user_made_proxy';
     public const SERVER_PROXY_MAX_PER_SERVER = 'server_proxy_max_per_server';
+    /** Part size in MB for chunked file uploads (FeatherWings). Keep it under the proxy's request limit (Cloudflare: 100 MB). */
+    public const SERVER_UPLOAD_CHUNK_SIZE_MB = 'server_upload_chunk_size_mb';
     public const SERVER_ALLOW_CROSS_REALM_SPELL_CHANGE = 'server_allow_cross_realm_spell_change';
     public const SERVER_ALLOW_USER_MADE_IMPORT = 'server_allow_user_made_import';
     public const SERVER_ALLOW_USER_MADE_FASTDL = 'server_allow_user_made_fastdl';
     public const SERVER_ALLOW_USER_MADE_SUBDOMAINS = 'server_allow_user_made_subdomains';
+    /**
+     * When true, users must assign a panel subdomain before starting/restarting a server.
+     * Allocation IPs are redacted until compliant. Bypass via user.servers.bypass_subdomain_requirement.
+     * Requires server_allow_user_made_subdomains so users can create subdomains.
+     */
+    public const SERVER_REQUIRE_SUBDOMAIN = 'server_require_subdomain';
     /** When true, panel queues auto-start for servers with auto_start enabled after a node reconnect. */
     public const SERVER_AUTO_START_ON_NODE_RECONNECT = 'server_auto_start_on_node_reconnect';
     /** Seconds between each queued auto-start on the same node (stagger). */
@@ -415,6 +434,10 @@ interface ConfigInterface
     public const FEATHERPANEL_PREMIUM_EXPIRES_AT = 'featherpanel_premium_expires_at';
     /** ISO timestamp of the last failed Mythic entitlement refresh (grace cache in use) */
     public const FEATHERPANEL_PREMIUM_LAST_FAILURE_AT = 'featherpanel_premium_last_failure_at';
+    /** Free community Premium (star the repo or spread the word): ISO timestamps and claim method. Expires after 30 days, renewable. */
+    public const FEATHERPANEL_PREMIUM_FREE_CLAIMED_AT = 'featherpanel_premium_free_claimed_at';
+    public const FEATHERPANEL_PREMIUM_FREE_EXPIRES_AT = 'featherpanel_premium_free_expires_at';
+    public const FEATHERPANEL_PREMIUM_FREE_METHOD = 'featherpanel_premium_free_method';
 
     /**
      * Temp uploads (public file sharing from server file manager via Wings).
@@ -427,6 +450,8 @@ interface ConfigInterface
      * Chatbot AI Settings.
      */
     public const CHATBOT_ENABLED = 'chatbot_enabled';
+    /** Optional: AI helper in the server file editor / crash console (suggests diffs, never auto-writes). */
+    public const CHATBOT_EDITOR_HELPER_ENABLED = 'chatbot_editor_helper_enabled';
     public const CHATBOT_AI_PROVIDER = 'chatbot_ai_provider';
     public const CHATBOT_TEMPERATURE = 'chatbot_temperature';
     public const CHATBOT_MAX_TOKENS = 'chatbot_max_tokens';
@@ -462,6 +487,8 @@ interface ConfigInterface
      * Status Page Settings.
      */
     public const STATUS_PAGE_ENABLED = 'status_page_enabled';
+    public const MAINTENANCE_MODE_ENABLED = 'maintenance_mode_enabled';
+    public const MAINTENANCE_MODE_MESSAGE = 'maintenance_mode_message';
     public const STATUS_PAGE_PUBLIC_ENABLED = 'status_page_public_enabled';
     public const STATUS_PAGE_SHOW_NODE_STATUS = 'status_page_show_node_status';
     public const STATUS_PAGE_SHOW_LOAD_USAGE = 'status_page_show_load_usage';
@@ -483,6 +510,66 @@ interface ConfigInterface
     public const MODULE_GAME_ENABLED = 'module_game_enabled';
     public const MODULE_WEB_ENABLED = 'module_web_enabled';
     public const MODULE_VDS_ENABLED = 'module_vds_enabled';
+
+    /**
+     * VDS console, graphs, snapshots and monitoring (admin settings, category "vds").
+     */
+    public const VDS_GRAPHS_ENABLED = 'vds_graphs_enabled';
+    public const VDS_GRAPHS_MAX_TIMEFRAME = 'vds_graphs_max_timeframe';
+    public const VDS_CONSOLE_PASTE_ENABLED = 'vds_console_paste_enabled';
+    public const VDS_CONSOLE_PASTE_MAX_CHARS = 'vds_console_paste_max_chars';
+    public const VDS_CONSOLE_SCREENSHOT_ENABLED = 'vds_console_screenshot_enabled';
+    public const VDS_CTRL_ALT_DEL_ENABLED = 'vds_ctrl_alt_del_enabled';
+    public const VDS_ISO_MODE = 'vds_iso_mode';
+    public const VDS_ISO_LIBRARY_ONLY = 'vds_iso_library_only';
+    public const VDS_ISO_USER_STORAGE = 'vds_iso_user_storage';
+    public const VDS_ISO_USER_UPLOAD_ENABLED = 'vds_iso_user_upload_enabled';
+    public const VDS_ISO_USER_URL_ENABLED = 'vds_iso_user_url_enabled';
+    public const VDS_ISO_USER_MAX_SIZE_MB = 'vds_iso_user_max_size_mb';
+    public const VDS_ISO_USER_MAX_PER_USER = 'vds_iso_user_max_per_user';
+    public const VDS_ISO_USER_URL_DOMAINS = 'vds_iso_user_url_domains';
+    public const VDS_ISO_USER_REQUIRE_APPROVAL = 'vds_iso_user_require_approval';
+    public const VDS_ISO_ALLOWED_STORAGES = 'vds_iso_allowed_storages';
+    public const VDS_ISO_ALLOWED_ISOS = 'vds_iso_allowed_isos';
+    public const VDS_RESCUE_ENABLED = 'vds_rescue_enabled';
+    public const VDS_RESCUE_ISO = 'vds_rescue_iso';
+    public const VDS_SNAPSHOTS_ENABLED = 'vds_snapshots_enabled';
+    public const VDS_SNAPSHOTS_DEFAULT_LIMIT = 'vds_snapshots_default_limit';
+    public const VDS_SNAPSHOTS_INCLUDE_RAM = 'vds_snapshots_include_ram';
+    public const VDS_MONITOR_ENABLED = 'vds_monitor_enabled';
+    public const VDS_MONITOR_INTERVAL_MINUTES = 'vds_monitor_interval_minutes';
+    public const VDS_NOTIFY_DOWN_ENABLED = 'vds_notify_down_enabled';
+    public const VDS_NOTIFY_HIGH_CPU_ENABLED = 'vds_notify_high_cpu_enabled';
+    public const VDS_HIGH_CPU_THRESHOLD = 'vds_high_cpu_threshold';
+    public const VDS_HIGH_CPU_DURATION_MINUTES = 'vds_high_cpu_duration_minutes';
+    public const VDS_NOTIFY_BACKUP_FAILED_ENABLED = 'vds_notify_backup_failed_enabled';
+    public const VDS_NOTIFY_COOLDOWN_HOURS = 'vds_notify_cooldown_hours';
+    public const VDS_SUSPEND_SHOW_REASON = 'vds_suspend_show_reason';
+    public const VDS_SUSPEND_MESSAGE = 'vds_suspend_message';
+    public const VDS_EXPIRY_WARN_DAYS = 'vds_expiry_warn_days';
+    public const VDS_EXPIRY_STOP_VM = 'vds_expiry_stop_vm';
+    public const VDS_PLACEMENT_STRATEGY = 'vds_placement_strategy';
+    public const VDS_PLACEMENT_OVERCOMMIT_PERCENT = 'vds_placement_overcommit_percent';
+    public const VDS_MIGRATION_ENABLED = 'vds_migration_enabled';
+    public const VDS_CONSOLE_BRAND_NAME = 'vds_console_brand_name';
+    public const VDS_CONSOLE_BRAND_LOGO = 'vds_console_brand_logo';
+    public const VDS_REAUTH_MODE = 'vds_reauth_mode';
+    public const VDS_REAUTH_ACTIONS = 'vds_reauth_actions';
+    public const VDS_BANDWIDTH_ENABLED = 'vds_bandwidth_enabled';
+    public const VDS_BANDWIDTH_LIMIT_GB = 'vds_bandwidth_limit_gb';
+    public const VDS_BANDWIDTH_COUNT = 'vds_bandwidth_count';
+    public const VDS_BANDWIDTH_ACTION = 'vds_bandwidth_action';
+    public const VDS_BANDWIDTH_THROTTLE_MBIT = 'vds_bandwidth_throttle_mbit';
+    public const VDS_BANDWIDTH_WARN_PERCENT = 'vds_bandwidth_warn_percent';
+    public const VDS_FIREWALL_ENABLED = 'vds_firewall_enabled';
+    public const VDS_FIREWALL_MAX_RULES = 'vds_firewall_max_rules';
+    public const VDS_FIREWALL_ALLOW_POLICY = 'vds_firewall_allow_policy';
+    public const VDS_FIREWALL_PRESETS = 'vds_firewall_presets';
+    public const VDS_SCHEDULES_ENABLED = 'vds_schedules_enabled';
+    public const VDS_SCHEDULES_MAX_PER_VDS = 'vds_schedules_max_per_vds';
+    public const VDS_SCHEDULES_ACTIONS = 'vds_schedules_actions';
+    public const VDS_SCHEDULES_ALLOW_HOURLY = 'vds_schedules_allow_hourly';
+    public const VDS_SCHEDULES_MAX_KEEP = 'vds_schedules_max_keep';
 
     /**
      * First-install setup wizard. 'true' once an admin finished or the install was upgraded.

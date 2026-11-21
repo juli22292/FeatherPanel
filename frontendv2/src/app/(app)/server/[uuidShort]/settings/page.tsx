@@ -23,6 +23,7 @@ import { formatBackupLimitLabel } from '@/lib/server-utils';
 import { ServerPageHeader } from '@/components/server/ServerPageHeader';
 import { ServerPageTips } from '@/components/server/ServerPageTips';
 import { PageCard } from '@/components/featherui/PageCard';
+import { CrashAutoRestartSetting } from '@/components/server/ServerCrashCard';
 import { HideIpsToggle } from '@/components/preferences/HideIpsToggle';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -72,6 +73,9 @@ import { filesApi } from '@/lib/files-api';
 import { PageLoading } from '@/components/featherui/PageLoading';
 import { UnsavedChangesBar } from '@/components/featherui/UnsavedChangesBar';
 import { Sensitive } from '@/components/common/Sensitive';
+import { ServiceExpiryChip } from '@/components/common/ServiceExpiryChip';
+import { useDateFormatOptions } from '@/contexts/PreferencesContext';
+import { formatExpiryAbsolute } from '@/lib/service-expiry';
 
 interface SftpDetails {
     host: string;
@@ -94,6 +98,7 @@ export default function ServerSettingsPage() {
     const router = useRouter();
     const pathname = usePathname();
     const { t } = useTranslation();
+    const dateOpts = useDateFormatOptions();
     const { loading: settingsLoading, settings } = useSettings();
     const { hasPermission, loading: permissionsLoading } = useServerPermissions(uuidShort);
     const { getWidgets } = usePluginWidgets('server-settings');
@@ -369,11 +374,8 @@ export default function ServerSettingsPage() {
     if (!canRename && !canReinstall && !canViewSftp) {
         return (
             <div className='fp-surface flex flex-col items-center justify-center space-y-8 rounded-xl border py-24 text-center'>
-                <div className='relative'>
-                    <div className='absolute inset-0 scale-150 rounded-full bg-red-500/20 blur-3xl' />
-                    <div className='relative flex h-32 w-32 rotate-3 items-center justify-center rounded-3xl border-2 border-red-500/20 bg-red-500/10'>
-                        <Lock className='h-16 w-16 text-red-500' />
-                    </div>
+                <div className='relative flex h-32 w-32 items-center justify-center rounded-3xl border-2 border-red-500/20 bg-red-500/10'>
+                    <Lock className='h-16 w-16 text-red-500' />
                 </div>
                 <div className='max-w-md space-y-3 px-4'>
                     <h2 className='text-3xl font-semibold tracking-tight'>{t('serverSettings.accessDenied')}</h2>
@@ -426,6 +428,23 @@ export default function ServerSettingsPage() {
                                     className='bg-secondary/50 border-border/10 focus:border-primary/50 h-12 rounded-xl text-base font-medium'
                                 />
                             </div>
+
+                            {server?.expires_at ? (
+                                <div className='space-y-2'>
+                                    <Label className='text-muted-foreground ml-1 text-xs font-bold'>
+                                        {t('service_expiry.label')}
+                                    </Label>
+                                    <div className='border-border/10 bg-muted/40 flex min-h-12 flex-wrap items-center justify-between gap-3 rounded-xl border px-4 py-2'>
+                                        <span className='text-sm font-medium tabular-nums'>
+                                            {formatExpiryAbsolute(server.expires_at, dateOpts)}
+                                        </span>
+                                        <ServiceExpiryChip expiresAt={server.expires_at} compact />
+                                    </div>
+                                    <p className='text-muted-foreground ml-1 text-xs break-words'>
+                                        {t('service_expiry.settings_help')}
+                                    </p>
+                                </div>
+                            ) : null}
 
                             {canRename && (
                                 <div className='flex gap-3 pt-2'>
@@ -592,6 +611,10 @@ export default function ServerSettingsPage() {
                                 </div>
                             </div>
                         </PageCard>
+                    )}
+
+                    {hasPermission('control.console') && (
+                        <CrashAutoRestartSetting uuidShort={uuidShort} canToggle={hasPermission('control.restart')} />
                     )}
 
                     <WidgetRenderer widgets={getWidgets('server-settings', 'after-server-info')} />

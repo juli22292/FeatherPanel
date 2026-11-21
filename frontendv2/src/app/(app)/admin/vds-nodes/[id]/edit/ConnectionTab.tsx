@@ -18,7 +18,7 @@ import { PageCard } from '@/components/featherui/PageCard';
 import { Input } from '@/components/featherui/Input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select-native';
-import { Network } from 'lucide-react';
+import { Monitor, Network } from 'lucide-react';
 import type { VdsNodeForm } from './page';
 import { TabHintCard } from './TabPrimitives';
 
@@ -45,9 +45,7 @@ export function ConnectionTab({ form, setForm, errors }: ConnectionTabProps) {
                                 error={!!errors.user}
                                 className='text-base'
                             />
-                            {errors.user && (
-                                <p className='mt-2 text-[10px] font-bold text-red-500 uppercase'>{errors.user}</p>
-                            )}
+                            {errors.user && <p className='mt-2 text-xs font-medium text-red-500'>{errors.user}</p>}
                             <p className='text-muted-foreground mt-2 text-xs'>{t('admin.vdsNodes.form.user_help')}</p>
                         </div>
 
@@ -64,7 +62,7 @@ export function ConnectionTab({ form, setForm, errors }: ConnectionTabProps) {
                                 className='text-base'
                             />
                             {errors.token_id && (
-                                <p className='mt-2 text-[10px] font-bold text-red-500 uppercase'>{errors.token_id}</p>
+                                <p className='mt-2 text-xs font-medium text-red-500'>{errors.token_id}</p>
                             )}
                             <p className='text-muted-foreground mt-2 text-xs'>
                                 {t('admin.vdsNodes.form.token_id_help')}
@@ -101,9 +99,7 @@ export function ConnectionTab({ form, setForm, errors }: ConnectionTabProps) {
                                     error={!!errors.fqdn}
                                     className='text-base'
                                 />
-                                {errors.fqdn && (
-                                    <p className='mt-2 text-[10px] font-bold text-red-500 uppercase'>{errors.fqdn}</p>
-                                )}
+                                {errors.fqdn && <p className='mt-2 text-xs font-medium text-red-500'>{errors.fqdn}</p>}
                             </div>
 
                             <div className='grid grid-cols-2 gap-4'>
@@ -134,9 +130,7 @@ export function ConnectionTab({ form, setForm, errors }: ConnectionTabProps) {
                                         className='text-base'
                                     />
                                     {errors.port && (
-                                        <p className='mt-2 text-[10px] font-bold text-red-500 uppercase'>
-                                            {errors.port}
-                                        </p>
+                                        <p className='mt-2 text-xs font-medium text-red-500'>{errors.port}</p>
                                     )}
                                 </div>
                             </div>
@@ -169,9 +163,7 @@ export function ConnectionTab({ form, setForm, errors }: ConnectionTabProps) {
                                     className='text-base'
                                 />
                                 {errors.timeout && (
-                                    <p className='mt-2 text-[10px] font-bold text-red-500 uppercase'>
-                                        {errors.timeout}
-                                    </p>
+                                    <p className='mt-2 text-xs font-medium text-red-500'>{errors.timeout}</p>
                                 )}
                             </div>
                         </div>
@@ -182,6 +174,79 @@ export function ConnectionTab({ form, setForm, errors }: ConnectionTabProps) {
                         title={t('admin.vdsNodes.connection.token_setup_reminder_title')}
                         description={t('admin.vdsNodes.connection.token_setup_reminder_description')}
                     />
+                </div>
+            </PageCard>
+
+            <PageCard
+                title={t('admin.vdsNodes.connection.vnc_upstream_title')}
+                icon={Monitor}
+                description={t('admin.vdsNodes.connection.vnc_upstream_description')}
+            >
+                <div className='space-y-6'>
+                    <TabHintCard
+                        icon={Monitor}
+                        title={t('admin.vdsNodes.connection.vnc_upstream_hint_title')}
+                        description={t('admin.vdsNodes.connection.vnc_upstream_hint_description')}
+                        className='border-amber-500/20 bg-amber-500/5'
+                    />
+
+                    <div>
+                        <Label className='mb-2 block text-sm font-semibold'>
+                            {t('admin.vdsNodes.connection.vnc_upstream_host')}
+                        </Label>
+                        <Input
+                            placeholder={t('admin.vdsNodes.connection.vnc_upstream_host_placeholder')}
+                            data-fp-sensitive=''
+                            value={form.vnc_upstream_host}
+                            onChange={(e) => setForm({ ...form, vnc_upstream_host: e.target.value })}
+                            className='text-base'
+                        />
+                        <p className='text-muted-foreground mt-2 text-xs'>
+                            {t('admin.vdsNodes.connection.vnc_upstream_host_help')}
+                        </p>
+                    </div>
+
+                    <div className='grid grid-cols-2 gap-4'>
+                        <div>
+                            <Label className='mb-2 block text-sm font-semibold'>
+                                {t('admin.vdsNodes.connection.vnc_upstream_scheme')}
+                            </Label>
+                            <Select
+                                value={form.vnc_upstream_scheme || 'https'}
+                                onChange={(e) =>
+                                    setForm({
+                                        ...form,
+                                        vnc_upstream_scheme: e.target.value as 'http' | 'https',
+                                    })
+                                }
+                                disabled={!form.vnc_upstream_host.trim()}
+                                className='h-11 rounded-lg px-3 text-base'
+                            >
+                                <option value='https'>{t('admin.vdsNodes.form.scheme_https')}</option>
+                                <option value='http'>{t('admin.vdsNodes.form.scheme_http')}</option>
+                            </Select>
+                        </div>
+                        <div>
+                            <Label className='mb-2 block text-sm font-semibold'>
+                                {t('admin.vdsNodes.connection.vnc_upstream_port')}
+                            </Label>
+                            <Input
+                                type='number'
+                                value={form.vnc_upstream_port}
+                                onChange={(e) =>
+                                    setForm({
+                                        ...form,
+                                        vnc_upstream_port: parseInt(e.target.value, 10) || 8006,
+                                    })
+                                }
+                                disabled={!form.vnc_upstream_host.trim()}
+                                className='text-base'
+                            />
+                            <p className='text-muted-foreground mt-2 text-xs'>
+                                {t('admin.vdsNodes.connection.vnc_upstream_port_help')}
+                            </p>
+                        </div>
+                    </div>
                 </div>
             </PageCard>
         </div>

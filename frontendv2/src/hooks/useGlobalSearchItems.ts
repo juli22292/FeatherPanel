@@ -34,7 +34,28 @@ import {
     User,
     Zap,
     Monitor,
+    Users as UsersIcon,
+    FileText,
+    Folder,
+    History,
+    LifeBuoy,
+    Network,
+    Plus,
+    SunMoon,
+    Eraser,
+    LogOut,
+    ScrollText,
+    type LucideIcon,
 } from 'lucide-react';
+import { filesApi } from '@/lib/files-api';
+import {
+    ADMIN_RECENT_CATEGORIES,
+    clearRecentSearches,
+    loadRecentSearches,
+    saveRecentSearch,
+    type RecentSearchEntry,
+} from '@/lib/global-search-recents';
+import axios from 'axios';
 import { useSession } from '@/contexts/SessionContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { usePterodactylImporterVisible, withoutPterodactylImporter } from '@/hooks/usePterodactylImporterVisibility';
@@ -223,6 +244,21 @@ function convertPluginNavItems(
         };
     });
 }
+
+const RECENT_CATEGORY_ICONS: Partial<Record<GlobalSearchResult['category'], LucideIcon>> = {
+    servers: ServerIcon,
+    serverPages: ServerIcon,
+    webspaces: Globe,
+    webspacePages: Globe,
+    vms: Monitor,
+    vdsPages: Monitor,
+    users: UsersIcon,
+    nodes: Network,
+    tickets: LifeBuoy,
+    files: FileText,
+    account: User,
+    commands: Zap,
+};
 
 function filterByPermission(items: GlobalSearchResult[], hasPermission: (p: string) => boolean): GlobalSearchResult[] {
     return items.filter((item) => !item.permission || hasPermission(item.permission));
@@ -628,6 +664,45 @@ export function useGlobalSearchItems(open: boolean, query: string) {
     );
 
     const [pluginItems, setPluginItems] = useState<GlobalSearchResult[]>([]);
+    const [userItems, setUserItems] = useState<GlobalSearchResult[]>([]);
+    const canViewUsers = hasPermission(Permissions.ADMIN_USERS_VIEW);
+
+    // Users are searched on the server (there can be thousands), only for staff who can list them.
+    useEffect(() => {
+        const q = parsedQuery.text.trim();
+        const scopeAllowsUsers = !parsedQuery.scopeExplicit || ['all', 'admin'].includes(parsedQuery.scope);
+        if (!open || !canViewUsers || q.length < 2 || !scopeAllowsUsers || parsedQuery.mode === 'debug') {
+            setUserItems([]);
+            return;
+        }
+        const controller = new AbortController();
+        const timer = window.setTimeout(async () => {
+            try {
+                const { data } = await axios.get('/api/admin/users', {
+                    params: { page: 1, limit: 6, search: q },
+                    signal: controller.signal,
+                });
+                const users: Array<{ uuid: string; username: string; email?: string }> = data?.data?.users ?? [];
+                setUserItems(
+                    users.map((user) => ({
+                        id: `user-${user.uuid}`,
+                        title: user.username,
+                        subtitle: user.email,
+                        href: `/admin/users/${user.uuid}/edit`,
+                        category: 'users' as const,
+                        icon: UsersIcon,
+                        keywords: [user.username, user.email ?? '', user.uuid, q],
+                    })),
+                );
+            } catch {
+                if (!controller.signal.aborted) setUserItems([]);
+            }
+        }, 250);
+        return () => {
+            controller.abort();
+            window.clearTimeout(timer);
+        };
+    }, [open, canViewUsers, parsedQuery.text, parsedQuery.scope, parsedQuery.scopeExplicit, parsedQuery.mode]);
 
     useEffect(() => {
         if (!open) {
@@ -665,12 +740,295 @@ export function useGlobalSearchItems(open: boolean, query: string) {
         };
     }, [open, parsedQuery.text]);
 
+    // ---- Recents (per user, this browser only) ----
+    const [recents, setRecents] = useState<RecentSearchEntry[]>([]);
+    useEffect(() => {
+        if (open) setRecents(loadRecentSearches(user?.uuid));
+    }, [open, user?.uuid]);
+    const recordRecent = useCallback(
+        (result: GlobalSearchResult) => setRecents(saveRecentSearch(user?.uuid, result)),
+        [user?.uuid],
+    );
+    const clearRecents = useCallback(() => {
+        clearRecentSearches(user?.uuid);
+        setRecents([]);
+    }, [user?.uuid]);
+    const recentItems = useMemo<GlobalSearchResult[]>(
+        () =>
+            recents
+                .filter((entry) => canViewAdmin || !ADMIN_RECENT_CATEGORIES.includes(entry.category))
+                .map((entry) => ({
+                    id: `recent:${entry.id}`,
+                    title: entry.title,
+                    subtitle: entry.subtitle,
+                    href: entry.href,
+                    category: 'recent' as const,
+                    icon: RECENT_CATEGORY_ICONS[entry.category] ?? History,
+                })),
+        [recents, canViewAdmin],
+    );
+
+    // ---- Commands (`>`): quick actions, permission filtered ----
+    const commandItems = useMemo<GlobalSearchResult[]>(() => {
+        const commands: Array<Omit<GlobalSearchResult, 'category'>> = [
+            {
+                id: 'cmd:theme',
+                title: t('globalSearch.commands.toggleTheme'),
+                href: '#toggle-theme',
+                action: 'toggleTheme',
+                icon: SunMoon,
+                keywords: ['dark', 'light', 'theme', 'mode'],
+            },
+            {
+                id: 'cmd:ticket',
+                title: t('globalSearch.commands.newTicket'),
+                href: '/dashboard/tickets/create',
+                icon: LifeBuoy,
+                keywords: ['support', 'help', 'ticket'],
+            },
+            {
+                id: 'cmd:account',
+                title: t('globalSearch.commands.accountSecurity'),
+                href: '/dashboard/account?tab=security',
+                icon: ShieldCheck,
+                keywords: ['2fa', 'password', 'sessions'],
+            },
+            {
+                id: 'cmd:new-server',
+                title: t('globalSearch.commands.newServer'),
+                href: '/admin/servers/create',
+                icon: Plus,
+                permission: Permissions.ADMIN_SERVERS_CREATE,
+                keywords: ['create', 'server'],
+            },
+            {
+                id: 'cmd:new-user',
+                title: t('globalSearch.commands.newUser'),
+                href: '/admin/users/create',
+                icon: Plus,
+                permission: Permissions.ADMIN_USERS_CREATE,
+                keywords: ['create', 'user', 'account'],
+            },
+            {
+                id: 'cmd:new-node',
+                title: t('globalSearch.commands.newNode'),
+                href: '/admin/nodes/create',
+                icon: Plus,
+                permission: Permissions.ADMIN_NODES_CREATE,
+                keywords: ['create', 'node', 'wings'],
+            },
+            {
+                id: 'cmd:audit',
+                title: t('globalSearch.commands.auditLog'),
+                href: '/admin/audit-log',
+                icon: ScrollText,
+                permission: Permissions.ADMIN_AUDIT_LOG_VIEW,
+                keywords: ['activity', 'log', 'audit'],
+            },
+            {
+                id: 'cmd:clear-recents',
+                title: t('globalSearch.commands.clearRecents'),
+                href: '#clear-recents',
+                action: 'clearRecents',
+                icon: Eraser,
+                keywords: ['history', 'recent'],
+            },
+            {
+                id: 'cmd:logout',
+                title: t('globalSearch.commands.signOut'),
+                href: '/auth/logout',
+                icon: LogOut,
+                keywords: ['logout', 'sign out', 'exit'],
+            },
+        ];
+        return filterByPermission(
+            commands.map((command) => ({
+                ...command,
+                category: 'commands' as const,
+                subtitle: command.action ? t('globalSearch.commands.actionHint') : command.href,
+            })),
+            hasPermission,
+        );
+    }, [t, hasPermission]);
+
+    // ---- Server-side lookups: nodes, tickets and files (debounced, abortable) ----
+    const [remoteItems, setRemoteItems] = useState<GlobalSearchResult[]>([]);
+    const [remoteLoading, setRemoteLoading] = useState(false);
+    const [filesUnavailable, setFilesUnavailable] = useState<'noServer' | 'error' | null>(null);
+    const canViewNodes = hasPermission(Permissions.ADMIN_NODES_VIEW);
+    const canViewAdminTickets = hasPermission(Permissions.ADMIN_TICKETS_VIEW);
+    const serverRouteId = entityContext?.kind === 'server' ? entityContext.routeId : null;
+
+    useEffect(() => {
+        const q = parsedQuery.text.trim();
+        const scope = parsedQuery.scope;
+        const unscoped = !parsedQuery.scopeExplicit || scope === 'all';
+        const wantFiles = scope === 'files';
+        const wantNodes =
+            canViewNodes && q.length >= 2 && (unscoped || ['admin', 'nodes', 'infrastructure'].includes(scope));
+        const wantTickets = !!user && q.length >= 2 && (unscoped || ['tickets', 'admin'].includes(scope));
+        setFilesUnavailable(wantFiles && !serverRouteId ? 'noServer' : null);
+        if (!open || parsedQuery.mode === 'debug' || (!wantFiles && !wantNodes && !wantTickets)) {
+            setRemoteItems([]);
+            setRemoteLoading(false);
+            return;
+        }
+        const controller = new AbortController();
+        setRemoteLoading(true);
+        const timer = window.setTimeout(async () => {
+            const jobs: Array<Promise<GlobalSearchResult[]>> = [];
+            if (wantFiles && serverRouteId) {
+                // `/config/ser` lists /config and filters by "ser"; `/` alone lists the root.
+                const slash = q.lastIndexOf('/');
+                const directory = slash >= 0 ? `/${q.slice(0, slash)}` : '/';
+                const needle = slash >= 0 ? q.slice(slash + 1) : q;
+                const toResult = (fullPath: string, isFile: boolean): GlobalSearchResult => {
+                    const cut = fullPath.lastIndexOf('/');
+                    const parent = cut > 0 ? fullPath.slice(0, cut) : '/';
+                    const name = fullPath.slice(cut + 1);
+                    return {
+                        id: `file:${serverRouteId}:${fullPath}`,
+                        title: name,
+                        subtitle: fullPath,
+                        href: isFile
+                            ? `/server/${serverRouteId}/files/edit?file=${encodeURIComponent(name)}&directory=${encodeURIComponent(parent)}`
+                            : `/server/${serverRouteId}/files?path=${encodeURIComponent(fullPath)}`,
+                        category: 'files' as const,
+                        icon: isFile ? FileText : Folder,
+                        keywords: [fullPath],
+                        contextTag: entityContext?.entityName,
+                    };
+                };
+                // Listing the typed directory (and filtering it) works on every daemon.
+                const listDirectory = () =>
+                    filesApi.getFiles(serverRouteId, directory, needle || undefined).then(({ contents }) =>
+                        contents
+                            .filter((file) => !file.isTrashShortcut)
+                            .slice(0, 25)
+                            .map((file) => toResult(`${directory === '/' ? '' : directory}/${file.name}`, file.isFile)),
+                    );
+                // Recursive search below the typed directory where the daemon supports it
+                // (`search-files`); unsupported daemons and errors fall back to the listing.
+                const search =
+                    needle.length >= 2
+                        ? filesApi
+                              .searchFiles(serverRouteId, {
+                                  directory,
+                                  pattern: needle,
+                                  case_insensitive: true,
+                              })
+                              .then((found) =>
+                                  found.slice(0, 25).map((file) => {
+                                      const raw = String(file.name ?? '');
+                                      const full = raw.startsWith('/')
+                                          ? raw
+                                          : `${directory === '/' ? '' : directory}/${raw}`;
+                                      return toResult(full, file.isFile);
+                                  }),
+                              )
+                              .catch(() => (controller.signal.aborted ? [] : listDirectory()))
+                        : listDirectory();
+                jobs.push(
+                    search.catch(() => {
+                        if (!controller.signal.aborted) setFilesUnavailable('error');
+                        return [];
+                    }),
+                );
+            }
+            if (wantNodes) {
+                jobs.push(
+                    axios
+                        .get('/api/admin/nodes', {
+                            params: { page: 1, limit: 5, search: q },
+                            signal: controller.signal,
+                        })
+                        .then(({ data }) =>
+                            ((data?.data?.nodes ?? []) as Array<{ id: number; name: string; fqdn?: string }>).map(
+                                (node) => ({
+                                    id: `node:${node.id}`,
+                                    title: node.name,
+                                    subtitle: node.fqdn,
+                                    href: `/admin/nodes/${node.id}/edit`,
+                                    category: 'nodes' as const,
+                                    icon: Network,
+                                    keywords: [node.fqdn ?? '', q],
+                                }),
+                            ),
+                        )
+                        .catch(() => []),
+                );
+            }
+            if (wantTickets) {
+                const url = canViewAdminTickets ? '/api/admin/tickets' : '/api/user/tickets';
+                jobs.push(
+                    axios
+                        .get(url, { params: { page: 1, limit: 5, search: q }, signal: controller.signal })
+                        .then(({ data }) =>
+                            ((data?.data?.tickets ?? []) as Array<{ id: number; uuid: string; title: string }>).map(
+                                (ticket) => ({
+                                    id: `ticket:${ticket.uuid}`,
+                                    title: ticket.title,
+                                    subtitle: `#${ticket.id}`,
+                                    href: canViewAdminTickets
+                                        ? `/admin/tickets/${ticket.uuid}`
+                                        : `/dashboard/tickets/${ticket.uuid}`,
+                                    category: 'tickets' as const,
+                                    icon: LifeBuoy,
+                                    keywords: [String(ticket.id), q],
+                                }),
+                            ),
+                        )
+                        .catch(() => []),
+                );
+            }
+            const settled = (await Promise.all(jobs)).flat();
+            if (!controller.signal.aborted) {
+                setRemoteItems(settled);
+                setRemoteLoading(false);
+            }
+        }, 300);
+        return () => {
+            controller.abort();
+            window.clearTimeout(timer);
+        };
+    }, [
+        open,
+        user,
+        canViewNodes,
+        canViewAdminTickets,
+        serverRouteId,
+        entityContext?.entityName,
+        parsedQuery.text,
+        parsedQuery.scope,
+        parsedQuery.scopeExplicit,
+        parsedQuery.mode,
+    ]);
+
     const results = useMemo(() => {
         if (parsedQuery.mode === 'debug') return [];
 
-        const merged = dedupeGlobalSearchResults([...allItems, ...pluginItems]);
-        const filtered = filterGlobalSearchResults(merged, query, { parsed: parsedQuery });
         const q = parsedQuery.text.trim();
+        const scope = parsedQuery.scope;
+        if (scope === 'files') {
+            // Wings already filtered the folder by name; sort the matches alphabetically.
+            return filterGlobalSearchResults(remoteItems, '', { parsed: { ...parsedQuery, text: '' } });
+        }
+        const withCommands = q || scope === 'commands' ? commandItems : [];
+        const merged = dedupeGlobalSearchResults([
+            ...allItems,
+            ...pluginItems,
+            ...userItems,
+            ...remoteItems,
+            ...withCommands,
+        ]);
+        const filtered = filterGlobalSearchResults(merged, query, {
+            parsed: parsedQuery,
+            recentHrefs: recents.map((entry) => entry.href),
+        });
+        if (!q && !parsedQuery.scopeExplicit && recentItems.length > 0) {
+            const recentHrefs = new Set(recentItems.map((item) => item.href));
+            return [...recentItems, ...filtered.filter((item) => !recentHrefs.has(item.href))];
+        }
 
         if (!q && entityContext && showCurrentContext) {
             const contextResults = filtered.filter(
@@ -680,13 +1038,29 @@ export function useGlobalSearchItems(open: boolean, query: string) {
         }
 
         return filtered;
-    }, [allItems, pluginItems, query, parsedQuery, entityContext, showCurrentContext]);
+    }, [
+        allItems,
+        pluginItems,
+        userItems,
+        remoteItems,
+        commandItems,
+        recents,
+        recentItems,
+        query,
+        parsedQuery,
+        entityContext,
+        showCurrentContext,
+    ]);
 
     return {
         results,
         parsedQuery,
         entityContext,
-        loading: serversLoading || webspacesLoading || vmsLoading || adminSettingsLoading,
+        loading: serversLoading || webspacesLoading || vmsLoading || adminSettingsLoading || remoteLoading,
+        filesUnavailable,
+        recordRecent,
+        clearRecents,
+        hasRecents: recentItems.length > 0,
     };
 }
 

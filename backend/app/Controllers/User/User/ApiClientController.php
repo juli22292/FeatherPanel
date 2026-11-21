@@ -331,6 +331,12 @@ class ApiClientController
             return $notAllowed;
         }
 
+        // Minting a new API key (full access) needs a confirmed browser session.
+        $reauth = \App\Helpers\StepUpAuth::require($request, \App\Helpers\StepUpAuth::ACTION_API_KEY);
+        if ($reauth !== null) {
+            return $reauth;
+        }
+
         $data = json_decode($request->getContent(), true);
         if ($data == null) {
             return ApiResponse::error('Invalid request data', 'INVALID_REQUEST_DATA', 400);
@@ -429,6 +435,12 @@ class ApiClientController
         $notAllowed = $this->ensureApiKeyCreationAllowed($user);
         if ($notAllowed !== null) {
             return $notAllowed;
+        }
+
+        // Minting a new API key (full access) needs a confirmed browser session.
+        $reauth = \App\Helpers\StepUpAuth::require($request, \App\Helpers\StepUpAuth::ACTION_API_KEY);
+        if ($reauth !== null) {
+            return $reauth;
         }
 
         $data = json_decode($request->getContent(), true);
@@ -855,6 +867,12 @@ class ApiClientController
             return ApiResponse::error('You are not allowed to access this API client', 'UNAUTHORIZED_ACCESS', 403);
         }
 
+        // New key material is a new API key: it needs a confirmed browser session.
+        $reauth = \App\Helpers\StepUpAuth::require($request, \App\Helpers\StepUpAuth::ACTION_API_KEY);
+        if ($reauth !== null) {
+            return $reauth;
+        }
+
         // Generate new API keys
         $newPublicKey = $this->generateApiKey();
         $newPrivateKey = $this->generateApiKey();
@@ -1260,6 +1278,12 @@ class ApiClientController
             return $allowCheck;
         }
 
+        // Minting a new API key (full access) needs a confirmed browser session.
+        $reauth = \App\Helpers\StepUpAuth::require($request, \App\Helpers\StepUpAuth::ACTION_API_KEY);
+        if ($reauth !== null) {
+            return $reauth;
+        }
+
         $userCode = trim((string) $request->query->get('user_code', ''));
         if ($userCode === '') {
             return ApiResponse::error('user_code is required', 'USER_CODE_REQUIRED', 400);
@@ -1453,6 +1477,12 @@ class ApiClientController
             return $allowCheck;
         }
 
+        // Minting a new API key (full access) needs a confirmed browser session.
+        $reauth = \App\Helpers\StepUpAuth::require($request, \App\Helpers\StepUpAuth::ACTION_API_KEY);
+        if ($reauth !== null) {
+            return $reauth;
+        }
+
         $data = json_decode($request->getContent(), true);
         if (!is_array($data) || !isset($data['request_token']) || !is_string($data['request_token'])) {
             return ApiResponse::error('request_token is required', 'REQUEST_TOKEN_REQUIRED', 400);
@@ -1567,6 +1597,12 @@ class ApiClientController
             if ($authorization['status'] === 'approved') {
                 $approvedApiClient = ApiClient::getApiClientById((int) $authorization['api_client_id']);
                 if ($approvedApiClient !== null) {
+                    // Replaying an approved result hands out the key again.
+                    $reauth = \App\Helpers\StepUpAuth::require($request, \App\Helpers\StepUpAuth::ACTION_API_KEY);
+                    if ($reauth !== null) {
+                        return $reauth;
+                    }
+
                     return $this->buildApprovedResponse($mode, $authorization, $approvedApiClient);
                 }
             }
@@ -1739,8 +1775,16 @@ class ApiClientController
             if ($host === '') {
                 return null;
             }
-            // User/browser mode keeps strict web redirect protections.
-            if ($scheme === 'http' && $mode !== 'server' && !in_array($host, ['localhost', '127.0.0.1'], true)) {
+            if ($mode === 'server') {
+                // Server mode makes the panel POST the freshly issued
+                // credentials to this URL, so the URL must not become an SSRF
+                // primitive: https only and the host has to resolve to public
+                // addresses (the same rule the generic URL fetcher enforces).
+                if ($scheme !== 'https' || !\App\Helpers\SafeUrlFetcher::isAllowedUrl($url)) {
+                    return null;
+                }
+            } elseif ($scheme === 'http' && !in_array($host, ['localhost', '127.0.0.1'], true)) {
+                // User/browser mode keeps strict web redirect protections.
                 return null;
             }
         } else {

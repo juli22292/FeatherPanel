@@ -370,11 +370,8 @@ export default function ServerStartupPage() {
     if (!canRead) {
         return (
             <div className='fp-surface flex flex-col items-center justify-center space-y-8 rounded-xl border py-24 text-center'>
-                <div className='relative'>
-                    <div className='absolute inset-0 scale-150 rounded-full bg-red-500/20 blur-3xl' />
-                    <div className='relative flex h-32 w-32 rotate-3 items-center justify-center rounded-3xl border-2 border-red-500/20 bg-red-500/10'>
-                        <Lock className='h-16 w-16 text-red-500' />
-                    </div>
+                <div className='relative flex h-32 w-32 items-center justify-center rounded-3xl border-2 border-red-500/20 bg-red-500/10'>
+                    <Lock className='h-16 w-16 text-red-500' />
                 </div>
                 <div className='max-w-md space-y-3 px-4'>
                     <h2 className='text-3xl font-black tracking-tight uppercase'>
@@ -413,7 +410,7 @@ export default function ServerStartupPage() {
                 title={t('serverStartup.title')}
                 description={t('serverStartup.description')}
                 actions={
-                    <div className='flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-3'>
+                    <div className='flex w-full flex-wrap gap-2 sm:w-auto sm:flex-nowrap sm:items-center sm:gap-3'>
                         <Button
                             variant='plain'
                             size='default'
@@ -432,7 +429,7 @@ export default function ServerStartupPage() {
                             disabled={saving || !unsaved || hasVariableErrors}
                             data-fp-save-shortcut
                             loading={saving}
-                            className='order-1 w-full sm:order-2 sm:w-auto'
+                            className='order-1 min-w-0 flex-1 sm:order-2 sm:flex-none'
                         >
                             {saving ? (
                                 t('common.saving')
@@ -488,8 +485,8 @@ export default function ServerStartupPage() {
                     >
                         {viewableVariables.length === 0 && customVariables.length === 0 ? (
                             <div className='flex flex-col items-center justify-center space-y-4 py-16 text-center'>
-                                <Settings className='text-muted-foreground/10 h-16 w-16' />
-                                <p className='text-muted-foreground leading-none font-black uppercase'>
+                                <Settings className='text-muted-foreground/30 h-12 w-12' />
+                                <p className='text-muted-foreground text-sm font-medium'>
                                     {t('serverStartup.noVariablesConfigured')}
                                 </p>
                             </div>
@@ -733,7 +730,7 @@ export default function ServerStartupPage() {
                                                         ? 'cursor-pointer'
                                                         : 'cursor-default opacity-80',
                                                     form.image === image.value
-                                                        ? 'border-blue-500/40 bg-blue-500/10'
+                                                        ? 'border-primary/40 bg-primary/10 ring-primary/20 ring-1 ring-inset'
                                                         : 'bg-card/50 border-border/5 hover:border-border/20',
                                                 )}
                                             >
@@ -743,7 +740,7 @@ export default function ServerStartupPage() {
                                                             className={cn(
                                                                 'truncate text-sm font-medium transition-colors',
                                                                 form.image === image.value
-                                                                    ? 'text-blue-500'
+                                                                    ? 'text-primary'
                                                                     : 'text-foreground group-hover/img:text-foreground',
                                                             )}
                                                         >
@@ -759,7 +756,7 @@ export default function ServerStartupPage() {
                                                         </p>
                                                     </div>
                                                     {form.image === image.value && (
-                                                        <div className='h-1.5 w-1.5 shrink-0 rounded-full bg-blue-500' />
+                                                        <div className='bg-primary h-1.5 w-1.5 shrink-0 rounded-full' />
                                                     )}
                                                 </div>
                                             </div>
@@ -773,10 +770,9 @@ export default function ServerStartupPage() {
 
                     {canChangeSpell && (
                         <FormSection className='bg-primary/5 border-primary/10 group relative overflow-hidden'>
-                            <div className='bg-primary/10 group-hover:bg-primary/20 pointer-events-none absolute -right-12 -bottom-12 h-48 w-48 blur-3xl transition-all duration-1000' />
                             <div className='relative z-10 flex items-center gap-5'>
-                                <div className='bg-primary/10 border-primary/20 flex h-12 w-12 items-center justify-center rounded-2xl border transition-all duration-500 group-hover:scale-110 group-hover:rotate-3'>
-                                    <Zap className='text-primary fill-primary/20 h-6 w-6' />
+                                <div className='bg-primary/10 border-primary/20 flex h-12 w-12 items-center justify-center rounded-2xl border'>
+                                    <Zap className='text-primary h-6 w-6' />
                                 </div>
                                 <div className='space-y-1'>
                                     <h3 className='text-xl font-black tracking-tight uppercase'>

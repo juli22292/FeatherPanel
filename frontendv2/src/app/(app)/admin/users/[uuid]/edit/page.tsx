@@ -15,6 +15,7 @@ See the LICENSE file or <https://www.gnu.org/licenses/>.
 
 'use client';
 
+import MailHtmlFrame from '@/components/common/MailHtmlFrame';
 import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslation } from '@/contexts/TranslationContext';
@@ -32,6 +33,7 @@ import {
     Unlock,
     Trash2,
     ArrowLeft,
+    Eye,
     Edit,
     RefreshCw,
     RotateCcw,
@@ -39,6 +41,7 @@ import {
     ExternalLink,
     AlertTriangle,
     CheckCircle2,
+    MonitorSmartphone,
 } from 'lucide-react';
 import { Button } from '@/components/featherui/Button';
 import { Input } from '@/components/featherui/Input';
@@ -50,6 +53,8 @@ import { Select } from '@/components/ui/select-native';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarImage } from '@/components/ui/avatar';
 import { toast } from 'sonner';
+import { useSession } from '@/contexts/SessionContext';
+import Permissions from '@/lib/permissions';
 import { Tabs, TabsContent, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollableTabsList } from '@/components/ui/scrollable-tabs-list';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
@@ -74,6 +79,8 @@ import {
     isAbuseIPDBReportValid,
 } from '@/components/admin/AbuseIPDBBanReportFields';
 import { ModerationStatusCard } from '@/components/admin/ModerationStatusCard';
+import { UserDiskQuotaCard } from '@/components/admin/inactive-cleanup/UserDiskQuotaCard';
+import { AdminUserSessionsPanel } from '@/components/admin/AdminUserSessionsPanel';
 import { copyToClipboard } from '@/lib/utils';
 import { usePluginWidgets } from '@/hooks/usePluginWidgets';
 import { WidgetRenderer } from '@/components/server/WidgetRenderer';
@@ -198,6 +205,8 @@ export default function UserEditPage({ params }: { params: Promise<{ uuid: strin
 
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
+    const { user: currentUser, hasPermission } = useSession();
+    const [impersonating, setImpersonating] = useState(false);
     const [user, setUser] = useState<ApiUser | null>(null);
     const [availableRoles, setAvailableRoles] = useState<AvailableRole[]>([]);
     const [ownedServers, setOwnedServers] = useState<Server[]>([]);
@@ -670,6 +679,19 @@ export default function UserEditPage({ params }: { params: Promise<{ uuid: strin
         ...(user.id != null && user.id !== undefined ? { userId: user.id } : {}),
     };
 
+    const startImpersonation = async () => {
+        if (!user || !window.confirm(t('impersonation.confirm', { username: user.username }))) return;
+        setImpersonating(true);
+        try {
+            await axios.post(`/api/admin/users/${user.uuid}/impersonate`);
+            // Full reload so the session, navigation and permissions switch to the user.
+            window.location.href = '/dashboard';
+        } catch (e) {
+            toast.error(getApiErrorMessage(e, t, 'impersonation.startFailed'));
+            setImpersonating(false);
+        }
+    };
+
     return (
         <div className='space-y-6'>
             <WidgetRenderer widgets={getWidgets('admin-users-edit', 'top-of-page')} context={widgetContext} />
@@ -679,10 +701,18 @@ export default function UserEditPage({ params }: { params: Promise<{ uuid: strin
                 description={t('admin.users.edit.description')}
                 icon={User}
                 actions={
-                    <Button variant='outline' onClick={() => router.push('/admin/users')}>
-                        <ArrowLeft className='mr-2 h-4 w-4' />
-                        {t('admin.users.back_to_list')}
-                    </Button>
+                    <div className='flex flex-wrap gap-2'>
+                        {hasPermission(Permissions.ADMIN_USERS_IMPERSONATE) && user.uuid !== currentUser?.uuid && (
+                            <Button variant='outline' onClick={startImpersonation} disabled={impersonating}>
+                                <Eye className='mr-2 h-4 w-4' />
+                                {t('impersonation.viewAsUser')}
+                            </Button>
+                        )}
+                        <Button variant='outline' onClick={() => router.push('/admin/users')}>
+                            <ArrowLeft className='mr-2 h-4 w-4' />
+                            {t('admin.users.back_to_list')}
+                        </Button>
+                    </div>
                 }
             />
 
@@ -1004,6 +1034,8 @@ export default function UserEditPage({ params }: { params: Promise<{ uuid: strin
                         </div>
                     </PageCard>
 
+                    {typeof user.id === 'number' && <UserDiskQuotaCard userId={user.id} />}
+
                     <PageCard title={t('admin.users.edit.actions.title')} icon={Shield} variant='default'>
                         <div className='space-y-4'>
                             <ModerationStatusCard
@@ -1107,6 +1139,10 @@ export default function UserEditPage({ params }: { params: Promise<{ uuid: strin
                                     {potentialAlts.length}
                                 </Badge>
                             )}
+                        </TabsTrigger>
+                        <TabsTrigger value='sessions' className='gap-2'>
+                            <MonitorSmartphone className='h-4 w-4' />
+                            {t('admin.users.edit.tabs.sessions')}
                         </TabsTrigger>
                         <TabsTrigger value='vds' className='gap-2'>
                             <ServerIcon className='h-4 w-4' />
@@ -1472,6 +1508,10 @@ export default function UserEditPage({ params }: { params: Promise<{ uuid: strin
                     </PageCard>
                 </TabsContent>
 
+                <TabsContent value='sessions'>
+                    <AdminUserSessionsPanel userUuid={resolvedParams.uuid} />
+                </TabsContent>
+
                 <TabsContent value='vds'>
                     <PageCard
                         title={t('admin.users.edit.vds.title', { defaultValue: 'Owned VDS' })}
@@ -1669,10 +1709,11 @@ export default function UserEditPage({ params }: { params: Promise<{ uuid: strin
                             {mailPreview?.status}
                         </DialogDescription>
                     </DialogHeader>
-                    <div className='bg-muted/50 mt-4 max-h-[60vh] overflow-auto rounded-xl border p-4'>
-                        <div
-                            className='prose prose-sm dark:prose-invert max-w-none'
-                            dangerouslySetInnerHTML={{ __html: mailPreview?.body || '' }}
+                    <div className='mt-4 h-[60vh] overflow-hidden rounded-xl border'>
+                        <MailHtmlFrame
+                            html={mailPreview?.body || ''}
+                            title={mailPreview?.subject || ''}
+                            className='h-full'
                         />
                     </div>
                 </DialogContent>

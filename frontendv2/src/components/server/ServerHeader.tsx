@@ -16,7 +16,18 @@ See the LICENSE file or <https://www.gnu.org/licenses/>.
 'use client';
 
 import { Button } from '@/components/featherui/Button';
-import { Play, Square, RotateCw, Skull, Loader2, Clock, Gamepad2, Server as ServerIcon } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import {
+    Play,
+    Square,
+    RotateCw,
+    Skull,
+    Loader2,
+    Clock,
+    Gamepad2,
+    Server as ServerIcon,
+    type LucideIcon,
+} from 'lucide-react';
 import ServerAddressChip from '@/components/server/ServerAddressChip';
 import { useTranslation } from '@/contexts/TranslationContext';
 import { useState, useEffect, type ReactNode } from 'react';
@@ -26,6 +37,7 @@ import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/contexts/ThemeContext';
 import { resolveSpellBannerUrl, type ServerSpellBannerStyle } from '@/lib/server-spell-banner';
+import { ServiceExpiryChip } from '@/components/common/ServiceExpiryChip';
 
 interface ServerHeaderProps {
     serverName: string;
@@ -37,6 +49,8 @@ interface ServerHeaderProps {
     port?: number | null;
     /** Human readable uptime from the daemon, when known. */
     uptime?: string;
+    /** When set, server is auto-suspended after this datetime. */
+    expiresAt?: string | null;
     nodeLocation?: string;
     nodeLocationFlag?: string;
     nodeName?: string;
@@ -55,6 +69,12 @@ interface ServerHeaderProps {
     onKill?: () => void;
     /** Optional 24 hour usage history shown above the power buttons. */
     trend?: ReactNode;
+    /** Icon in the title tile (defaults to a gamepad for game servers). */
+    icon?: LucideIcon;
+    /** Extra buttons rendered before the power buttons (e.g. refresh, open console). */
+    extraActions?: ReactNode;
+    /** Translated status label; defaults to `servers.status.<status>`. */
+    statusLabel?: string;
 }
 
 export default function ServerHeader({
@@ -64,6 +84,7 @@ export default function ServerHeader({
     address,
     port,
     uptime,
+    expiresAt,
     nodeLocation,
     nodeLocationFlag,
     nodeName,
@@ -80,8 +101,19 @@ export default function ServerHeader({
     onRestart,
     onKill,
     trend,
+    icon: TitleIcon = Gamepad2,
+    extraActions,
+    statusLabel,
 }: ServerHeaderProps) {
     const { t } = useTranslation();
+    const [isPhone, setIsPhone] = useState(false);
+    useEffect(() => {
+        const mq = window.matchMedia('(max-width: 639px)');
+        const update = () => setIsPhone(mq.matches);
+        update();
+        mq.addEventListener('change', update);
+        return () => mq.removeEventListener('change', update);
+    }, []);
     const { theme } = useTheme();
     const [actionLoading, setActionLoading] = useState<string | null>(null);
     const [showKillConfirm, setShowKillConfirm] = useState(false);
@@ -158,7 +190,7 @@ export default function ServerHeader({
             <span className={chipClass}>
                 <span className={cn('h-2 w-2 shrink-0 rounded-full', statusDot(serverStatus))} aria-hidden />
                 <span className='font-medium'>
-                    {t(`servers.status.${serverStatus}`, { defaultValue: serverStatus })}
+                    {statusLabel ?? t(`servers.status.${serverStatus}`, { defaultValue: serverStatus })}
                 </span>
             </span>
             {address ? <ServerAddressChip host={address} port={port} className='hidden sm:inline-flex' /> : null}
@@ -168,6 +200,7 @@ export default function ServerHeader({
                     <span className='tabular-nums'>{uptime}</span>
                 </span>
             ) : null}
+            <ServiceExpiryChip expiresAt={expiresAt} />
             {nodeName || nodeLocation ? (
                 <span className={chipClass} title={t('servers.node')}>
                     {nodeLocationFlag ? (
@@ -196,8 +229,8 @@ export default function ServerHeader({
         </div>
     );
 
-    const powerButtons = (
-        <div className='grid shrink-0 grid-cols-[repeat(3,minmax(0,1fr))_auto] gap-2 sm:flex sm:items-center'>
+    const powerGridInner = (
+        <div className='fp-mobile-actionbar grid shrink-0 grid-cols-[repeat(3,minmax(0,1fr))_auto] gap-2 sm:flex sm:items-center'>
             {canStart && (
                 <Button
                     variant='secondary'
@@ -269,6 +302,20 @@ export default function ServerHeader({
         </div>
     );
 
+    // On phones the power controls float in a fixed bar at the bottom of the viewport. Portalled to
+    // <body> so a transformed / blurred ancestor card can't become its containing block.
+    const powerGrid =
+        isPhone && typeof document !== 'undefined' ? createPortal(powerGridInner, document.body) : powerGridInner;
+
+    const powerButtons = extraActions ? (
+        <div className='flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end'>
+            <div className='flex flex-wrap items-center gap-2'>{extraActions}</div>
+            {powerGrid}
+        </div>
+    ) : (
+        powerGrid
+    );
+
     const killDialog = (
         <ConfirmDialog
             open={showKillConfirm}
@@ -314,7 +361,7 @@ export default function ServerHeader({
                 <div className='min-w-0 space-y-3'>
                     <div className='flex min-w-0 items-center gap-3'>
                         <span className='bg-primary/15 text-primary flex h-10 w-10 shrink-0 items-center justify-center rounded-lg'>
-                            <Gamepad2 className='h-5 w-5' aria-hidden />
+                            <TitleIcon className='h-5 w-5' aria-hidden />
                         </span>
                         <div className='min-w-0'>
                             <h1 className='truncate text-xl font-semibold tracking-tight sm:text-2xl'>{serverName}</h1>

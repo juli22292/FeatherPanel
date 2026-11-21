@@ -606,7 +606,7 @@ class WebNode
     public static function updateWebNodeById(int $id, array $data): bool
     {
         if ($id <= 0) {
-            App::getInstance(true)->getLogger()->error('Invalid web node ID: ' . $id . ' with data: ' . json_encode($data));
+            App::getInstance(true)->getLogger()->error('Invalid web node ID: ' . $id . ' with data: ' . \App\Helpers\LogRedactor::json($data));
 
             return false;
         }
@@ -614,13 +614,13 @@ class WebNode
         if (isset($data['location_id'])) {
             $location = Location::getById((int) $data['location_id']);
             if (!$location) {
-                App::getInstance(true)->getLogger()->error('Invalid location_id: ' . $data['location_id'] . ' for web node with data: ' . json_encode($data));
+                App::getInstance(true)->getLogger()->error('Invalid location_id: ' . $data['location_id'] . ' for web node with data: ' . \App\Helpers\LogRedactor::json($data));
 
                 return false;
             }
 
             if (($location['type'] ?? 'game') !== 'web') {
-                App::getInstance(true)->getLogger()->error('Location is not marked as web hosting location_id: ' . $data['location_id'] . ' for web node with data: ' . json_encode($data));
+                App::getInstance(true)->getLogger()->error('Location is not marked as web hosting location_id: ' . $data['location_id'] . ' for web node with data: ' . \App\Helpers\LogRedactor::json($data));
 
                 return false;
             }
@@ -913,8 +913,8 @@ class WebNode
                 $cachedNode = self::getWebNodeById((int) $cachedNodeId);
                 if (
                     $cachedNode !== null
-                    && ($cachedNode['daemon_token_id'] ?? '') === $tokenId
-                    && ($cachedNode['daemon_token'] ?? '') === $tokenSecret
+                    && hash_equals($tokenId, (string) ($cachedNode['daemon_token_id'] ?? ''))
+                    && hash_equals($tokenSecret, (string) ($cachedNode['daemon_token'] ?? ''))
                 ) {
                     return $cachedNode;
                 }
@@ -937,7 +937,7 @@ class WebNode
                     continue;
                 }
 
-                if ($storedId === $tokenId && $storedSecret === $tokenSecret) {
+                if (hash_equals($tokenId, (string) $storedId) && hash_equals($tokenSecret, (string) $storedSecret)) {
                     Cache::put($cacheKey, (int) $row['id'], 5);
 
                     return self::decryptSensitiveFields($row);

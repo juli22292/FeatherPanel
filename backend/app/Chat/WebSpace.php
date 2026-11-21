@@ -46,6 +46,7 @@ class WebSpace
         'waf_enabled',
         'waf_deny_ips',
         'waf_deny_paths',
+        'waf_settings',
         'database_limit',
         'mailbox_limit',
         'domains',
@@ -449,9 +450,36 @@ class WebSpace
             return false;
         }
 
-        $allowed = ['name', 'description', 'domains', 'domain_routes', 'ssl', 'ssl_mode', 'disk', 'document_root', 'webplate_id', 'image', 'waf_enabled', 'waf_deny_ips', 'waf_deny_paths', 'cpu_limit', 'memory_limit', 'bandwidth_limit_gb', 'backend_host'];
+        $allowed = ['name', 'description', 'domains', 'domain_routes', 'ssl', 'ssl_mode', 'disk', 'document_root', 'webplate_id', 'image', 'waf_enabled', 'waf_deny_ips', 'waf_deny_paths', 'waf_settings', 'cpu_limit', 'memory_limit', 'bandwidth_limit_gb', 'backend_host'];
         $updates = [];
         $params = ['uuid' => $uuid];
+
+        if (isset($fields['domains']) && !isset($fields['domain_routes']) && is_array($fields['domains'])) {
+            // A flat `domains` PATCH must update the authoritative routes table
+            // too - otherwise the JSON column and featherpanel_webspace_domains
+            // silently desync and the daemon never learns the new domains.
+            // Existing route metadata (type, redirect_target, document_root) is
+            // preserved; new domains become aliases.
+            $existing = self::getByUuid($uuid);
+            if (!$existing) {
+                return false;
+            }
+            $previousRoutes = [];
+            foreach (WebSpaceDomain::listForWebspaceId((int) ($existing['id'] ?? 0)) as $routeRow) {
+                $previousRoutes[strtolower((string) ($routeRow['domain'] ?? ''))] = $routeRow;
+            }
+            $fields['domain_routes'] = [];
+            foreach ($fields['domains'] as $index => $domain) {
+                $previous = $previousRoutes[strtolower(trim((string) $domain))] ?? null;
+                $fields['domain_routes'][] = [
+                    'domain' => (string) $domain,
+                    'type' => $previous['type'] ?? ($index === 0 ? 'primary' : 'alias'),
+                    'redirect_target' => $previous['redirect_target'] ?? null,
+                    'document_root' => $previous['document_root'] ?? '',
+                ];
+            }
+            unset($fields['domains']);
+        }
 
         if (isset($fields['domain_routes']) && is_array($fields['domain_routes'])) {
             $existing = self::getByUuid($uuid);
@@ -546,6 +574,11 @@ class WebSpace
         if (array_key_exists('waf_deny_paths', $fields)) {
             $updates[] = 'waf_deny_paths = :waf_deny_paths';
             $params['waf_deny_paths'] = self::encodeDenyPaths($fields['waf_deny_paths']);
+        }
+
+        if (array_key_exists('waf_settings', $fields)) {
+            $updates[] = 'waf_settings = :waf_settings';
+            $params['waf_settings'] = json_encode(is_array($fields['waf_settings']) ? $fields['waf_settings'] : [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}';
         }
 
         if (array_key_exists('cpu_limit', $fields) && is_numeric($fields['cpu_limit'])) {
@@ -712,6 +745,7 @@ class WebSpace
             'waf_enabled' => !empty($row['waf_enabled']),
             'waf_deny_ips' => is_array($row['waf_deny_ips'] ?? null) ? array_values($row['waf_deny_ips']) : [],
             'waf_deny_paths' => is_array($row['waf_deny_paths'] ?? null) ? array_values($row['waf_deny_paths']) : [],
+            'waf_settings' => self::daemonWafSettings($row),
             'backend_port' => (int) ($row['backend_port'] ?? 0),
             'backend_host' => trim((string) ($row['backend_host'] ?? '')),
             'suspended' => strtolower(trim((string) ($row['status'] ?? ''))) === 'suspended',
@@ -783,6 +817,7 @@ class WebSpace
         $row['waf_enabled'] = !empty($row['waf_enabled']);
         $row['waf_deny_ips'] = self::decodeDenyIps($row['waf_deny_ips'] ?? null);
         $row['waf_deny_paths'] = self::decodeDenyPaths($row['waf_deny_paths'] ?? null);
+        $row['waf_settings'] = self::decodeWafSettings($row['waf_settings'] ?? null);
         $row['cpu_limit'] = (float) ($row['cpu_limit'] ?? 0);
         $row['memory_limit'] = (int) ($row['memory_limit'] ?? 0);
         $row['bandwidth_used_bytes'] = (int) ($row['bandwidth_used_bytes'] ?? 0);
@@ -844,7 +879,7 @@ class WebSpace
             if (!is_string($d) || trim($d) === '') {
                 continue;
             }
-            $clean[] = strtolower(rtrim(trim($d), '.'));
+            $clean[] = \App\Helpers\DomainName::toAscii($d);
         }
 
         return json_encode(array_values(array_unique($clean))) ?: '[]';
@@ -866,6 +901,39 @@ class WebSpace
         $decoded = json_decode($raw, true);
 
         return is_array($decoded) ? array_values(array_filter(array_map('strval', $decoded))) : [];
+    }
+
+    /**
+     * Stored layer-7 firewall settings (empty array = nothing customised yet).
+     *
+     * @return array<string, mixed>
+     */
+    private static function decodeWafSettings(mixed $raw): array
+    {
+        if (is_array($raw)) {
+            return $raw;
+        }
+        if (!is_string($raw) || $raw === '') {
+            return [];
+        }
+        $decoded = json_decode($raw, true);
+
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    /**
+     * Effective settings for the daemon. Deny lists travel in their own fields.
+     *
+     * @param array<string, mixed> $row
+     *
+     * @return array<string, mixed>
+     */
+    private static function daemonWafSettings(array $row): array
+    {
+        $settings = \App\Helpers\WebSpaceWafSettings::withLegacyMode(is_array($row['waf_settings'] ?? null) ? $row['waf_settings'] : [], !empty($row['waf_enabled']));
+        unset($settings['deny_ips'], $settings['deny_paths']);
+
+        return $settings;
     }
 
     private static function encodeDenyIps(mixed $raw): string
@@ -897,8 +965,7 @@ class WebSpace
             if ($value === '' || strlen($value) > 64) {
                 continue;
             }
-            $host = explode('/', $value, 2)[0];
-            if (filter_var($host, FILTER_VALIDATE_IP) === false) {
+            if (!\App\Helpers\WebSpaceWafRules::isValidIp($value)) {
                 continue;
             }
             if (!in_array($value, $out, true)) {
@@ -950,7 +1017,7 @@ class WebSpace
             while (str_contains($value, '//')) {
                 $value = str_replace('//', '/', $value);
             }
-            if ($value === '/') {
+            if ($value === '/' || !\App\Helpers\WebSpaceWafRules::isValidPath($value)) {
                 continue;
             }
             if (!in_array($value, $out, true)) {

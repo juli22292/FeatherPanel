@@ -9,13 +9,13 @@ jobs:
   build:
     if: github.repository == 'MythicalLTD/FeatherPanel'
     name: Async Runner Build
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: runner
     steps:
       - name: Code Checkout
-        uses: useblacksmith/checkout@v1
+        uses: actions/checkout@v4
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -23,7 +23,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: 1.93
+          toolchain: stable
       - name: Build
         run: cargo build --release --locked --bin async-runner
       - name: Test

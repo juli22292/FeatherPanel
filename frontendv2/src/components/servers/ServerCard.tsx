@@ -37,13 +37,14 @@ import { ResourceBar } from './ResourceBar';
 import { Checkbox } from '@/components/ui/checkbox';
 import { OverflowText } from '@/components/featherui/OverflowText';
 import { safeCssUrl } from '@/lib/safe-css-url';
+import { ServiceExpiryChip } from '@/components/common/ServiceExpiryChip';
 
 interface ServerCardProps {
     server: Server;
     layout: string;
     liveStats: { memory: number; disk: number; cpu: number; status: string } | null;
     isConnected: boolean;
-    t: (key: string) => string;
+    t: (key: string, params?: Record<string, string>) => string;
     folders: ServerFolder[];
     onAssignFolder: (folderId: number) => void;
     onUnassignFolder: () => void;
@@ -87,7 +88,7 @@ export function ServerCard({
         return (
             <div
                 className={cn(
-                    'fp-surface group relative flex flex-col items-stretch gap-4 rounded-xl border p-4 transition-all sm:flex-row sm:items-center sm:gap-6 sm:p-5 md:p-6',
+                    'fp-surface-solid fp-lift group relative flex flex-col items-stretch gap-4 rounded-xl border p-4 sm:flex-row sm:items-center sm:gap-6 sm:p-5 md:p-6',
                     accessible ? 'hover:border-primary' : 'opacity-60',
                 )}
             >
@@ -161,6 +162,16 @@ export function ServerCard({
                                 <OverflowText>{server.spell?.name}</OverflowText>
                             </div>
                         </div>
+                        {server.expires_at ? (
+                            <div className='min-w-0'>
+                                <div className='text-muted-foreground text-[10px] tracking-wider uppercase sm:text-xs'>
+                                    {t('service_expiry.label')}
+                                </div>
+                                <div className='mt-0.5'>
+                                    <ServiceExpiryChip expiresAt={server.expires_at} compact />
+                                </div>
+                            </div>
+                        ) : null}
                     </Link>
 
                     <div className='flex shrink-0 items-center gap-0.5 self-end sm:self-auto'>
@@ -261,7 +272,7 @@ export function ServerCard({
     return (
         <div
             className={cn(
-                'fp-surface group relative overflow-hidden rounded-xl border transition-all',
+                'fp-surface-solid fp-lift group relative overflow-hidden rounded-xl border',
                 accessible ? 'hover:border-primary' : 'opacity-60',
             )}
         >
@@ -287,7 +298,7 @@ export function ServerCard({
                 {server.spell?.banner && (
                     <div className='relative h-28 overflow-hidden sm:h-40'>
                         <div
-                            className='absolute inset-0 bg-cover bg-center transition-transform duration-300 group-hover:scale-105'
+                            className='absolute inset-0 bg-cover bg-center transition-transform duration-500 ease-out group-hover:scale-105 motion-reduce:transition-none motion-reduce:group-hover:scale-100'
                             style={{
                                 backgroundImage: safeCssUrl(
                                     resolveAttachmentUrl(server.spell.banner) || server.spell.banner,
@@ -423,6 +434,7 @@ export function ServerCard({
                             {t('servers.subuser')}
                         </span>
                     )}
+                    <ServiceExpiryChip expiresAt={server.expires_at} compact />
                 </Link>
 
                 <Link href={serverUrl} className='grid cursor-pointer grid-cols-1 gap-3 pt-2 min-[400px]:grid-cols-2'>

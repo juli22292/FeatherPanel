@@ -124,6 +124,9 @@ class NodeStatusController
                     'id' => $nodeId,
                     'name' => $node['name'],
                     'status' => $probe['status'] === 'healthy' ? 'healthy' : 'unhealthy',
+                    'latency_ms' => isset($probe['latency_ms']) && $probe['latency_ms'] !== null
+                        ? (int) $probe['latency_ms']
+                        : null,
                 ];
 
                 if ($showIndividualNodes) {
@@ -214,6 +217,12 @@ class NodeStatusController
             }
             $responseData['data']['total_servers'] = $totalServers;
         }
+
+        // Maintenance notice so the status page can tell visitors what is going on.
+        $responseData['maintenance'] = [
+            'enabled' => $config->getSetting(ConfigInterface::MAINTENANCE_MODE_ENABLED, 'false') === 'true',
+            'message' => (string) $config->getSetting(ConfigInterface::MAINTENANCE_MODE_MESSAGE, ''),
+        ];
 
         return ApiResponse::success($responseData, 'Status data retrieved successfully', 200);
     }

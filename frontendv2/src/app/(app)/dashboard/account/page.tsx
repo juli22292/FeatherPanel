@@ -27,10 +27,12 @@ import { cn } from '@/lib/utils';
 import ProfileTab from '@/components/account/ProfileTab';
 import SettingsTab from '@/components/account/SettingsTab';
 import SshKeysTab from '@/components/account/SshKeysTab';
+import StorageTab from '@/components/account/StorageTab';
 import ApiKeysTab from '@/components/account/ApiKeysTab';
 import McpTab from '@/components/account/McpTab';
 import ActivityTab from '@/components/account/ActivityTab';
 import MailTab from '@/components/account/MailTab';
+import NotificationsTab from '@/components/account/NotificationsTab';
 import { usePluginWidgets } from '@/hooks/usePluginWidgets';
 import { WidgetRenderer } from '@/components/server/WidgetRenderer';
 import { Sensitive } from '@/components/common/Sensitive';
@@ -51,7 +53,9 @@ export default function AccountPage() {
     const tabs = [
         { id: 'profile', name: t('account.profile'), component: ProfileTab },
         { id: 'settings', name: t('account.settings'), component: SettingsTab },
+        { id: 'notifications', name: t('account.notifications.title'), component: NotificationsTab },
         { id: 'ssh-keys', name: t('account.sshKeys.title'), component: SshKeysTab },
+        { id: 'storage', name: t('account.storage.title'), component: StorageTab },
         { id: 'api-keys', name: t('account.apiKeys.title'), component: ApiKeysTab },
         { id: 'mcp', name: t('account.mcp.title'), component: McpTab },
         { id: 'activity', name: t('account.activity.title'), component: ActivityTab },
@@ -109,7 +113,7 @@ export default function AccountPage() {
                                 className='border-primary/20 h-20 w-20 rounded-full border-2 object-cover sm:h-24 sm:w-24'
                             />
                         ) : (
-                            <div className='from-primary/20 to-primary/10 border-primary/20 flex h-20 w-20 items-center justify-center rounded-full border-2 bg-linear-to-br sm:h-24 sm:w-24'>
+                            <div className='bg-muted border-border flex h-20 w-20 items-center justify-center rounded-full border-2 sm:h-24 sm:w-24'>
                                 <span className='text-primary text-2xl font-semibold'>{getUserInitials()}</span>
                             </div>
                         )}

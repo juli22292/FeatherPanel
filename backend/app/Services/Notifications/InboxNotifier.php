@@ -20,6 +20,9 @@ namespace App\Services\Notifications;
 use App\App;
 use App\Chat\User;
 use App\Chat\Subuser;
+use App\Chat\VmSubuser;
+use App\Chat\WebSpaceSubuser;
+use App\WebSpaceSubuserPermissions;
 use App\Realtime\Mercure;
 use App\SubuserPermissions;
 use App\Chat\UserNotification;
@@ -31,6 +34,9 @@ use App\Chat\UserNotification;
 class InboxNotifier
 {
     public const REALTIME_TYPE = 'inbox.updated';
+
+    /** Resource limit alerts repeat at most every six hours per server and metric. */
+    public const RESOURCE_ALERT_COOLDOWN = 6 * 3600;
 
     /** A staff reply on someone's ticket (internal notes never notify). */
     public static function ticketReply(array $ticket, array $message, ?string $replierUuid): void
@@ -103,6 +109,28 @@ class InboxNotifier
         });
     }
 
+    /** A user's own backup storage lost access (token revoked at the provider). */
+    public static function storageDisconnected(array $destination, int $backups): void
+    {
+        self::guard(static function () use ($destination, $backups): void {
+            $user = User::getUserById((int) ($destination['user_id'] ?? 0));
+            if (!$user) {
+                return;
+            }
+            self::send(
+                [$user],
+                UserNotification::KIND_STORAGE_DISCONNECTED,
+                [
+                    'storage_name' => mb_substr((string) ($destination['name'] ?? ''), 0, 120),
+                    'provider' => (string) ($destination['provider'] ?? ''),
+                    'count' => (string) $backups,
+                ],
+                '/dashboard/account?tab=storage',
+                'storage:' . (string) ($destination['uuid'] ?? '')
+            );
+        });
+    }
+
     /** Wings reported a crash: owner and subusers with console access. Repeats fold into one unread item. */
     public static function serverCrashed(array $server): void
     {
@@ -122,10 +150,248 @@ class InboxNotifier
     }
 
     /**
+     * A server stayed above its CPU, memory or disk limit threshold. One alert per
+     * server and metric every RESOURCE_ALERT_COOLDOWN seconds per user.
+     */
+    public static function resourceLimit(array $server, string $metric, int $percent): void
+    {
+        self::guard(static function () use ($server, $metric, $percent): void {
+            $uuidShort = (string) ($server['uuidShort'] ?? '');
+            $groupKey = 'limit:' . (int) ($server['id'] ?? 0) . ':' . $metric;
+            $audience = array_values(array_filter(
+                self::serverAudience($server, SubuserPermissions::CONTROL_CONSOLE),
+                static fn (array $user): bool => !UserNotification::sentWithin((int) $user['id'], $groupKey, self::RESOURCE_ALERT_COOLDOWN)
+            ));
+            self::send(
+                $audience,
+                UserNotification::KIND_RESOURCE_LIMIT,
+                [
+                    'server_name' => mb_substr((string) ($server['name'] ?? ''), 0, 120),
+                    'server' => $uuidShort,
+                    'metric' => $metric,
+                    'percent' => (string) $percent,
+                ],
+                '/server/' . rawurlencode($uuidShort),
+                $groupKey
+            );
+        });
+    }
+
+    /** A server that was running before a transfer could not be started on its new node. */
+    public static function transferPowerRestoreFailed(array $server): void
+    {
+        self::guard(static function () use ($server): void {
+            $uuidShort = (string) ($server['uuidShort'] ?? '');
+            self::send(
+                self::serverAudience($server, SubuserPermissions::CONTROL_START),
+                UserNotification::KIND_TRANSFER_POWER_FAILED,
+                [
+                    'server_name' => mb_substr((string) ($server['name'] ?? ''), 0, 120),
+                    'server' => $uuidShort,
+                ],
+                '/server/' . rawurlencode($uuidShort),
+                'transfer-power:' . (int) ($server['id'] ?? 0)
+            );
+        });
+    }
+
+    /**
      * Owner plus subusers holding the permission.
      *
      * @return array<int, array> user rows
      */
+    /** A VDS stopped without a panel power action (detected by the VDS monitor cron). */
+    public static function vdsDown(array $vds, int $cooldownSeconds): void
+    {
+        self::vdsSend($vds, UserNotification::KIND_VDS_DOWN, 'vds_down', 'power', [], $cooldownSeconds);
+    }
+
+    /** A VDS stayed above the CPU threshold for the configured duration. */
+    public static function vdsHighCpu(array $vds, int $percent, int $minutes, int $cooldownSeconds): void
+    {
+        self::vdsSend($vds, UserNotification::KIND_VDS_HIGH_CPU, 'vds_high_cpu', 'console', [
+            'percent' => (string) $percent,
+            'minutes' => (string) $minutes,
+        ], $cooldownSeconds);
+    }
+
+    /** A VDS reached the warning threshold or its monthly traffic limit (once per level per month). */
+    public static function vdsBandwidth(array $vds, int $percent, string $usedGb, string $limitGb, string $actionLabel, string $period): void
+    {
+        self::vdsSend($vds, UserNotification::KIND_VDS_BANDWIDTH, 'vds_bandwidth', 'console', [
+            'percent' => (string) $percent,
+            'used_gb' => $usedGb,
+            'limit_gb' => $limitGb,
+            'action_label' => $actionLabel,
+        ], 40 * 86400, 'vds-bandwidth:' . ($vds['id'] ?? 0) . ':' . $period . ':' . ($percent >= 100 ? 'limit' : 'warn'));
+    }
+
+    /** A VDS expires soon. One notification per expiry date. */
+    public static function vdsExpiring(array $vds, string $expiresAt, int $days): void
+    {
+        self::vdsSend($vds, UserNotification::KIND_VDS_EXPIRING, 'vds_expiring', 'console', [
+            'expires_at' => $expiresAt,
+            'days' => (string) $days,
+        ], 90 * 86400, 'vds-expiring:' . ($vds['id'] ?? 0) . ':' . $expiresAt);
+    }
+
+    /** A VDS backup task failed. The group key is per task, so every failure is reported once. */
+    public static function vdsBackupFailed(array $vds, string $taskId, string $error): void
+    {
+        self::vdsSend($vds, UserNotification::KIND_VDS_BACKUP_FAILED, 'vds_backup_failed', 'backup', [
+            'error' => mb_substr($error, 0, 300),
+        ], 30 * 86400, 'vds-backup:' . $taskId);
+    }
+
+    private static function vdsSend(array $vds, string $kind, string $event, string $permission, array $extra, int $cooldownSeconds, ?string $groupKey = null): void
+    {
+        self::guard(static function () use ($vds, $kind, $event, $permission, $extra, $cooldownSeconds, $groupKey): void {
+            $vdsId = (int) ($vds['id'] ?? 0);
+            if ($vdsId <= 0) {
+                return;
+            }
+            $groupKey ??= $kind . ':' . $vdsId;
+            $audience = array_values(array_filter(
+                self::vdsAudience($vds, $permission),
+                static function (array $user) use ($groupKey, $cooldownSeconds, $event): bool {
+                    $prefs = ExternalNotifier::getPreferences((string) ($user['uuid'] ?? ''));
+                    if (empty($prefs['events'][$event])) {
+                        return false;
+                    }
+
+                    return !UserNotification::sentWithin((int) $user['id'], $groupKey, $cooldownSeconds);
+                }
+            ));
+            self::send(
+                $audience,
+                $kind,
+                array_merge(['vds_name' => mb_substr((string) ($vds['hostname'] ?? ('VDS #' . $vdsId)), 0, 120), 'vds' => (string) $vdsId], $extra),
+                '/vds/' . $vdsId,
+                $groupKey
+            );
+        });
+    }
+
+    /** VDS owner plus subusers that hold the given VDS permission. */
+    private static function vdsAudience(array $vds, string $permission): array
+    {
+        $users = [];
+        $ownerUuid = (string) ($vds['user_uuid'] ?? '');
+        if ($ownerUuid !== '' && ($owner = User::getUserByUuid($ownerUuid))) {
+            $users[(int) $owner['id']] = $owner;
+        }
+        foreach (VmSubuser::getSubusersByVmInstance((int) ($vds['id'] ?? 0)) as $row) {
+            $userId = (int) ($row['user_id'] ?? 0);
+            if ($userId <= 0 || isset($users[$userId])) {
+                continue;
+            }
+            $permissions = json_decode((string) ($row['permissions'] ?? ''), true);
+            if (!is_array($permissions) || !in_array($permission, $permissions, true)) {
+                continue;
+            }
+            if ($user = User::getUserById($userId)) {
+                $users[$userId] = $user;
+            }
+        }
+
+        return array_values($users);
+    }
+
+    /**
+     * A FeatherQuilld event for a WebSpace (install result, backup, limit or malware).
+     * Unknown events are ignored. Each user can opt out per event in their notification settings.
+     */
+    public static function webspaceEvent(array $space, string $event, array $metadata = []): void
+    {
+        $uuidShort = (string) ($space['uuidShort'] ?? '');
+        $base = '/webspace/' . rawurlencode($uuidShort);
+        $id = (int) ($space['id'] ?? 0);
+        switch ($event) {
+            case 'install_completed':
+            case 'install_failed':
+                $ok = $event === 'install_completed';
+                self::webspaceSend($space, $ok ? UserNotification::KIND_WEBSPACE_INSTALLED : UserNotification::KIND_WEBSPACE_INSTALL_FAILED, 'webspace_install', WebSpaceSubuserPermissions::CONSOLE_OUTPUT, [], $base, 'ws-install:' . $id, 0);
+                break;
+            case 'backup_completed':
+                self::webspaceSend($space, UserNotification::KIND_WEBSPACE_BACKUP_COMPLETED, 'webspace_backup_completed', WebSpaceSubuserPermissions::BACKUP_READ, [], $base . '/backups', 'ws-backup:' . $id, 0);
+                break;
+            case 'backup_failed':
+                self::webspaceSend($space, UserNotification::KIND_WEBSPACE_BACKUP_FAILED, 'webspace_backup_failed', WebSpaceSubuserPermissions::BACKUP_READ, [
+                    'error' => mb_substr((string) ($metadata['error'] ?? ''), 0, 300),
+                ], $base . '/backups', 'ws-backup-failed:' . $id, 0);
+                break;
+            case 'limit_reached':
+                $resource = (string) ($metadata['resource'] ?? '');
+                if (!in_array($resource, ['disk', 'bandwidth', 'memory'], true)) {
+                    return;
+                }
+                $limit = (float) ($metadata['limit_bytes'] ?? 0);
+                $percent = $limit > 0 ? (int) min(100, round(((float) ($metadata['used_bytes'] ?? 0)) / $limit * 100)) : 0;
+                self::webspaceSend($space, UserNotification::KIND_WEBSPACE_LIMIT, 'webspace_limit', WebSpaceSubuserPermissions::CONSOLE_OUTPUT, [
+                    'resource' => $resource,
+                    'percent' => (string) $percent,
+                ], $base, 'ws-limit:' . $id . ':' . $resource, self::RESOURCE_ALERT_COOLDOWN);
+                break;
+            case 'malware_scan_completed':
+                $count = (int) ($metadata['infected_count'] ?? $metadata['infectedCount'] ?? 0);
+                if ($count <= 0) {
+                    return;
+                }
+                self::webspaceSend($space, UserNotification::KIND_WEBSPACE_MALWARE, 'webspace_malware', WebSpaceSubuserPermissions::SETTINGS_READ, [
+                    'count' => (string) $count,
+                ], $base . '/malware', 'ws-malware:' . $id, 0);
+                break;
+        }
+    }
+
+    private static function webspaceSend(array $space, string $kind, string $event, string $permission, array $extra, string $link, string $groupKey, int $cooldownSeconds): void
+    {
+        self::guard(static function () use ($space, $kind, $event, $permission, $extra, $link, $groupKey, $cooldownSeconds): void {
+            $audience = array_values(array_filter(
+                self::webspaceAudience($space, $permission),
+                static function (array $user) use ($event, $groupKey, $cooldownSeconds): bool {
+                    $prefs = ExternalNotifier::getPreferences((string) ($user['uuid'] ?? ''));
+                    if (empty($prefs['events'][$event])) {
+                        return false;
+                    }
+
+                    return $cooldownSeconds <= 0 || !UserNotification::sentWithin((int) $user['id'], $groupKey, $cooldownSeconds);
+                }
+            ));
+            self::send(
+                $audience,
+                $kind,
+                array_merge([
+                    'webspace_name' => mb_substr((string) ($space['name'] ?? ''), 0, 120),
+                    'webspace' => (string) ($space['uuidShort'] ?? ''),
+                ], $extra),
+                $link,
+                $groupKey
+            );
+        });
+    }
+
+    /** WebSpace owner plus subusers that hold the given permission. */
+    private static function webspaceAudience(array $space, string $permission): array
+    {
+        $users = [];
+        $ownerId = (int) ($space['owner_id'] ?? 0);
+        if ($ownerId > 0 && ($owner = User::getUserById($ownerId))) {
+            $users[$ownerId] = $owner;
+        }
+        foreach (WebSpaceSubuser::listByWebSpaceId((int) ($space['id'] ?? 0)) as $row) {
+            $userId = (int) ($row['user_id'] ?? 0);
+            if ($userId <= 0 || isset($users[$userId]) || !in_array($permission, (array) ($row['permissions'] ?? []), true)) {
+                continue;
+            }
+            if ($user = User::getUserById($userId)) {
+                $users[$userId] = $user;
+            }
+        }
+
+        return array_values($users);
+    }
+
     private static function serverAudience(array $server, string $permission): array
     {
         $users = [];
@@ -159,6 +425,8 @@ class InboxNotifier
             if ($userId <= 0 || UserNotification::notify($userId, $kind, $data, $link, $groupKey) === false) {
                 continue;
             }
+            ExternalNotifier::deliver($user, $kind, $data, $link);
+            WebPushNotifier::deliver($user, $kind, $data, $link);
             if (!empty($user['uuid']) && Mercure::isEnabled()) {
                 Mercure::publish(Mercure::userTopic((string) $user['uuid']), self::REALTIME_TYPE);
             }

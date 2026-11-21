@@ -163,11 +163,8 @@ export default function CreateSubdomainPage() {
     if (availableDomains.length === 0 && !loading) {
         return (
             <div className='fp-surface flex flex-col items-center justify-center space-y-8 rounded-xl border py-24 text-center'>
-                <div className='relative'>
-                    <div className='bg-primary/20 absolute inset-0 scale-150 rounded-full blur-3xl' />
-                    <div className='bg-primary/10 border-primary/20 relative flex h-32 w-32 rotate-3 items-center justify-center rounded-3xl border-2'>
-                        <Globe className='text-primary h-16 w-16' />
-                    </div>
+                <div className='bg-primary/10 border-primary/20 relative flex h-32 w-32 items-center justify-center rounded-3xl border-2'>
+                    <Globe className='text-primary h-16 w-16' />
                 </div>
                 <div className='max-w-md space-y-3 px-4'>
                     <h2 className='text-3xl font-black tracking-tight uppercase'>
@@ -193,7 +190,7 @@ export default function CreateSubdomainPage() {
                 title={t('serverSubdomains.createButton')}
                 description={t('serverSubdomains.newSubdomainDescription')}
                 actions={
-                    <div className='flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-3'>
+                    <div className='flex w-full flex-wrap gap-2 sm:w-auto sm:flex-nowrap sm:items-center sm:gap-3'>
                         <Button
                             variant='ghost'
                             size='default'
@@ -209,7 +206,7 @@ export default function CreateSubdomainPage() {
                             onClick={handleCreate}
                             disabled={saving || limitReached}
                             loading={saving}
-                            className='order-1 w-full sm:order-2 sm:w-auto'
+                            className='order-1 min-w-0 flex-1 sm:order-2 sm:flex-none'
                             data-fp-save-shortcut
                         >
                             {saving ? (
@@ -231,10 +228,10 @@ export default function CreateSubdomainPage() {
                     {limitReached && (
                         <div className='flex items-start gap-4 rounded-2xl border border-yellow-500/20 bg-yellow-500/5 p-5'>
                             <div className='flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-yellow-500/30 bg-yellow-500/20'>
-                                <Info className='h-5 w-5 text-yellow-500' />
+                                <Info className='h-5 w-5 text-yellow-600 dark:text-yellow-400' />
                             </div>
                             <div className='space-y-1'>
-                                <h4 className='text-sm font-bold tracking-wide text-yellow-500 uppercase'>
+                                <h4 className='text-sm font-bold tracking-wide text-yellow-600 uppercase dark:text-yellow-400'>
                                     {t('serverSubdomains.limitReached')}
                                 </h4>
                                 <p className='text-xs leading-relaxed font-medium text-yellow-500/70'>
@@ -302,7 +299,6 @@ export default function CreateSubdomainPage() {
 
                 <div className='space-y-8 lg:col-span-4'>
                     <FormSection className='group relative space-y-4 overflow-hidden border-blue-500/10 bg-blue-500/5'>
-                        <div className='pointer-events-none absolute -right-6 -bottom-6 h-24 w-24 bg-blue-500/10 blur-2xl transition-transform duration-1000 group-hover:scale-150' />
                         <div className='relative z-10 flex h-10 w-10 items-center justify-center rounded-xl border border-blue-500/20 bg-blue-500/10'>
                             <Info className='h-5 w-5 text-blue-500' />
                         </div>

@@ -18,7 +18,7 @@ declare(strict_types=1);
  */
 
 if (!defined('APP_VERSION')) {
-    define('APP_VERSION', 'v1.4.3.2');
+    define('APP_VERSION', 'v1.5.5.1');
 }
 
 require __DIR__ . '/../storage/packages/autoload.php';

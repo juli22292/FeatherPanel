@@ -33,6 +33,7 @@ use OpenApi\Attributes as OA;
 use App\Chat\VmInstanceBackup;
 use App\Config\ConfigInterface;
 use App\Chat\VmInstanceActivity;
+use App\Helpers\FeatherTailClient;
 use App\Mail\templates\VmSuspended;
 use App\Services\Vm\VmInstanceUtil;
 use App\CloudFlare\CloudFlareRealIP;
@@ -260,6 +261,11 @@ class VmInstancesController
         $onBoot = isset($data['on_boot']) ? (int) (bool) $data['on_boot'] : 1;
         $backupLimit = isset($data['backup_limit']) && is_numeric($data['backup_limit']) ? max(0, min(100, (int) $data['backup_limit'])) : 5;
         $backupRetentionForMeta = null;
+        if (array_key_exists('snapshot_limit', $data) && $data['snapshot_limit'] !== null && $data['snapshot_limit'] !== '') {
+            if (!is_numeric($data['snapshot_limit']) || (int) $data['snapshot_limit'] < 0 || (int) $data['snapshot_limit'] > 100) {
+                return ApiResponse::error('snapshot_limit must be empty or an integer between 0 and 100', 'INVALID_SNAPSHOT_LIMIT', 400);
+            }
+        }
         if (array_key_exists('backup_retention_mode', $data)) {
             $rawBr = $data['backup_retention_mode'];
             if ($rawBr === null || $rawBr === '') {
@@ -428,6 +434,50 @@ class VmInstancesController
             $targetNode = (string) $nodesResult['nodes'][0]['node'];
         }
 
+        $usesDhcp = false;
+        foreach ($networkAssignments as $assignment) {
+            $ipRow = $freeIpsById[(int) $assignment['vm_ip_id']] ?? VmIp::getById((int) $assignment['vm_ip_id']);
+            if ($ipRow === null) {
+                return ApiResponse::error('Invalid vm_ip_id or IP is already assigned to another instance', 'INVALID_VM_IP', 400);
+            }
+            $pin = trim((string) ($ipRow['pve_node'] ?? ''));
+            if ($pin !== '' && $pin !== $targetNode) {
+                return ApiResponse::error(
+                    'IP ' . ($ipRow['ip'] ?? '') . ' is pinned to Proxmox node ' . $pin . ', not ' . $targetNode,
+                    'IP_PVE_NODE_MISMATCH',
+                    400
+                );
+            }
+            if (($ipRow['assignment_mode'] ?? 'static') === 'dhcp') {
+                $usesDhcp = true;
+            }
+        }
+
+        if ($usesDhcp) {
+            if ($vmType !== 'qemu') {
+                return ApiResponse::error(
+                    'DHCP-assigned IPs require a QEMU/KVM guest (FeatherTail resolves MAC from QEMU config)',
+                    'DHCP_LXC_UNSUPPORTED',
+                    400
+                );
+            }
+            if ((int) ($vmNode['feathertail_enabled'] ?? 0) !== 1) {
+                return ApiResponse::error(
+                    'Enable FeatherTail on this VDS node before assigning DHCP IPs',
+                    'FEATHERTAIL_REQUIRED',
+                    400
+                );
+            }
+            $tailHealth = FeatherTailClient::health($vmNode);
+            if (($tailHealth['status'] ?? '') !== 'healthy') {
+                return ApiResponse::error(
+                    'FeatherTail is unreachable: ' . ($tailHealth['error'] ?? 'unknown error'),
+                    'FEATHERTAIL_UNREACHABLE',
+                    502
+                );
+            }
+        }
+
         $nextResult = $client->getNextVmid(5000);
         if (!$nextResult['ok'] || $nextResult['vmid'] === null) {
             return ApiResponse::error(
@@ -448,13 +498,25 @@ class VmInstancesController
             'template_vmid' => $templateVmid,
             'template_node' => $templateNode,
             'vm_ip_id' => $vmIpId,
-            'networks' => array_map(static function (array $assignment): array {
+            'networks' => array_map(static function (array $assignment) use ($freeIpsById): array {
+                $ipRow = $freeIpsById[(int) $assignment['vm_ip_id']] ?? VmIp::getById((int) $assignment['vm_ip_id']) ?? [];
+
                 return [
                     'key' => $assignment['network_key'],
                     'vm_ip_id' => (int) $assignment['vm_ip_id'],
                     'bridge' => $assignment['bridge'] ?? null,
+                    'ip' => $ipRow['ip'] ?? null,
+                    'cidr' => isset($ipRow['cidr']) ? (int) $ipRow['cidr'] : null,
+                    'gateway' => $ipRow['gateway'] ?? null,
+                    'address_scope' => $ipRow['address_scope'] ?? 'public',
+                    'assignment_mode' => $ipRow['assignment_mode'] ?? 'static',
+                    'is_primary' => !empty($assignment['is_primary']),
+                    'interface_name' => $assignment['interface_name'] ?? null,
+                    'sort_order' => (int) ($assignment['sort_order'] ?? 0),
                 ];
             }, $networkAssignments),
+            'uses_dhcp' => $usesDhcp,
+            'feathertail_enabled' => (int) ($vmNode['feathertail_enabled'] ?? 0) === 1,
             'notes' => $notesRaw,
             'vm_type' => $vmType,
             'memory' => $memory,
@@ -714,7 +776,18 @@ class VmInstancesController
             }
         }
 
-        $dbKeys = ['hostname', 'notes', 'user_uuid', 'vm_ip_id', 'backup_limit', 'backup_retention_mode', 'expires_at'];
+        if (array_key_exists('iso_mode', $data) && $data['iso_mode'] !== null && !in_array($data['iso_mode'], ['', 'inherit', 'provider', 'provider_user', 'disabled'], true)) {
+            return ApiResponse::error('iso_mode must be inherit, provider, provider_user or disabled', 'INVALID_ISO_MODE', 400);
+        }
+
+        if (
+            array_key_exists('bandwidth_limit_gb', $data) && $data['bandwidth_limit_gb'] !== null && $data['bandwidth_limit_gb'] !== ''
+            && (!is_numeric($data['bandwidth_limit_gb']) || (int) $data['bandwidth_limit_gb'] < 0 || (int) $data['bandwidth_limit_gb'] > 10000000)
+        ) {
+            return ApiResponse::error('bandwidth_limit_gb must be empty (default), 0 (unlimited) or a positive number of GB', 'INVALID_BANDWIDTH_LIMIT', 400);
+        }
+
+        $dbKeys = ['hostname', 'notes', 'user_uuid', 'vm_ip_id', 'backup_limit', 'backup_retention_mode', 'snapshot_limit', 'iso_mode', 'bandwidth_limit_gb', 'expires_at'];
         $dbUpdate = array_intersect_key($data, array_flip($dbKeys));
         $proxmoxKeys = ['memory', 'cpus', 'cores', 'on_boot', 'vm_ip_id', 'bios', 'efi_enabled', 'efi_storage', 'tpm_enabled', 'tpm_storage'];
         $proxmoxUpdate = array_intersect_key($data, array_flip($proxmoxKeys));
@@ -2465,7 +2538,7 @@ class VmInstancesController
             required: true,
             content: new OA\JsonContent(
                 properties: [
-                    new OA\Property(property: 'limit', type: 'integer', description: 'Maximum number of backups (0–100)'),
+                    new OA\Property(property: 'limit', type: 'integer', description: 'Maximum number of backups (0-100)'),
                 ]
             )
         ),

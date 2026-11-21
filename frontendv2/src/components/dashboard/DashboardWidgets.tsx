@@ -82,6 +82,8 @@ export interface DashboardOverview {
         items: DashboardOverviewServerItem[];
     };
     can_view?: { backups: boolean; schedules: boolean };
+    /** Present only when the user has a disk quota; sizes in MiB. */
+    disk_quota?: { quota_mb: number; allocated_mb: number; remaining_mb: number | null } | null;
     backups: {
         uuid: string;
         name: string;
@@ -123,7 +125,10 @@ function Bar({ percent }: { percent: number | null }) {
     return (
         <div className='bg-muted h-1.5 overflow-hidden rounded-full'>
             <div
-                className={cn('h-full rounded-full transition-[width] duration-500', tone)}
+                className={cn(
+                    'h-full rounded-full transition-[width] duration-700 ease-out motion-reduce:transition-none',
+                    tone,
+                )}
                 style={{ width: `${percent === null ? 0 : Math.min(100, Math.max(percent, 0))}%` }}
             />
         </div>
@@ -234,6 +239,14 @@ export function UsageWidget({
                                 usage.unlimited.disk > 0 ? null : percentOf(usage.disk_bytes, usage.disk_limit_bytes)
                             }
                         />
+                        {overview?.disk_quota && (
+                            <UsageRow
+                                label={t('dashboard.widgets.usage.disk_quota')}
+                                used={formatDisk(overview.disk_quota.allocated_mb * 1024 * 1024)}
+                                limit={formatDisk(overview.disk_quota.quota_mb * 1024 * 1024)}
+                                percent={percentOf(overview.disk_quota.allocated_mb, overview.disk_quota.quota_mb)}
+                            />
+                        )}
                         {usage.reporting < (overview?.servers.total ?? 0) && (
                             <p className='text-muted-foreground text-xs'>
                                 {t('dashboard.widgets.usage.partial', {

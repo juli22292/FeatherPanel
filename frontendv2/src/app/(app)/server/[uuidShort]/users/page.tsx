@@ -56,6 +56,8 @@ import { useFormBaseline } from '@/hooks/useFormBaseline';
 import { useDiscardConfirm } from '@/hooks/useUnsavedChangesGuard';
 import { Sensitive } from '@/components/common/Sensitive';
 import { ListPagination } from '@/components/featherui/ListPagination';
+import { SubuserInviteManager } from '@/components/server/SubuserInviteManager';
+import { SubuserPresetPicker } from '@/components/server/SubuserPresetPicker';
 
 export default function ServerSubusersPage() {
     const { uuidShort } = useParams() as { uuidShort: string };
@@ -286,11 +288,8 @@ export default function ServerSubusersPage() {
     if (!isEnabled(settings?.server_allow_subusers)) {
         return (
             <div className='fp-surface flex flex-col items-center justify-center space-y-8 rounded-xl border py-24 text-center'>
-                <div className='relative'>
-                    <div className='absolute inset-0 scale-150 rounded-full bg-red-500/20 blur-3xl' />
-                    <div className='relative flex h-32 w-32 rotate-3 items-center justify-center rounded-3xl border-2 border-red-500/20 bg-red-500/10'>
-                        <Lock className='h-16 w-16 text-red-500' />
-                    </div>
+                <div className='relative flex h-32 w-32 items-center justify-center rounded-3xl border-2 border-red-500/20 bg-red-500/10'>
+                    <Lock className='h-16 w-16 text-red-500' />
                 </div>
                 <div className='max-w-md space-y-3 px-4'>
                     <h2 className='text-3xl font-semibold tracking-tight'>{t('serverSubusers.featureDisabled')}</h2>
@@ -342,19 +341,20 @@ export default function ServerSubusersPage() {
                 title={t('serverSubusers.title')}
                 description={t('serverSubusers.description')}
                 actions={
-                    <div className='flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-3'>
+                    <div className='flex w-full flex-wrap gap-2 sm:w-auto sm:flex-nowrap sm:items-center sm:gap-3'>
                         {showHeaderAddAction && (
                             <Button
                                 size='default'
                                 variant='default'
                                 onClick={() => setIsAddOpen(true)}
                                 disabled={loading}
-                                className='order-1 w-full sm:order-2 sm:w-auto'
+                                className='order-1 min-w-0 flex-1 sm:order-2 sm:flex-none'
                             >
                                 <Plus className='mr-2 h-5 w-5' />
                                 {t('serverSubusers.addSubuser')}
                             </Button>
                         )}
+                        {canCreate && <SubuserInviteManager uuidShort={uuidShort} disabled={loading} />}
                         <Button
                             variant='glass'
                             size='default'
@@ -398,7 +398,8 @@ export default function ServerSubusersPage() {
                                 onKeyDown={(e) => e.key === 'Enter' && fetchSubusers(1)}
                                 type='text'
                                 placeholder={t('serverSubusers.searchPlaceholder')}
-                                className='h-14 pl-12'
+                                variant='surface'
+                                className='h-14 pl-12 text-base'
                             />
                         </div>
                         <Button
@@ -678,62 +679,65 @@ export default function ServerSubusersPage() {
                             <p className='text-muted-foreground mt-4 font-medium'>{t('common.loading')}</p>
                         </div>
                     ) : (
-                        <div className='scrollbar-thin scrollbar-thumb-muted-foreground/10 max-h-[50vh] space-y-6 overflow-y-auto pr-2'>
-                            {Object.entries(groupedPermissions).map(([category, data]) => (
-                                <div key={category} className='space-y-4'>
-                                    <div className='fp-chrome-surface border-border/5 sticky top-0 z-10 -mx-2 border-b px-2 py-3 backdrop-blur-xl'>
-                                        <h4 className='text-primary text-lg font-semibold tracking-tight'>
-                                            {t(`serverSubusers.permissionCategories.${category}.name`)}
-                                        </h4>
-                                        <p className='text-muted-foreground text-[10px] leading-relaxed font-medium opacity-70'>
-                                            {t(`serverSubusers.permissionCategories.${category}.description`)}
-                                        </p>
+                        <>
+                            <SubuserPresetPicker available={availablePermissions} onApply={setSelectedPermissions} />
+                            <div className='scrollbar-thin scrollbar-thumb-muted-foreground/10 max-h-[50vh] space-y-6 overflow-y-auto pr-2'>
+                                {Object.entries(groupedPermissions).map(([category, data]) => (
+                                    <div key={category} className='space-y-4'>
+                                        <div className='fp-chrome-surface border-border/5 sticky top-0 z-10 -mx-2 border-b px-2 py-3 backdrop-blur-xl'>
+                                            <h4 className='text-primary text-lg font-semibold tracking-tight'>
+                                                {t(`serverSubusers.permissionCategories.${category}.name`)}
+                                            </h4>
+                                            <p className='text-muted-foreground text-[10px] leading-relaxed font-medium opacity-70'>
+                                                {t(`serverSubusers.permissionCategories.${category}.description`)}
+                                            </p>
+                                        </div>
+                                        <div className='grid gap-3'>
+                                            {data.permissions.map((perm) => (
+                                                <label
+                                                    key={perm}
+                                                    className={cn(
+                                                        'group flex cursor-pointer items-start gap-4 rounded-2xl border p-4 transition-all',
+                                                        selectedPermissions.includes(perm)
+                                                            ? 'bg-primary/5 border-primary/20'
+                                                            : 'fp-surface border-border/5 hover:border-border/20',
+                                                    )}
+                                                >
+                                                    <div className='relative mt-1 shrink-0'>
+                                                        <input
+                                                            type='checkbox'
+                                                            checked={selectedPermissions.includes(perm)}
+                                                            onChange={() => togglePermission(perm)}
+                                                            className='peer sr-only'
+                                                        />
+                                                        <div
+                                                            className={cn(
+                                                                'flex h-6 w-6 items-center justify-center rounded-lg border-2 transition-all',
+                                                                selectedPermissions.includes(perm)
+                                                                    ? 'bg-primary border-primary'
+                                                                    : 'border-border/10 group-hover:border-primary/40',
+                                                            )}
+                                                        >
+                                                            {selectedPermissions.includes(perm) && (
+                                                                <CheckCircle2 className='h-4 w-4 text-white' />
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <div className='space-y-1'>
+                                                        <div className='text-sm leading-none font-bold'>
+                                                            {getPermissionName(perm)}
+                                                        </div>
+                                                        <div className='text-muted-foreground text-xs leading-relaxed font-medium'>
+                                                            {getPermissionDescription(perm)}
+                                                        </div>
+                                                    </div>
+                                                </label>
+                                            ))}
+                                        </div>
                                     </div>
-                                    <div className='grid gap-3'>
-                                        {data.permissions.map((perm) => (
-                                            <label
-                                                key={perm}
-                                                className={cn(
-                                                    'group flex cursor-pointer items-start gap-4 rounded-2xl border p-4 transition-all',
-                                                    selectedPermissions.includes(perm)
-                                                        ? 'bg-primary/5 border-primary/20'
-                                                        : 'fp-surface border-border/5 hover:border-border/20',
-                                                )}
-                                            >
-                                                <div className='relative mt-1 shrink-0'>
-                                                    <input
-                                                        type='checkbox'
-                                                        checked={selectedPermissions.includes(perm)}
-                                                        onChange={() => togglePermission(perm)}
-                                                        className='peer sr-only'
-                                                    />
-                                                    <div
-                                                        className={cn(
-                                                            'flex h-6 w-6 items-center justify-center rounded-lg border-2 transition-all',
-                                                            selectedPermissions.includes(perm)
-                                                                ? 'bg-primary border-primary'
-                                                                : 'border-border/10 group-hover:border-primary/40',
-                                                        )}
-                                                    >
-                                                        {selectedPermissions.includes(perm) && (
-                                                            <CheckCircle2 className='h-4 w-4 text-white' />
-                                                        )}
-                                                    </div>
-                                                </div>
-                                                <div className='space-y-1'>
-                                                    <div className='text-sm leading-none font-bold'>
-                                                        {getPermissionName(perm)}
-                                                    </div>
-                                                    <div className='text-muted-foreground text-xs leading-relaxed font-medium'>
-                                                        {getPermissionDescription(perm)}
-                                                    </div>
-                                                </div>
-                                            </label>
-                                        ))}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
+                                ))}
+                            </div>
+                        </>
                     )}
 
                     <div className='text-primary/80 bg-primary/5 border-primary/10 flex items-center gap-3 rounded-2xl border px-5 py-4 text-xs font-semibold'>

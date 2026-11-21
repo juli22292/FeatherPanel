@@ -17,10 +17,12 @@
 
 use App\App;
 use RateLimit\Rate;
+use App\Controllers\User\Auth\SsoController;
 use App\Controllers\User\Auth\OidcController;
 use Symfony\Component\HttpFoundation\Request;
 use App\Controllers\User\Auth\LoginController;
 use Symfony\Component\Routing\RouteCollection;
+use App\Controllers\User\Auth\ReauthController;
 use App\Controllers\User\Auth\DiscordController;
 use App\Controllers\User\Auth\QrLoginController;
 use App\Controllers\User\Auth\RegisterController;
@@ -154,7 +156,7 @@ return function (RouteCollection $routes): void {
         function (Request $request) {
             return (new AuthLogoutController())->get($request);
         },
-        ['GET', 'DELETE'],
+        ['GET', 'POST', 'DELETE'],
         Rate::perMinute(30), // Default: Admin can override in ratelimit.json
         'user-auth'
     );
@@ -169,6 +171,53 @@ return function (RouteCollection $routes): void {
         ['POST'],
         Rate::perMinute(10), // Default: Admin can override in ratelimit.json
         'user-auth'
+    );
+
+    // Step-up re-authentication for sensitive actions
+    App::getInstance(true)->registerAuthRoute(
+        $routes,
+        'auth-reauth-status',
+        '/api/user/auth/reauth',
+        function (Request $request) {
+            return (new ReauthController())->status($request);
+        },
+        ['GET']
+    );
+
+    App::getInstance(true)->registerAuthRoute(
+        $routes,
+        'auth-reauth-confirm',
+        '/api/user/auth/reauth',
+        function (Request $request) {
+            return (new ReauthController())->confirm($request);
+        },
+        ['POST'],
+        Rate::perMinute(10), // Default: Admin can override in ratelimit.json
+        'user-auth-reauth'
+    );
+
+    App::getInstance(true)->registerAuthRoute(
+        $routes,
+        'auth-reauth-revoke',
+        '/api/user/auth/reauth',
+        function (Request $request) {
+            return (new ReauthController())->revoke($request);
+        },
+        ['DELETE'],
+        Rate::perMinute(30),
+        'user-auth-reauth'
+    );
+
+    App::getInstance(true)->registerAuthRoute(
+        $routes,
+        'auth-reauth-email',
+        '/api/user/auth/reauth/email',
+        function (Request $request) {
+            return (new ReauthController())->sendEmailCode($request);
+        },
+        ['POST'],
+        Rate::perMinute(3),
+        'user-auth-reauth'
     );
 
     // Discord OAuth routes
@@ -289,6 +338,67 @@ return function (RouteCollection $routes): void {
         ['DELETE'],
         Rate::perMinute(5),
         'user-auth-oidc'
+    );
+
+    // Google and GitHub single sign-on routes
+    App::getInstance(true)->registerAuthRoute(
+        $routes,
+        'sso-identities',
+        '/api/user/auth/sso/identities',
+        function (Request $request) {
+            return (new SsoController())->identities($request);
+        },
+        ['GET'],
+        Rate::perMinute(30),
+        'user-auth-sso'
+    );
+
+    App::getInstance(true)->registerApiRoute(
+        $routes,
+        'sso-login',
+        '/api/user/auth/sso/{provider}/login',
+        function (Request $request, array $args) {
+            return (new SsoController())->login($request, (string) ($args['provider'] ?? ''));
+        },
+        ['GET'],
+        Rate::perMinute(10),
+        'user-auth-sso'
+    );
+
+    App::getInstance(true)->registerApiRoute(
+        $routes,
+        'sso-callback',
+        '/api/user/auth/sso/{provider}/callback',
+        function (Request $request, array $args) {
+            return (new SsoController())->callback($request, (string) ($args['provider'] ?? ''));
+        },
+        ['GET'],
+        Rate::perMinute(10),
+        'user-auth-sso'
+    );
+
+    App::getInstance(true)->registerAuthRoute(
+        $routes,
+        'sso-link',
+        '/api/user/auth/sso/{provider}/link',
+        function (Request $request, array $args) {
+            return (new SsoController())->link($request, (string) ($args['provider'] ?? ''));
+        },
+        ['GET'],
+        Rate::perMinute(5),
+        'user-auth-sso'
+    );
+
+    App::getInstance(true)->registerAuthRoute(
+        $routes,
+        'sso-unlink',
+        '/api/user/auth/sso/{provider}/unlink',
+        function (Request $request, array $args) {
+            return (new SsoController())->unlink($request, (string) ($args['provider'] ?? ''));
+        },
+        ['DELETE'],
+        Rate::perMinute(5),
+        'user-auth-sso'
     );
 
     // Email Login (OTP) routes

@@ -29,8 +29,16 @@ import {
     Megaphone,
     MessageSquareText,
     TriangleAlert,
+    Gauge,
+    CalendarClock,
+    CloudOff,
+    Power,
     type LucideProps,
     ArrowRightLeft,
+    ServerCrash,
+    Hourglass,
+    Globe,
+    ShieldAlert,
 } from 'lucide-react';
 import { useSession } from '@/contexts/SessionContext';
 import { useTranslation } from '@/contexts/TranslationContext';
@@ -48,6 +56,22 @@ type InboxKind =
     | 'server_crashed'
     | 'file_transfer_completed'
     | 'file_transfer_failed'
+    | 'resource_limit'
+    | 'transfer_power_failed'
+    | 'vds_down'
+    | 'vds_high_cpu'
+    | 'vds_backup_failed'
+    | 'vds_bandwidth'
+    | 'vds_expiring'
+    | 'storage_disconnected'
+    | 'webspace_installed'
+    | 'webspace_install_failed'
+    | 'webspace_backup_completed'
+    | 'webspace_backup_failed'
+    | 'webspace_limit'
+    | 'webspace_malware'
+    | 'node_alert'
+    | 'server_inactive'
     | 'announcement';
 
 export interface InboxItem {
@@ -75,6 +99,22 @@ const KIND_ICONS: Record<InboxKind, { icon: ComponentType<LucideProps>; tone: st
     server_crashed: { icon: TriangleAlert, tone: 'text-amber-500 bg-amber-500/10' },
     file_transfer_completed: { icon: ArrowRightLeft, tone: 'text-emerald-500 bg-emerald-500/10' },
     file_transfer_failed: { icon: ArrowRightLeft, tone: 'text-red-500 bg-red-500/10' },
+    resource_limit: { icon: Gauge, tone: 'text-amber-500 bg-amber-500/10' },
+    transfer_power_failed: { icon: Power, tone: 'text-red-500 bg-red-500/10' },
+    vds_down: { icon: Power, tone: 'text-red-500 bg-red-500/10' },
+    vds_high_cpu: { icon: Gauge, tone: 'text-amber-500 bg-amber-500/10' },
+    vds_backup_failed: { icon: ArchiveX, tone: 'text-red-500 bg-red-500/10' },
+    vds_bandwidth: { icon: Gauge, tone: 'text-amber-500 bg-amber-500/10' },
+    vds_expiring: { icon: CalendarClock, tone: 'text-orange-500 bg-orange-500/10' },
+    storage_disconnected: { icon: CloudOff, tone: 'text-red-500 bg-red-500/10' },
+    webspace_installed: { icon: Globe, tone: 'text-emerald-500 bg-emerald-500/10' },
+    webspace_install_failed: { icon: Globe, tone: 'text-red-500 bg-red-500/10' },
+    webspace_backup_completed: { icon: Archive, tone: 'text-emerald-500 bg-emerald-500/10' },
+    webspace_backup_failed: { icon: ArchiveX, tone: 'text-red-500 bg-red-500/10' },
+    webspace_limit: { icon: Gauge, tone: 'text-amber-500 bg-amber-500/10' },
+    webspace_malware: { icon: ShieldAlert, tone: 'text-red-500 bg-red-500/10' },
+    node_alert: { icon: ServerCrash, tone: 'text-red-500 bg-red-500/10' },
+    server_inactive: { icon: Hourglass, tone: 'text-amber-500 bg-amber-500/10' },
     announcement: { icon: Megaphone, tone: 'text-sky-500 bg-sky-500/10' },
 };
 
@@ -85,6 +125,22 @@ const KIND_TITLES: Record<InboxKind, string> = {
     server_crashed: 'navbar.inbox.kinds.server_crashed',
     file_transfer_completed: 'navbar.inbox.kinds.file_transfer_completed',
     file_transfer_failed: 'navbar.inbox.kinds.file_transfer_failed',
+    resource_limit: 'navbar.inbox.kinds.resource_limit',
+    transfer_power_failed: 'navbar.inbox.kinds.transfer_power_failed',
+    vds_down: 'navbar.inbox.kinds.vds_down',
+    vds_high_cpu: 'navbar.inbox.kinds.vds_high_cpu',
+    vds_backup_failed: 'navbar.inbox.kinds.vds_backup_failed',
+    vds_bandwidth: 'navbar.inbox.kinds.vds_bandwidth',
+    vds_expiring: 'navbar.inbox.kinds.vds_expiring',
+    storage_disconnected: 'navbar.inbox.kinds.storage_disconnected',
+    webspace_installed: 'navbar.inbox.kinds.webspace_installed',
+    webspace_install_failed: 'navbar.inbox.kinds.webspace_install_failed',
+    webspace_backup_completed: 'navbar.inbox.kinds.webspace_backup_completed',
+    webspace_backup_failed: 'navbar.inbox.kinds.webspace_backup_failed',
+    webspace_limit: 'navbar.inbox.kinds.webspace_limit',
+    webspace_malware: 'navbar.inbox.kinds.webspace_malware',
+    node_alert: 'navbar.inbox.kinds.node_alert',
+    server_inactive: 'navbar.inbox.kinds.server_inactive',
     announcement: 'navbar.inbox.kinds.announcement',
 };
 
@@ -95,6 +151,22 @@ const KIND_BODIES: Record<Exclude<InboxKind, 'announcement'>, string> = {
     server_crashed: 'navbar.inbox.bodies.server_crashed',
     file_transfer_completed: 'navbar.inbox.bodies.file_transfer_completed',
     file_transfer_failed: 'navbar.inbox.bodies.file_transfer_failed',
+    resource_limit: 'navbar.inbox.bodies.resource_limit',
+    transfer_power_failed: 'navbar.inbox.bodies.transfer_power_failed',
+    vds_down: 'navbar.inbox.bodies.vds_down',
+    vds_high_cpu: 'navbar.inbox.bodies.vds_high_cpu',
+    vds_backup_failed: 'navbar.inbox.bodies.vds_backup_failed',
+    vds_bandwidth: 'navbar.inbox.bodies.vds_bandwidth',
+    vds_expiring: 'navbar.inbox.bodies.vds_expiring',
+    storage_disconnected: 'navbar.inbox.bodies.storage_disconnected',
+    webspace_installed: 'navbar.inbox.bodies.webspace_installed',
+    webspace_install_failed: 'navbar.inbox.bodies.webspace_install_failed',
+    webspace_backup_completed: 'navbar.inbox.bodies.webspace_backup_completed',
+    webspace_backup_failed: 'navbar.inbox.bodies.webspace_backup_failed',
+    webspace_limit: 'navbar.inbox.bodies.webspace_limit',
+    webspace_malware: 'navbar.inbox.bodies.webspace_malware',
+    node_alert: 'navbar.inbox.bodies.node_alert',
+    server_inactive: 'navbar.inbox.bodies.server_inactive',
 };
 
 function isKnownKind(kind: string): kind is InboxKind {
@@ -111,6 +183,15 @@ function bodyParams(item: InboxItem): Record<string, string> {
         backup: d.backup_name ?? '',
         target: d.target_name ?? '',
         files: d.count ?? '',
+        percent: d.percent ?? '',
+        vds: d.vds_name ?? '',
+        webspace: d.webspace_name ?? '',
+        resource: d.resource ?? '',
+        minutes: d.minutes ?? '',
+        error: d.error ?? '',
+        storage: d.storage_name ?? '',
+        message: d.message ?? '',
+        days: d.days ?? '',
         count: String(item.count),
     };
 }
@@ -266,7 +347,13 @@ export function NotificationBell({ className }: { className?: string }) {
                                     kind === 'announcement'
                                         ? (item.data.excerpt ?? '')
                                         : kind
-                                          ? t(KIND_BODIES[kind], bodyParams(item))
+                                          ? t(KIND_BODIES[kind], {
+                                                ...bodyParams(item),
+                                                metric:
+                                                    kind === 'resource_limit'
+                                                        ? t(`navbar.inbox.metrics.${item.data.metric ?? 'cpu'}`)
+                                                        : '',
+                                            })
                                           : '';
                                 return (
                                     <li key={item.key}>

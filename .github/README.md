@@ -56,6 +56,7 @@ This branch ships experimental features that may be unstable, incomplete, or uns
 - [Installation guides](https://docs.mythical.systems/docs)
 - [Configuration](https://docs.mythical.systems/docs)
 - [Releases](https://github.com/mythicalltd/featherpanel/releases)
+- [Changelog](https://github.com/mythicalltd/featherpanel/blob/develop/CHANGELOG.md)
 
 </td>
 <td valign="top">
@@ -162,7 +163,7 @@ Examples for crawlers: `…/pages/all.json`, `…/cli/all.json`, `…/cli/usage.
 
 <br />
 
-Hand-authored inputs live in `frontendv2/icanhas/` (plugin Markdown, auth guides, assets, schemas). One command — `pnpm export:docs` — builds the **entire** `public/icanhasfeatherpanel/` tree (widgets, pages, permissions, events, API + OpenAPI, CLI, settings, installer, plugins/auth indexes, RAG). That output is gitignored and produced at ship time for **both** GitHub Pages (`pnpm build:public-docs`) and Docker/panel images (host `export:docs` then `frontendv2` image build, or `pnpm build:with-docs` / `make frontend`).
+Hand-authored inputs live in `frontendv2/icanhas/` (plugin Markdown, auth guides, assets, schemas). One command - `pnpm export:docs` - builds the **entire** `public/icanhasfeatherpanel/` tree (widgets, pages, permissions, events, API + OpenAPI, CLI, settings, installer, plugins/auth indexes, RAG). That output is gitignored and produced at ship time for **both** GitHub Pages (`pnpm build:public-docs`) and Docker/panel images (host `export:docs` then `frontendv2` image build, or `pnpm build:with-docs` / `make frontend`).
 
 ```bash
 # 1. Generate OpenAPI from PHP controller annotations
@@ -253,20 +254,20 @@ Optional environment variables for `build:public-docs`:
 
 <!-- COUNT-STATS:START -->
 
-_Last updated: 2026-10-20T18:34:56.633Z_
+_Last updated: 2026-11-19T22:14:17.270Z_
 
 | Extension | Files | Lines |
 | --- | ---: | ---: |
-| `.tsx` | 687 | 198,503 |
-| `.php` | 796 | 197,369 |
-| `.ts` | 232 | 29,260 |
-| `.json` | 19 | 19,207 |
-| `.yaml` | 5 | 7,764 |
-| `.css` | 8 | 5,767 |
-| `.rs` | 17 | 3,641 |
-| `.sql` | 224 | 3,594 |
-| `.yml` | 26 | 2,947 |
-| **Total** | 2,014 | 468,052 |
+| `.php` | 962 | 223,921 |
+| `.tsx` | 759 | 218,342 |
+| `.ts` | 268 | 42,475 |
+| `.json` | 23 | 28,224 |
+| `.yaml` | 5 | 7,825 |
+| `.css` | 8 | 6,101 |
+| `.rs` | 32 | 4,777 |
+| `.sql` | 253 | 4,621 |
+| `.yml` | 32 | 3,225 |
+| **Total** | 2,342 | 539,511 |
 
 <!-- COUNT-STATS:END -->
 

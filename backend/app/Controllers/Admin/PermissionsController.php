@@ -268,9 +268,32 @@ class PermissionsController
         if (strlen($data['permission']) < 2 || strlen($data['permission']) > 255) {
             return ApiResponse::error('Permission must be between 2 and 255 characters', 'INVALID_DATA_LENGTH');
         }
+
+        // Granting a root-level node (for example `admin.root`) to a role is a
+        // root-only decision. Without this guard `admin.roles.permissions.create`
+        // alone was enough to lift your own role to full administrator.
+        if (
+            \App\Helpers\AdminRank::isRootLevelPermission((string) $data['permission'])
+            && !\App\Helpers\AdminRank::isRoot($request->attributes->get('user'))
+        ) {
+            return ApiResponse::error(
+                'Only a full administrator can grant ' . $data['permission'],
+                'ROOT_PERMISSION_GRANT_FORBIDDEN',
+                403
+            );
+        }
+
         $unknownFields = Database::unknownColumns(Permission::getTableName(), $data);
         if ($unknownFields !== []) {
             return ApiResponse::error('Unknown field(s): ' . implode(', ', $unknownFields), 'UNKNOWN_FIELDS', 400);
+        }
+
+        // Granting an admin permission to a role needs a confirmed session.
+        if (\App\Helpers\StepUpAuth::isAdminPermission((string) $data['permission'])) {
+            $reauth = \App\Helpers\StepUpAuth::require($request, \App\Helpers\StepUpAuth::ACTION_ADMIN_ROLE);
+            if ($reauth !== null) {
+                return $reauth;
+            }
         }
 
         $id = Permission::createPermission($data);
@@ -366,6 +389,18 @@ class PermissionsController
             }
         }
 
+        if (
+            isset($data['permission'])
+            && \App\Helpers\AdminRank::isRootLevelPermission((string) $data['permission'])
+            && !\App\Helpers\AdminRank::isRoot($request->attributes->get('user'))
+        ) {
+            return ApiResponse::error(
+                'Only a full administrator can grant ' . $data['permission'],
+                'ROOT_PERMISSION_GRANT_FORBIDDEN',
+                403
+            );
+        }
+
         $admin = $request->attributes->get('user');
         if (
             $permission['permission'] === Permissions::ADMIN_ROOT
@@ -389,6 +424,20 @@ class PermissionsController
         }
         if ($data === []) {
             return ApiResponse::error('No data to update', 'NO_DATA', 400);
+        }
+
+        // Turning a row into an admin permission, or moving an admin permission to
+        // another role, hands out admin access: it needs a confirmed session.
+        $resultingPermission = (string) ($data['permission'] ?? $permission['permission']);
+        $grantsAdmin = \App\Helpers\StepUpAuth::isAdminPermission($resultingPermission) && (
+            $resultingPermission !== (string) $permission['permission']
+            || (isset($data['role_id']) && (int) $data['role_id'] !== (int) $permission['role_id'])
+        );
+        if ($grantsAdmin) {
+            $reauth = \App\Helpers\StepUpAuth::require($request, \App\Helpers\StepUpAuth::ACTION_ADMIN_ROLE);
+            if ($reauth !== null) {
+                return $reauth;
+            }
         }
 
         $success = Permission::updatePermission($id, $data);

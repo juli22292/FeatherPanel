@@ -35,7 +35,7 @@ const SHORTCUTS: { keys: string; label: string }[] = [
 
 const segBtn = (active: boolean) =>
     cn(
-        'inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition-colors',
+        'inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium transition-colors focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:outline-none',
         active ? 'bg-primary/15 text-primary' : 'text-muted-foreground hover:text-foreground hover:bg-muted/60',
     );
 
@@ -49,8 +49,8 @@ export function FileListControls({
     const { t } = useTranslation();
     const sortKeys: FilesSortKey[] = ['name', 'size', 'modified'];
     return (
-        <Popover className='relative w-full'>
-            <div className='flex flex-wrap items-center gap-2'>
+        <Popover className='relative'>
+            <div className='flex flex-wrap items-center justify-end gap-2'>
                 <div className='fp-surface-inset flex items-center gap-0.5 rounded-xl border p-0.5'>
                     {sortKeys.map((key) => (
                         <button
@@ -105,7 +105,7 @@ export function FileListControls({
                     </button>
                 </div>
                 <PopoverButton
-                    className={cn(segBtn(false), 'fp-surface-inset border')}
+                    className={cn(segBtn(false), 'fp-surface-inset hidden border sm:inline-flex')}
                     title={t('files.shortcuts.title')}
                     aria-label={t('files.shortcuts.title')}
                 >

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * FeatherPanel MCP — stdio entry for local Claude Desktop / Cursor.
+ * FeatherPanel MCP - stdio entry for local Claude Desktop / Cursor.
  *
  * Env:
  *   FEATHERPANEL_URL      Panel base URL (e.g. https://panel.example.com)
@@ -9,6 +9,9 @@
 
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { setDefaultApiKey } from './auth.js';
+import { FeatherPanelClient } from './client.js';
+import { resolvePanelFeatures } from './features.js';
+import { resolveAdminAccess } from './tools/admin-common.js';
 import { createFeatherPanelMcpServer } from './server.js';
 
 const apiKey = process.env.FEATHERPANEL_API_KEY?.trim();
@@ -24,6 +27,9 @@ if (!process.env.FEATHERPANEL_URL?.trim()) {
 
 setDefaultApiKey(apiKey);
 
-const server = createFeatherPanelMcpServer();
+const client = new FeatherPanelClient(apiKey);
+const features = await resolvePanelFeatures(client);
+const admin = await resolveAdminAccess(client);
+const server = createFeatherPanelMcpServer(features, admin);
 const transport = new StdioServerTransport();
 await server.connect(transport);

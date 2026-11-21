@@ -131,10 +131,11 @@ final class BackupFifoEviction
      *
      * @return array{message: string, code: string, status: int}|null
      */
-    public static function evictOldestWingsBackup(int $serverId, string $serverUuid, Wings $wings): ?array
+    public static function evictOldestWingsBackup(int $serverId, string $serverUuid, Wings $wings, ?int $destinationId = null): ?array
     {
         $app = App::getInstance(true);
-        $victim = Backup::getOldestUnlockedBackupForServer($serverId);
+        // Only evict from the pool the new backup goes to (host storage or that same user destination).
+        $victim = Backup::getOldestUnlockedBackupForServer($serverId, true, $destinationId);
         if ($victim === null) {
             return [
                 'message' => 'Backup limit reached. FIFO rotation needs at least one unlocked backup; unlock or delete one manually.',
@@ -143,6 +144,13 @@ final class BackupFifoEviction
             ];
         }
 
+        if (\App\Services\Storage\BackupStorageService::isRemote($victim)) {
+            try {
+                \App\Services\Storage\BackupStorageService::deleteObject($victim, ['uuid' => $serverUuid]);
+            } catch (\Throwable $e) {
+                return ['message' => 'Failed to delete the oldest backup from remote storage: ' . $e->getMessage(), 'code' => 'REMOTE_DELETE_FAILED', 'status' => 502];
+            }
+        }
         $response = $wings->getServer()->deleteBackup(
             $serverUuid,
             (string) $victim['uuid'],

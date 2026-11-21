@@ -33,6 +33,22 @@ class UserNotification
     public const KIND_SERVER_CRASHED = 'server_crashed';
     public const KIND_FILE_TRANSFER_COMPLETED = 'file_transfer_completed';
     public const KIND_FILE_TRANSFER_FAILED = 'file_transfer_failed';
+    public const KIND_RESOURCE_LIMIT = 'resource_limit';
+    public const KIND_TRANSFER_POWER_FAILED = 'transfer_power_failed';
+    public const KIND_VDS_DOWN = 'vds_down';
+    public const KIND_VDS_HIGH_CPU = 'vds_high_cpu';
+    public const KIND_VDS_BACKUP_FAILED = 'vds_backup_failed';
+    public const KIND_VDS_BANDWIDTH = 'vds_bandwidth';
+    public const KIND_VDS_EXPIRING = 'vds_expiring';
+    public const KIND_STORAGE_DISCONNECTED = 'storage_disconnected';
+    public const KIND_NODE_ALERT = 'node_alert';
+    public const KIND_SERVER_INACTIVE = 'server_inactive';
+    public const KIND_WEBSPACE_INSTALLED = 'webspace_installed';
+    public const KIND_WEBSPACE_INSTALL_FAILED = 'webspace_install_failed';
+    public const KIND_WEBSPACE_BACKUP_COMPLETED = 'webspace_backup_completed';
+    public const KIND_WEBSPACE_BACKUP_FAILED = 'webspace_backup_failed';
+    public const KIND_WEBSPACE_LIMIT = 'webspace_limit';
+    public const KIND_WEBSPACE_MALWARE = 'webspace_malware';
 
     public const KINDS = [
         self::KIND_TICKET_REPLY,
@@ -41,6 +57,22 @@ class UserNotification
         self::KIND_SERVER_CRASHED,
         self::KIND_FILE_TRANSFER_COMPLETED,
         self::KIND_FILE_TRANSFER_FAILED,
+        self::KIND_RESOURCE_LIMIT,
+        self::KIND_TRANSFER_POWER_FAILED,
+        self::KIND_VDS_DOWN,
+        self::KIND_VDS_HIGH_CPU,
+        self::KIND_VDS_BACKUP_FAILED,
+        self::KIND_VDS_BANDWIDTH,
+        self::KIND_VDS_EXPIRING,
+        self::KIND_STORAGE_DISCONNECTED,
+        self::KIND_NODE_ALERT,
+        self::KIND_SERVER_INACTIVE,
+        self::KIND_WEBSPACE_INSTALLED,
+        self::KIND_WEBSPACE_INSTALL_FAILED,
+        self::KIND_WEBSPACE_BACKUP_COMPLETED,
+        self::KIND_WEBSPACE_BACKUP_FAILED,
+        self::KIND_WEBSPACE_LIMIT,
+        self::KIND_WEBSPACE_MALWARE,
     ];
 
     /** Read items are kept this long, unread ones three times as long. */
@@ -99,6 +131,22 @@ class UserNotification
         } catch (\PDOException $e) {
             App::getInstance(true)->getLogger()->error('Failed to add user notification: ' . $e->getMessage());
 
+            return false;
+        }
+    }
+
+    /** True when this user got a notification with the group key within the last $seconds. */
+    public static function sentWithin(int $userId, string $groupKey, int $seconds): bool
+    {
+        try {
+            $pdo = Database::getPdoConnection();
+            $stmt = $pdo->prepare(
+                'SELECT 1 FROM ' . self::$table . ' WHERE user_id = :user_id AND group_key = :group_key AND created_at >= DATE_SUB(CURRENT_TIMESTAMP, INTERVAL :seconds SECOND) LIMIT 1'
+            );
+            $stmt->execute(['user_id' => $userId, 'group_key' => mb_substr($groupKey, 0, 191), 'seconds' => $seconds]);
+
+            return $stmt->fetchColumn() !== false;
+        } catch (\PDOException $e) {
             return false;
         }
     }

@@ -26,8 +26,11 @@ use App\Chat\VmInstance;
 use App\Chat\VmTemplate;
 use App\Helpers\ApiResponse;
 use OpenApi\Attributes as OA;
-use App\Services\Proxmox\Proxmox;
+use App\Services\Vm\IsoLibrary;
+use App\Helpers\FeatherTailClient;
+use App\Services\Vm\VmInstanceUtil;
 use App\CloudFlare\CloudFlareRealIP;
+use App\Helpers\FeatherTailCapabilities;
 use App\Plugins\Events\Events\VdsNodeEvent;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -50,6 +53,15 @@ use Symfony\Component\HttpFoundation\Response;
         new OA\Property(property: 'timeout', type: 'integer', description: 'Timeout in seconds'),
         new OA\Property(property: 'addional_headers', type: 'string', nullable: true, description: 'Additional HTTP headers (JSON encoded, optional)'),
         new OA\Property(property: 'additional_params', type: 'string', nullable: true, description: 'Additional query parameters (JSON encoded, optional)'),
+        new OA\Property(property: 'storage_tpm', type: 'string', description: 'Preferred Proxmox storage for TPM state'),
+        new OA\Property(property: 'storage_efi', type: 'string', description: 'Preferred Proxmox storage for EFI disk'),
+        new OA\Property(property: 'storage_backups', type: 'string', description: 'Preferred Proxmox storage for backups'),
+        new OA\Property(property: 'storage_iso_user', type: 'string', description: 'Proxmox storage for user-uploaded ISOs'),
+        new OA\Property(property: 'storage_iso_allowed', type: 'string', description: 'Comma-separated ISO storages users may mount from (empty = all)'),
+        new OA\Property(property: 'rescue_iso', type: 'string', description: 'Proxmox volid of the rescue ISO for this node'),
+        new OA\Property(property: 'feathertail_enabled', type: 'integer', description: 'Whether FeatherTail agent integration is enabled (0/1)'),
+        new OA\Property(property: 'feathertail_url', type: 'string', description: 'FeatherTail agent base URL (e.g. http://node:8686)'),
+        new OA\Property(property: 'feathertail_tls_no_verify', type: 'integer', description: 'Skip TLS verification when calling FeatherTail (0/1)'),
         new OA\Property(property: 'created_at', type: 'string', format: 'date-time', description: 'Creation timestamp'),
         new OA\Property(property: 'updated_at', type: 'string', format: 'date-time', description: 'Last update timestamp'),
     ]
@@ -86,6 +98,15 @@ use Symfony\Component\HttpFoundation\Response;
         new OA\Property(property: 'timeout', type: 'integer', description: 'Timeout in seconds', default: 60),
         new OA\Property(property: 'addional_headers', type: 'string', nullable: true, description: 'Additional HTTP headers (JSON encoded, optional)'),
         new OA\Property(property: 'additional_params', type: 'string', nullable: true, description: 'Additional query parameters (JSON encoded, optional)'),
+        new OA\Property(property: 'storage_tpm', type: 'string', nullable: true, description: 'Preferred Proxmox storage for TPM state'),
+        new OA\Property(property: 'storage_efi', type: 'string', nullable: true, description: 'Preferred Proxmox storage for EFI disk'),
+        new OA\Property(property: 'storage_backups', type: 'string', nullable: true, description: 'Preferred Proxmox storage for backups'),
+        new OA\Property(property: 'storage_iso_user', type: 'string', nullable: true, description: 'Proxmox storage for user-uploaded ISOs'),
+        new OA\Property(property: 'storage_iso_allowed', type: 'string', nullable: true, description: 'Comma-separated ISO storages users may mount from'),
+        new OA\Property(property: 'rescue_iso', type: 'string', nullable: true, description: 'Proxmox volid of the rescue ISO'),
+        new OA\Property(property: 'feathertail_enabled', type: 'integer', nullable: true, description: 'Enable FeatherTail agent integration'),
+        new OA\Property(property: 'feathertail_url', type: 'string', nullable: true, description: 'FeatherTail agent base URL'),
+        new OA\Property(property: 'feathertail_tls_no_verify', type: 'integer', nullable: true, description: 'Skip TLS verification for FeatherTail'),
         new OA\Property(property: 'id', type: 'integer', nullable: true, description: 'Optional VM node ID (useful for migrations)'),
     ]
 )]
@@ -106,10 +127,22 @@ use Symfony\Component\HttpFoundation\Response;
         new OA\Property(property: 'timeout', type: 'integer', description: 'Timeout in seconds'),
         new OA\Property(property: 'addional_headers', type: 'string', nullable: true, description: 'Additional HTTP headers (JSON encoded, optional)'),
         new OA\Property(property: 'additional_params', type: 'string', nullable: true, description: 'Additional query parameters (JSON encoded, optional)'),
+        new OA\Property(property: 'storage_tpm', type: 'string', nullable: true, description: 'Preferred Proxmox storage for TPM state'),
+        new OA\Property(property: 'storage_efi', type: 'string', nullable: true, description: 'Preferred Proxmox storage for EFI disk'),
+        new OA\Property(property: 'storage_backups', type: 'string', nullable: true, description: 'Preferred Proxmox storage for backups'),
+        new OA\Property(property: 'storage_iso_user', type: 'string', nullable: true, description: 'Proxmox storage for user-uploaded ISOs'),
+        new OA\Property(property: 'storage_iso_allowed', type: 'string', nullable: true, description: 'Comma-separated ISO storages users may mount from'),
+        new OA\Property(property: 'rescue_iso', type: 'string', nullable: true, description: 'Proxmox volid of the rescue ISO'),
+        new OA\Property(property: 'feathertail_enabled', type: 'integer', nullable: true, description: 'Enable FeatherTail agent integration'),
+        new OA\Property(property: 'feathertail_url', type: 'string', nullable: true, description: 'FeatherTail agent base URL'),
+        new OA\Property(property: 'feathertail_tls_no_verify', type: 'integer', nullable: true, description: 'Skip TLS verification for FeatherTail'),
     ]
 )]
 class VmNodesController
 {
+    private const FIREWALL_ACTIONS = ['ACCEPT', 'DROP', 'REJECT'];
+    private const FIREWALL_PROTOCOLS = ['tcp', 'udp', 'icmp', 'ipv6-icmp'];
+
     #[OA\Get(
         path: '/api/admin/vm-nodes',
         summary: 'Get all Proxmox VM nodes',
@@ -190,6 +223,7 @@ class VmNodesController
         }
 
         $vmNodes = VmNode::searchVmNodes(page: $page, limit: $limit, search: (string) $search, locationId: $locationId);
+        $vmNodes = array_map(static fn (array $row): array => VmNode::sanitizeForAdminResponse($row), $vmNodes);
         $total = VmNode::getVmNodesCount(search: (string) $search, locationId: $locationId);
 
         $totalPages = (int) ceil($total / $limit);
@@ -252,7 +286,7 @@ class VmNodesController
             return ApiResponse::error('VM node not found', 'VM_NODE_NOT_FOUND', 404);
         }
 
-        return ApiResponse::success(['vm_node' => $vmNode], 'VM node fetched successfully', 200);
+        return ApiResponse::success(['vm_node' => VmNode::sanitizeForAdminResponse($vmNode)], 'VM node fetched successfully', 200);
     }
 
     #[OA\Put(
@@ -366,14 +400,16 @@ class VmNodesController
             'ip_address' => CloudFlareRealIP::getRealIP(),
         ]);
 
+        $safeNode = VmNode::sanitizeForAdminResponse($vmNode ?? []);
+
         self::emitVdsEvent(VdsNodeEvent::onVdsNodeCreated(), [
             'user_uuid' => $admin['uuid'] ?? null,
             'vm_node_id' => (int) $vmNodeId,
-            'vm_node' => $vmNode,
+            'vm_node' => $safeNode,
             'context' => ['source' => 'admin'],
         ]);
 
-        return ApiResponse::success(['vm_node' => $vmNode], 'VM node created successfully', 201);
+        return ApiResponse::success(['vm_node' => $safeNode], 'VM node created successfully', 201);
     }
 
     #[OA\Patch(
@@ -488,15 +524,17 @@ class VmNodesController
             'ip_address' => CloudFlareRealIP::getRealIP(),
         ]);
 
+        $safeNode = VmNode::sanitizeForAdminResponse($vmNode ?? []);
+
         self::emitVdsEvent(VdsNodeEvent::onVdsNodeUpdated(), [
             'user_uuid' => $admin['uuid'] ?? null,
             'vm_node_id' => $id,
-            'vm_node' => $vmNode,
+            'vm_node' => $safeNode,
             'changed_fields' => array_keys($data),
             'context' => ['source' => 'admin'],
         ]);
 
-        return ApiResponse::success(['vm_node' => $vmNode], 'VM node updated successfully', 200);
+        return ApiResponse::success(['vm_node' => $safeNode], 'VM node updated successfully', 200);
     }
 
     #[OA\Delete(
@@ -630,53 +668,7 @@ class VmNodesController
         }
 
         try {
-            $tlsNoVerify = ($vmNode['tls_no_verify'] ?? 'false') === 'true';
-
-            $extraHeaders = [];
-            $extraParams = [];
-
-            if (!empty($vmNode['addional_headers']) && is_string($vmNode['addional_headers'])) {
-                $decoded = json_decode($vmNode['addional_headers'], true);
-                if (is_array($decoded)) {
-                    foreach ($decoded as $key => $value) {
-                        if (is_string($key) && (is_string($value) || is_numeric($value))) {
-                            $extraHeaders[$key] = (string) $value;
-                        }
-                    }
-                } else {
-                    App::getInstance(true)->getLogger()->warning(
-                        'VM node additional headers JSON is invalid for ID ' . $id
-                    );
-                }
-            }
-
-            if (!empty($vmNode['additional_params']) && is_string($vmNode['additional_params'])) {
-                $decoded = json_decode($vmNode['additional_params'], true);
-                if (is_array($decoded)) {
-                    foreach ($decoded as $key => $value) {
-                        if (is_string($key) && (is_string($value) || is_numeric($value))) {
-                            $extraParams[$key] = $value;
-                        }
-                    }
-                } else {
-                    App::getInstance(true)->getLogger()->warning(
-                        'VM node additional params JSON is invalid for ID ' . $id
-                    );
-                }
-            }
-
-            $client = new Proxmox(
-                $vmNode['fqdn'],
-                (int) $vmNode['port'],
-                $vmNode['scheme'],
-                $vmNode['user'],
-                $vmNode['token_id'],
-                $vmNode['secret'],
-                $tlsNoVerify,
-                (int) ($vmNode['timeout'] ?? 10),
-                $extraHeaders,
-                $extraParams,
-            );
+            $client = VmInstanceUtil::buildProxmoxClientForNode($vmNode);
 
             $result = $client->testConnection();
 
@@ -684,18 +676,15 @@ class VmNodesController
                 return ApiResponse::success($result, 'Connection to Proxmox VM node successful', 200);
             }
 
-            return ApiResponse::error(
-                'Failed to connect to Proxmox VM node: ' . ($result['error'] ?? 'unknown error'),
-                'PROXMOX_CONNECTION_FAILED',
-                500,
-                $result
-            );
+            // Return 200 with ok:false so the UI can mark the node offline without an Axios error.
+            return ApiResponse::success($result, 'Failed to connect to Proxmox VM node', 200);
         } catch (\Throwable $e) {
             App::getInstance(true)->getLogger()->error('Proxmox VM node connection test failed for ID ' . $id . ': ' . $e->getMessage());
 
-            return ApiResponse::error('Failed to connect to Proxmox VM node', 'PROXMOX_CONNECTION_FAILED', 500, [
+            return ApiResponse::success([
+                'ok' => false,
                 'error' => $e->getMessage(),
-            ]);
+            ], 'Failed to connect to Proxmox VM node', 200);
         }
     }
 
@@ -707,53 +696,7 @@ class VmNodesController
         }
 
         try {
-            $tlsNoVerify = ($vmNode['tls_no_verify'] ?? 'false') === 'true';
-
-            $extraHeaders = [];
-            $extraParams = [];
-
-            if (!empty($vmNode['addional_headers']) && is_string($vmNode['addional_headers'])) {
-                $decoded = json_decode($vmNode['addional_headers'], true);
-                if (is_array($decoded)) {
-                    foreach ($decoded as $key => $value) {
-                        if (is_string($key) && (is_string($value) || is_numeric($value))) {
-                            $extraHeaders[$key] = (string) $value;
-                        }
-                    }
-                } else {
-                    App::getInstance(true)->getLogger()->warning(
-                        'VM node additional headers JSON is invalid for ID ' . $id
-                    );
-                }
-            }
-
-            if (!empty($vmNode['additional_params']) && is_string($vmNode['additional_params'])) {
-                $decoded = json_decode($vmNode['additional_params'], true);
-                if (is_array($decoded)) {
-                    foreach ($decoded as $key => $value) {
-                        if (is_string($key) && (is_string($value) || is_numeric($value))) {
-                            $extraParams[$key] = $value;
-                        }
-                    }
-                } else {
-                    App::getInstance(true)->getLogger()->warning(
-                        'VM node additional params JSON is invalid for ID ' . $id
-                    );
-                }
-            }
-
-            $client = new Proxmox(
-                $vmNode['fqdn'],
-                (int) $vmNode['port'],
-                $vmNode['scheme'],
-                $vmNode['user'],
-                $vmNode['token_id'],
-                $vmNode['secret'],
-                $tlsNoVerify,
-                (int) ($vmNode['timeout'] ?? 10),
-                $extraHeaders,
-                $extraParams,
-            );
+            $client = VmInstanceUtil::buildProxmoxClientForNode($vmNode);
 
             $versionResult = $client->getVersion();
             $nodesResult = $client->getNodes();
@@ -785,53 +728,7 @@ class VmNodesController
             return ApiResponse::error('VM node not found', 'VM_NODE_NOT_FOUND', 404);
         }
         try {
-            $tlsNoVerify = ($vmNode['tls_no_verify'] ?? 'false') === 'true';
-
-            $extraHeaders = [];
-            $extraParams = [];
-
-            if (!empty($vmNode['addional_headers']) && is_string($vmNode['addional_headers'])) {
-                $decoded = json_decode($vmNode['addional_headers'], true);
-                if (is_array($decoded)) {
-                    foreach ($decoded as $key => $value) {
-                        if (is_string($key) && (is_string($value) || is_numeric($value))) {
-                            $extraHeaders[$key] = (string) $value;
-                        }
-                    }
-                } else {
-                    App::getInstance(true)->getLogger()->warning(
-                        'VM node additional headers JSON is invalid for ID ' . $id
-                    );
-                }
-            }
-
-            if (!empty($vmNode['additional_params']) && is_string($vmNode['additional_params'])) {
-                $decoded = json_decode($vmNode['additional_params'], true);
-                if (is_array($decoded)) {
-                    foreach ($decoded as $key => $value) {
-                        if (is_string($key) && (is_string($value) || is_numeric($value))) {
-                            $extraParams[$key] = $value;
-                        }
-                    }
-                } else {
-                    App::getInstance(true)->getLogger()->warning(
-                        'VM node additional params JSON is invalid for ID ' . $id
-                    );
-                }
-            }
-
-            $client = new Proxmox(
-                $vmNode['fqdn'],
-                (int) $vmNode['port'],
-                $vmNode['scheme'],
-                $vmNode['user'],
-                $vmNode['token_id'],
-                $vmNode['secret'],
-                $tlsNoVerify,
-                (int) ($vmNode['timeout'] ?? 10),
-                $extraHeaders,
-                $extraParams,
-            );
+            $client = VmInstanceUtil::buildProxmoxClientForNode($vmNode);
             $result = $client->listVms();
             if (!$result['ok']) {
                 return ApiResponse::error($result['error'] ?? 'Failed to list VMs', 'PROXMOX_LIST_FAILED', 503, $result);
@@ -855,53 +752,7 @@ class VmNodesController
             return ApiResponse::error('VM node not found', 'VM_NODE_NOT_FOUND', 404);
         }
         try {
-            $tlsNoVerify = ($vmNode['tls_no_verify'] ?? 'false') === 'true';
-
-            $extraHeaders = [];
-            $extraParams = [];
-
-            if (!empty($vmNode['addional_headers']) && is_string($vmNode['addional_headers'])) {
-                $decoded = json_decode($vmNode['addional_headers'], true);
-                if (is_array($decoded)) {
-                    foreach ($decoded as $key => $value) {
-                        if (is_string($key) && (is_string($value) || is_numeric($value))) {
-                            $extraHeaders[$key] = (string) $value;
-                        }
-                    }
-                } else {
-                    App::getInstance(true)->getLogger()->warning(
-                        'VM node additional headers JSON is invalid for ID ' . $id
-                    );
-                }
-            }
-
-            if (!empty($vmNode['additional_params']) && is_string($vmNode['additional_params'])) {
-                $decoded = json_decode($vmNode['additional_params'], true);
-                if (is_array($decoded)) {
-                    foreach ($decoded as $key => $value) {
-                        if (is_string($key) && (is_string($value) || is_numeric($value))) {
-                            $extraParams[$key] = $value;
-                        }
-                    }
-                } else {
-                    App::getInstance(true)->getLogger()->warning(
-                        'VM node additional params JSON is invalid for ID ' . $id
-                    );
-                }
-            }
-
-            $client = new Proxmox(
-                $vmNode['fqdn'],
-                (int) $vmNode['port'],
-                $vmNode['scheme'],
-                $vmNode['user'],
-                $vmNode['token_id'],
-                $vmNode['secret'],
-                $tlsNoVerify,
-                (int) ($vmNode['timeout'] ?? 10),
-                $extraHeaders,
-                $extraParams,
-            );
+            $client = VmInstanceUtil::buildProxmoxClientForNode($vmNode);
             $nodesResult = $client->getNodes();
             if (!$nodesResult['ok'] || empty($nodesResult['nodes'])) {
                 return ApiResponse::error(
@@ -944,45 +795,7 @@ class VmNodesController
             return ApiResponse::error('VM node not found', 'VM_NODE_NOT_FOUND', 404);
         }
         try {
-            $tlsNoVerify = ($vmNode['tls_no_verify'] ?? 'false') === 'true';
-
-            $extraHeaders = [];
-            $extraParams = [];
-
-            if (!empty($vmNode['addional_headers']) && is_string($vmNode['addional_headers'])) {
-                $decoded = json_decode($vmNode['addional_headers'], true);
-                if (is_array($decoded)) {
-                    foreach ($decoded as $key => $value) {
-                        if (is_string($key) && (is_string($value) || is_numeric($value))) {
-                            $extraHeaders[$key] = (string) $value;
-                        }
-                    }
-                }
-            }
-
-            if (!empty($vmNode['additional_params']) && is_string($vmNode['additional_params'])) {
-                $decoded = json_decode($vmNode['additional_params'], true);
-                if (is_array($decoded)) {
-                    foreach ($decoded as $key => $value) {
-                        if (is_string($key) && (is_string($value) || is_numeric($value))) {
-                            $extraParams[$key] = $value;
-                        }
-                    }
-                }
-            }
-
-            $client = new Proxmox(
-                $vmNode['fqdn'],
-                (int) $vmNode['port'],
-                $vmNode['scheme'],
-                $vmNode['user'],
-                $vmNode['token_id'],
-                $vmNode['secret'],
-                $tlsNoVerify,
-                (int) ($vmNode['timeout'] ?? 10),
-                $extraHeaders,
-                $extraParams,
-            );
+            $client = VmInstanceUtil::buildProxmoxClientForNode($vmNode);
             $nodesResult = $client->getNodes();
             if (!$nodesResult['ok'] || empty($nodesResult['nodes'])) {
                 return ApiResponse::error(
@@ -1017,53 +830,7 @@ class VmNodesController
             return ApiResponse::error('VM node not found', 'VM_NODE_NOT_FOUND', 404);
         }
         try {
-            $tlsNoVerify = ($vmNode['tls_no_verify'] ?? 'false') === 'true';
-
-            $extraHeaders = [];
-            $extraParams = [];
-
-            if (!empty($vmNode['addional_headers']) && is_string($vmNode['addional_headers'])) {
-                $decoded = json_decode($vmNode['addional_headers'], true);
-                if (is_array($decoded)) {
-                    foreach ($decoded as $key => $value) {
-                        if (is_string($key) && (is_string($value) || is_numeric($value))) {
-                            $extraHeaders[$key] = (string) $value;
-                        }
-                    }
-                } else {
-                    App::getInstance(true)->getLogger()->warning(
-                        'VM node additional headers JSON is invalid for ID ' . $id
-                    );
-                }
-            }
-
-            if (!empty($vmNode['additional_params']) && is_string($vmNode['additional_params'])) {
-                $decoded = json_decode($vmNode['additional_params'], true);
-                if (is_array($decoded)) {
-                    foreach ($decoded as $key => $value) {
-                        if (is_string($key) && (is_string($value) || is_numeric($value))) {
-                            $extraParams[$key] = $value;
-                        }
-                    }
-                } else {
-                    App::getInstance(true)->getLogger()->warning(
-                        'VM node additional params JSON is invalid for ID ' . $id
-                    );
-                }
-            }
-
-            $client = new Proxmox(
-                $vmNode['fqdn'],
-                (int) $vmNode['port'],
-                $vmNode['scheme'],
-                $vmNode['user'],
-                $vmNode['token_id'],
-                $vmNode['secret'],
-                $tlsNoVerify,
-                (int) ($vmNode['timeout'] ?? 10),
-                $extraHeaders,
-                $extraParams,
-            );
+            $client = VmInstanceUtil::buildProxmoxClientForNode($vmNode);
             $nodesResult = $client->getNodes();
             if (!$nodesResult['ok'] || empty($nodesResult['nodes'])) {
                 return ApiResponse::error(
@@ -1107,53 +874,7 @@ class VmNodesController
         }
 
         try {
-            $tlsNoVerify = ($vmNode['tls_no_verify'] ?? 'false') === 'true';
-
-            $extraHeaders = [];
-            $extraParams = [];
-
-            if (!empty($vmNode['addional_headers']) && is_string($vmNode['addional_headers'])) {
-                $decoded = json_decode($vmNode['addional_headers'], true);
-                if (is_array($decoded)) {
-                    foreach ($decoded as $key => $value) {
-                        if (is_string($key) && (is_string($value) || is_numeric($value))) {
-                            $extraHeaders[$key] = (string) $value;
-                        }
-                    }
-                } else {
-                    App::getInstance(true)->getLogger()->warning(
-                        'VM node additional headers JSON is invalid for ID ' . $id
-                    );
-                }
-            }
-
-            if (!empty($vmNode['additional_params']) && is_string($vmNode['additional_params'])) {
-                $decoded = json_decode($vmNode['additional_params'], true);
-                if (is_array($decoded)) {
-                    foreach ($decoded as $key => $value) {
-                        if (is_string($key) && (is_string($value) || is_numeric($value))) {
-                            $extraParams[$key] = $value;
-                        }
-                    }
-                } else {
-                    App::getInstance(true)->getLogger()->warning(
-                        'VM node additional params JSON is invalid for ID ' . $id
-                    );
-                }
-            }
-
-            $client = new Proxmox(
-                $vmNode['fqdn'],
-                (int) $vmNode['port'],
-                $vmNode['scheme'],
-                $vmNode['user'],
-                $vmNode['token_id'],
-                $vmNode['secret'],
-                $tlsNoVerify,
-                (int) ($vmNode['timeout'] ?? 10),
-                $extraHeaders,
-                $extraParams,
-            );
+            $client = VmInstanceUtil::buildProxmoxClientForNode($vmNode);
 
             $nodesResult = $client->getNodes();
             if (!$nodesResult['ok'] || empty($nodesResult['nodes'])) {
@@ -1185,6 +906,63 @@ class VmNodesController
             App::getInstance(true)->getLogger()->error('Proxmox getBackupStorages failed for node ' . $id . ': ' . $e->getMessage());
 
             return ApiResponse::error('Failed to fetch backup storage: ' . $e->getMessage(), 'PROXMOX_ERROR', 500);
+        }
+    }
+
+    /**
+     * GET /api/admin/vm-nodes/{id}/iso-storage List ISO-capable Proxmox storages and their ISO files.
+     */
+    public function isoStorage(Request $request, int $id): Response
+    {
+        $vmNode = VmNode::getVmNodeById($id);
+        if (!$vmNode) {
+            return ApiResponse::error('VM node not found', 'VM_NODE_NOT_FOUND', 404);
+        }
+
+        try {
+            $client = VmInstanceUtil::buildProxmoxClientForNode($vmNode);
+
+            $nodesResult = $client->getNodes();
+            if (!$nodesResult['ok'] || empty($nodesResult['nodes'])) {
+                return ApiResponse::error(
+                    'Could not get Proxmox nodes: ' . ($nodesResult['error'] ?? 'unknown'),
+                    'PROXMOX_ERROR',
+                    503,
+                );
+            }
+
+            $availableNodes = array_values(array_filter(array_map(
+                static fn ($node): string => is_array($node) && isset($node['node']) && is_string($node['node']) ? trim($node['node']) : '',
+                $nodesResult['nodes']
+            )));
+            $requestedNode = trim((string) $request->query->get('pve_node', ''));
+            if ($requestedNode !== '' && !in_array($requestedNode, $availableNodes, true)) {
+                return ApiResponse::error('Selected Proxmox node is not available', 'INVALID_PROXMOX_NODE', 400, [
+                    'available_nodes' => $availableNodes,
+                ]);
+            }
+            $pveNode = $requestedNode !== '' ? $requestedNode : (string) $nodesResult['nodes'][0]['node'];
+            $result = $client->getIsoStorages($pveNode);
+            if (!$result['ok']) {
+                return ApiResponse::error($result['error'] ?? 'Failed to fetch ISO storage', 'PROXMOX_ERROR', 503);
+            }
+
+            $storages = $result['storage'] ?? [];
+            $files = IsoLibrary::storageIsos($client, $pveNode, $storages);
+
+            return ApiResponse::success([
+                'storages' => $storages,
+                'files' => array_map(static fn (array $f): array => [
+                    'volid' => $f['volid'],
+                    'name' => $f['name'],
+                    'storage' => $f['storage'],
+                    'size' => $f['size'],
+                ], $files),
+            ], 'ISO storage list fetched', 200);
+        } catch (\Throwable $e) {
+            App::getInstance(true)->getLogger()->error('Proxmox getIsoStorages failed for node ' . $id . ': ' . $e->getMessage());
+
+            return ApiResponse::error('Failed to fetch ISO storage: ' . $e->getMessage(), 'PROXMOX_ERROR', 500);
         }
     }
 
@@ -1304,6 +1082,9 @@ class VmNodesController
                     new OA\Property(property: 'cidr', type: 'integer', nullable: true, description: 'CIDR prefix length'),
                     new OA\Property(property: 'gateway', type: 'string', nullable: true, description: 'Gateway IP'),
                     new OA\Property(property: 'is_primary', type: 'string', enum: ['true', 'false'], description: 'Mark as primary IP'),
+                    new OA\Property(property: 'address_scope', type: 'string', enum: ['public', 'private'], description: 'Public or private address'),
+                    new OA\Property(property: 'assignment_mode', type: 'string', enum: ['static', 'dhcp'], description: 'Static cloud-init or FeatherTail DHCP'),
+                    new OA\Property(property: 'pve_node', type: 'string', nullable: true, description: 'Proxmox cluster node this IP may be used on (null = any)'),
                     new OA\Property(property: 'notes', type: 'string', nullable: true, description: 'Notes'),
                 ]
             )
@@ -1392,6 +1173,9 @@ class VmNodesController
                     new OA\Property(property: 'cidr', type: 'integer', nullable: true, description: 'CIDR prefix length'),
                     new OA\Property(property: 'gateway', type: 'string', nullable: true, description: 'Gateway IP'),
                     new OA\Property(property: 'is_primary', type: 'string', enum: ['true', 'false'], description: 'Mark as primary IP'),
+                    new OA\Property(property: 'address_scope', type: 'string', enum: ['public', 'private'], description: 'Public or private address'),
+                    new OA\Property(property: 'assignment_mode', type: 'string', enum: ['static', 'dhcp'], description: 'Static cloud-init or FeatherTail DHCP'),
+                    new OA\Property(property: 'pve_node', type: 'string', nullable: true, description: 'Proxmox cluster node this IP may be used on (null = any)'),
                     new OA\Property(property: 'notes', type: 'string', nullable: true, description: 'Notes'),
                 ]
             )
@@ -1602,7 +1386,8 @@ class VmNodesController
         if (!$vmNode) {
             return ApiResponse::error('VM node not found', 'VM_NODE_NOT_FOUND', 404);
         }
-        $ips = VmIp::getFreeIpsForNode($id);
+        $pveNode = trim((string) $request->query->get('pve_node', ''));
+        $ips = VmIp::getFreeIpsForNode($id, $pveNode !== '' ? $pveNode : null);
 
         return ApiResponse::success(['free_ips' => $ips], 'Free IPs fetched successfully', 200);
     }
@@ -1729,6 +1514,632 @@ class VmNodesController
         return $deleted
             ? ApiResponse::success(null, 'Template deleted successfully', 200)
             : ApiResponse::error('Delete failed', 'DELETE_FAILED', 400);
+    }
+
+    /**
+     * GET /api/admin/vm-nodes/{id}/firewall - Proxmox host/node firewall options + rules.
+     */
+    public function getFirewall(Request $request, int $id): Response
+    {
+        $ctx = $this->firewallContext($request, $id);
+        if ($ctx instanceof Response) {
+            return $ctx;
+        }
+
+        $rules = $this->fetchNodeFirewallRules($ctx);
+        if ($rules === null) {
+            return ApiResponse::error('Failed to fetch firewall rules from Proxmox', 'PROXMOX_ERROR', 503);
+        }
+
+        $opts = $ctx['client']->apiGet($this->nodeFirewallPath($ctx['pveNode'], '/options'));
+        $o = is_array($opts['data'] ?? null) ? $opts['data'] : [];
+
+        $clusterEnabled = null;
+        $cluster = $ctx['client']->apiGet('/api2/json/cluster/firewall/options');
+        if ($cluster['ok'] && is_array($cluster['data'] ?? null)) {
+            $clusterEnabled = (int) ($cluster['data']['enable'] ?? 0) === 1;
+        }
+
+        return ApiResponse::success([
+            'pve_node' => $ctx['pveNode'],
+            'available_nodes' => $ctx['availableNodes'],
+            'enabled' => (int) ($o['enable'] ?? 0) === 1,
+            'policy_in' => strtoupper((string) ($o['policy_in'] ?? 'ACCEPT')),
+            'policy_out' => strtoupper((string) ($o['policy_out'] ?? 'ACCEPT')),
+            'rules' => $rules,
+            'cluster_enabled' => $clusterEnabled,
+        ], 'Node firewall fetched', 200);
+    }
+
+    /**
+     * PUT /api/admin/vm-nodes/{id}/firewall/options.
+     */
+    public function setFirewallOptions(Request $request, int $id): Response
+    {
+        $ctx = $this->firewallContext($request, $id);
+        if ($ctx instanceof Response) {
+            return $ctx;
+        }
+
+        $body = $this->jsonBody($request);
+        if ($body instanceof Response) {
+            return $body;
+        }
+
+        $params = [];
+        if (array_key_exists('enabled', $body)) {
+            $params['enable'] = !empty($body['enabled']) ? 1 : 0;
+        }
+        if (array_key_exists('policy_in', $body)) {
+            $policy = strtoupper((string) $body['policy_in']);
+            if (!in_array($policy, self::FIREWALL_ACTIONS, true)) {
+                return ApiResponse::error('Invalid inbound policy', 'INVALID_POLICY', 400);
+            }
+            $params['policy_in'] = $policy;
+        }
+        if (array_key_exists('policy_out', $body)) {
+            $policy = strtoupper((string) $body['policy_out']);
+            if (!in_array($policy, self::FIREWALL_ACTIONS, true)) {
+                return ApiResponse::error('Invalid outbound policy', 'INVALID_POLICY', 400);
+            }
+            $params['policy_out'] = $policy;
+        }
+        if ($params === []) {
+            return ApiResponse::error('Nothing to update', 'NOTHING_TO_UPDATE', 400);
+        }
+
+        $res = $ctx['client']->apiPut($this->nodeFirewallPath($ctx['pveNode'], '/options'), $params);
+        if (!$res['ok']) {
+            return ApiResponse::error(
+                'Proxmox rejected the firewall options: ' . ($res['error'] ?? 'unknown'),
+                'PROXMOX_ERROR',
+                503
+            );
+        }
+
+        $admin = $request->attributes->get('user');
+        Activity::createActivity([
+            'user_uuid' => $admin['uuid'] ?? null,
+            'name' => 'vm_node_firewall_options',
+            'context' => 'Updated host firewall options on ' . ($ctx['vmNode']['name'] ?? $id) . ' / ' . $ctx['pveNode'],
+            'ip_address' => CloudFlareRealIP::getRealIP(),
+        ]);
+
+        return ApiResponse::success([], 'Firewall options updated', 200);
+    }
+
+    /**
+     * POST /api/admin/vm-nodes/{id}/firewall/rules.
+     */
+    public function addFirewallRule(Request $request, int $id): Response
+    {
+        $ctx = $this->firewallContext($request, $id);
+        if ($ctx instanceof Response) {
+            return $ctx;
+        }
+
+        $body = $this->jsonBody($request);
+        if ($body instanceof Response) {
+            return $body;
+        }
+
+        $rule = self::validateFirewallRule($body);
+        if (is_string($rule)) {
+            return ApiResponse::error($rule, 'INVALID_RULE', 400);
+        }
+
+        $existing = $this->fetchNodeFirewallRules($ctx);
+        if ($existing === null) {
+            return ApiResponse::error('Failed to fetch firewall rules from Proxmox', 'PROXMOX_ERROR', 503);
+        }
+        if (count($existing) >= 500) {
+            return ApiResponse::error('Firewall rule limit reached (500)', 'RULE_LIMIT_REACHED', 409);
+        }
+
+        $res = $ctx['client']->apiPost($this->nodeFirewallPath($ctx['pveNode'], '/rules'), $rule);
+        if (!$res['ok']) {
+            return ApiResponse::error(
+                'Proxmox rejected the firewall rule: ' . ($res['error'] ?? 'unknown'),
+                'PROXMOX_ERROR',
+                503
+            );
+        }
+
+        $admin = $request->attributes->get('user');
+        Activity::createActivity([
+            'user_uuid' => $admin['uuid'] ?? null,
+            'name' => 'vm_node_firewall_rule_add',
+            'context' => 'Added host firewall rule on ' . ($ctx['vmNode']['name'] ?? $id) . ' / ' . $ctx['pveNode'],
+            'ip_address' => CloudFlareRealIP::getRealIP(),
+        ]);
+
+        return ApiResponse::success([], 'Rule added', 200);
+    }
+
+    /**
+     * DELETE /api/admin/vm-nodes/{id}/firewall/rules/{pos}.
+     */
+    public function deleteFirewallRule(Request $request, int $id, int $pos): Response
+    {
+        $ctx = $this->firewallContext($request, $id);
+        if ($ctx instanceof Response) {
+            return $ctx;
+        }
+
+        $existing = $this->fetchNodeFirewallRules($ctx);
+        $match = array_values(array_filter($existing ?? [], static fn ($r) => $r['pos'] === $pos));
+        if ($match === []) {
+            return ApiResponse::error('Rule not found', 'RULE_NOT_FOUND', 404);
+        }
+
+        $res = $ctx['client']->apiDelete($this->nodeFirewallPath($ctx['pveNode'], '/rules/' . $pos));
+        if (!$res['ok']) {
+            return ApiResponse::error(
+                'Proxmox rejected the rule removal: ' . ($res['error'] ?? 'unknown'),
+                'PROXMOX_ERROR',
+                503
+            );
+        }
+
+        $admin = $request->attributes->get('user');
+        Activity::createActivity([
+            'user_uuid' => $admin['uuid'] ?? null,
+            'name' => 'vm_node_firewall_rule_delete',
+            'context' => 'Deleted host firewall rule #' . $pos . ' on ' . ($ctx['vmNode']['name'] ?? $id) . ' / ' . $ctx['pveNode'],
+            'ip_address' => CloudFlareRealIP::getRealIP(),
+        ]);
+
+        return ApiResponse::success([], 'Rule deleted', 200);
+    }
+
+    #[OA\Get(
+        path: '/api/admin/vm-nodes/{id}/setup-command',
+        summary: 'Get FeatherTail setup commands',
+        description: 'Returns APT install and config commands for FeatherTail on this Proxmox node (includes panel-issued token).',
+        tags: ['Admin - VM Nodes'],
+        parameters: [
+            new OA\Parameter(name: 'id', in: 'path', description: 'VM Node ID', required: true, schema: new OA\Schema(type: 'integer')),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Setup commands'),
+            new OA\Response(response: 404, description: 'VM node not found'),
+        ]
+    )]
+    public function getSetupCommand(Request $request, int $id): Response
+    {
+        $vmNode = VmNode::getVmNodeById($id);
+        if (!$vmNode) {
+            return ApiResponse::error('VM node not found', 'VM_NODE_NOT_FOUND', 404);
+        }
+
+        $token = trim((string) ($vmNode['feathertail_token'] ?? ''));
+        if ($token === '') {
+            $token = VmNode::generateFeatherTailToken();
+            VmNode::updateVmNodeById($id, ['feathertail_token' => $token]);
+            $vmNode = VmNode::getVmNodeById($id) ?? $vmNode;
+            $token = trim((string) ($vmNode['feathertail_token'] ?? $token));
+        }
+
+        $url = trim((string) ($vmNode['feathertail_url'] ?? ''));
+        if ($url === '') {
+            $url = VmNode::defaultFeatherTailUrl((string) ($vmNode['fqdn'] ?? ''));
+            VmNode::updateVmNodeById($id, ['feathertail_url' => $url]);
+            $vmNode['feathertail_url'] = $url;
+        }
+
+        $bind = '0.0.0.0:8686';
+        $commands = FeatherTailCapabilities::buildSetupCommands($token, $url, $bind);
+        $defaults = FeatherTailCapabilities::defaults();
+
+        return ApiResponse::success([
+            'install_command' => $commands['install_command'],
+            'setup_command' => $commands['setup_command'],
+            'install_command_display' => $commands['install_command_display'],
+            'setup_command_display' => $commands['setup_command_display'],
+            'config_path_hint' => $commands['config_path_hint'],
+            'notes' => $commands['notes'],
+            'feathertail_url' => $url,
+            'feathertail_enabled' => (int) ($vmNode['feathertail_enabled'] ?? 0),
+            'feathertail_tls_no_verify' => (int) ($vmNode['feathertail_tls_no_verify'] ?? 0),
+            'daemon_type' => 'feathertail',
+            'daemon_display_name' => $defaults['display_name'],
+            'systemd_unit' => $defaults['systemd_unit'],
+            'default_port' => $defaults['default_port'],
+        ], 'Setup command retrieved successfully', 200);
+    }
+
+    #[OA\Post(
+        path: '/api/admin/vm-nodes/{id}/feathertail/reset-token',
+        summary: 'Reset FeatherTail agent token',
+        description: 'Regenerates the FeatherTail Bearer token. Re-run the setup command on the Proxmox node afterward.',
+        tags: ['Admin - VM Nodes'],
+        parameters: [
+            new OA\Parameter(name: 'id', in: 'path', description: 'VM Node ID', required: true, schema: new OA\Schema(type: 'integer')),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Token reset'),
+            new OA\Response(response: 404, description: 'VM node not found'),
+        ]
+    )]
+    public function resetFeatherTailToken(Request $request, int $id): Response
+    {
+        $admin = $request->attributes->get('user');
+        $vmNode = VmNode::getVmNodeById($id);
+        if (!$vmNode) {
+            return ApiResponse::error('VM node not found', 'VM_NODE_NOT_FOUND', 404);
+        }
+
+        $token = VmNode::generateFeatherTailToken();
+        $ok = VmNode::updateVmNodeById($id, ['feathertail_token' => $token]);
+        if (!$ok) {
+            return ApiResponse::error('Failed to reset FeatherTail token', 'FEATHERTAIL_TOKEN_RESET_FAILED', 400);
+        }
+
+        $vmNode = VmNode::getVmNodeById($id);
+
+        Activity::createActivity([
+            'user_uuid' => $admin['uuid'] ?? null,
+            'name' => 'reset_feathertail_token',
+            'context' => 'Reset FeatherTail token for VM node: ' . ($vmNode['name'] ?? $id),
+            'ip_address' => CloudFlareRealIP::getRealIP(),
+        ]);
+
+        return ApiResponse::success([
+            'vm_node' => VmNode::sanitizeForAdminResponse($vmNode ?? []),
+            'feathertail_token' => $token,
+        ], 'FeatherTail token reset successfully', 200);
+    }
+
+    #[OA\Post(
+        path: '/api/admin/vm-nodes/{id}/feathertail/test',
+        summary: 'Test FeatherTail agent connection',
+        description: 'Calls FeatherTail GET /api/v1/system/health using the stored URL and token.',
+        tags: ['Admin - VM Nodes'],
+        parameters: [
+            new OA\Parameter(name: 'id', in: 'path', description: 'VM Node ID', required: true, schema: new OA\Schema(type: 'integer')),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Probe result'),
+            new OA\Response(response: 404, description: 'VM node not found'),
+        ]
+    )]
+    public function testFeatherTail(Request $request, int $id): Response
+    {
+        $vmNode = VmNode::getVmNodeById($id);
+        if (!$vmNode) {
+            return ApiResponse::error('VM node not found', 'VM_NODE_NOT_FOUND', 404);
+        }
+
+        $result = FeatherTailClient::health($vmNode);
+        $healthy = ($result['status'] ?? '') === 'healthy';
+
+        return ApiResponse::success([
+            'healthy' => $healthy,
+            'status' => $result['status'],
+            'http_status' => $result['http_status'],
+            'error' => $result['error'],
+            'url' => $result['url'],
+            'body' => $result['body'],
+        ], $healthy ? 'FeatherTail is reachable' : 'FeatherTail probe failed', $healthy ? 200 : 200);
+    }
+
+    #[OA\Get(
+        path: '/api/admin/vm-nodes/{id}/feathertail/leases',
+        summary: 'List FeatherTail DHCP leases',
+        tags: ['Admin - VM Nodes'],
+        parameters: [
+            new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'integer')),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Lease list'),
+            new OA\Response(response: 404, description: 'VM node not found'),
+        ]
+    )]
+    public function listFeatherTailLeases(Request $request, int $id): Response
+    {
+        $vmNode = VmNode::getVmNodeById($id);
+        if (!$vmNode) {
+            return ApiResponse::error('VM node not found', 'VM_NODE_NOT_FOUND', 404);
+        }
+
+        $result = FeatherTailClient::listLeases($vmNode);
+        if (($result['status'] ?? '') !== 'healthy') {
+            return ApiResponse::error(
+                $result['error'] ?? 'Failed to list FeatherTail leases',
+                'FEATHERTAIL_LEASES_FAILED',
+                502,
+                ['http_status' => $result['http_status'], 'body' => $result['body']]
+            );
+        }
+
+        $leases = is_array($result['body']['leases'] ?? null) ? $result['body']['leases'] : [];
+
+        return ApiResponse::success(['leases' => $leases], 'FeatherTail leases fetched', 200);
+    }
+
+    #[OA\Post(
+        path: '/api/admin/vm-nodes/{id}/feathertail/leases',
+        summary: 'Assign a FeatherTail DHCP lease',
+        tags: ['Admin - VM Nodes'],
+        parameters: [
+            new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'integer')),
+        ],
+        requestBody: new OA\RequestBody(
+            required: true,
+            content: new OA\JsonContent(
+                required: ['vmid', 'hostname', 'ip', 'gateway', 'cidr'],
+                properties: [
+                    new OA\Property(property: 'vmid', type: 'integer'),
+                    new OA\Property(property: 'hostname', type: 'string'),
+                    new OA\Property(property: 'ip', type: 'string'),
+                    new OA\Property(property: 'gateway', type: 'string'),
+                    new OA\Property(property: 'cidr', type: 'integer'),
+                    new OA\Property(property: 'dns_servers', type: 'array', items: new OA\Items(type: 'string')),
+                    new OA\Property(property: 'lease_time_secs', type: 'integer', nullable: true),
+                ]
+            )
+        ),
+        responses: [
+            new OA\Response(response: 200, description: 'Lease assigned'),
+            new OA\Response(response: 400, description: 'Invalid payload'),
+            new OA\Response(response: 404, description: 'VM node not found'),
+        ]
+    )]
+    public function assignFeatherTailLease(Request $request, int $id): Response
+    {
+        $admin = $request->attributes->get('user');
+        $vmNode = VmNode::getVmNodeById($id);
+        if (!$vmNode) {
+            return ApiResponse::error('VM node not found', 'VM_NODE_NOT_FOUND', 404);
+        }
+
+        $data = json_decode($request->getContent(), true);
+        if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
+            return ApiResponse::error('Invalid JSON in request body', 'INVALID_JSON', 400);
+        }
+
+        $vmid = isset($data['vmid']) ? (int) $data['vmid'] : 0;
+        $hostname = isset($data['hostname']) && is_string($data['hostname']) ? trim($data['hostname']) : '';
+        $ip = isset($data['ip']) && is_string($data['ip']) ? trim($data['ip']) : '';
+        $gateway = isset($data['gateway']) && is_string($data['gateway']) ? trim($data['gateway']) : '';
+        $cidr = isset($data['cidr']) ? (int) $data['cidr'] : 0;
+        if ($vmid <= 0 || $hostname === '' || $ip === '' || $gateway === '' || $cidr <= 0) {
+            return ApiResponse::error('vmid, hostname, ip, gateway and cidr are required', 'MISSING_REQUIRED_FIELDS', 400);
+        }
+
+        $payload = [
+            'vmid' => $vmid,
+            'hostname' => $hostname,
+            'ip' => $ip,
+            'gateway' => $gateway,
+            'cidr' => $cidr,
+            'dns_servers' => isset($data['dns_servers']) && is_array($data['dns_servers']) ? array_values($data['dns_servers']) : ['1.1.1.1', '8.8.8.8'],
+        ];
+        if (isset($data['lease_time_secs']) && is_numeric($data['lease_time_secs'])) {
+            $payload['lease_time_secs'] = (int) $data['lease_time_secs'];
+        }
+
+        $result = FeatherTailClient::assignLease($vmNode, $payload);
+        if (($result['status'] ?? '') !== 'healthy') {
+            return ApiResponse::error(
+                $result['error'] ?? 'Failed to assign FeatherTail lease',
+                'FEATHERTAIL_LEASE_ASSIGN_FAILED',
+                502,
+                ['http_status' => $result['http_status'], 'body' => $result['body']]
+            );
+        }
+
+        Activity::createActivity([
+            'user_uuid' => $admin['uuid'] ?? null,
+            'name' => 'assign_feathertail_lease',
+            'context' => 'Assigned FeatherTail lease ' . $ip . ' to VMID ' . $vmid . ' on node ' . ($vmNode['name'] ?? $id),
+            'ip_address' => CloudFlareRealIP::getRealIP(),
+        ]);
+
+        return ApiResponse::success(['lease' => $result['body']['lease'] ?? $result['body']], 'Lease assigned', 200);
+    }
+
+    #[OA\Delete(
+        path: '/api/admin/vm-nodes/{id}/feathertail/leases/vm/{vmid}',
+        summary: 'Delete FeatherTail DHCP lease by VMID',
+        tags: ['Admin - VM Nodes'],
+        parameters: [
+            new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'integer')),
+            new OA\Parameter(name: 'vmid', in: 'path', required: true, schema: new OA\Schema(type: 'integer')),
+        ],
+        responses: [
+            new OA\Response(response: 200, description: 'Lease deleted'),
+            new OA\Response(response: 404, description: 'VM node not found'),
+        ]
+    )]
+    public function deleteFeatherTailLease(Request $request, int $id, int $vmid): Response
+    {
+        $admin = $request->attributes->get('user');
+        $vmNode = VmNode::getVmNodeById($id);
+        if (!$vmNode) {
+            return ApiResponse::error('VM node not found', 'VM_NODE_NOT_FOUND', 404);
+        }
+        if ($vmid <= 0) {
+            return ApiResponse::error('Invalid VMID', 'INVALID_VMID', 400);
+        }
+
+        $result = FeatherTailClient::deleteLeaseByVmid($vmNode, $vmid);
+        if (($result['status'] ?? '') !== 'healthy') {
+            return ApiResponse::error(
+                $result['error'] ?? 'Failed to delete FeatherTail lease',
+                'FEATHERTAIL_LEASE_DELETE_FAILED',
+                502,
+                ['http_status' => $result['http_status'], 'body' => $result['body']]
+            );
+        }
+
+        Activity::createActivity([
+            'user_uuid' => $admin['uuid'] ?? null,
+            'name' => 'delete_feathertail_lease',
+            'context' => 'Deleted FeatherTail lease for VMID ' . $vmid . ' on node ' . ($vmNode['name'] ?? $id),
+            'ip_address' => CloudFlareRealIP::getRealIP(),
+        ]);
+
+        return ApiResponse::success([
+            'removed' => (bool) ($result['body']['removed'] ?? true),
+        ], 'Lease deleted', 200);
+    }
+
+    /**
+     * @return array{vmNode: array, client: \App\Services\Proxmox\Proxmox, pveNode: string, availableNodes: list<string>}|Response
+     */
+    private function firewallContext(Request $request, int $id): array | Response
+    {
+        $vmNode = VmNode::getVmNodeById($id);
+        if (!$vmNode) {
+            return ApiResponse::error('VM node not found', 'VM_NODE_NOT_FOUND', 404);
+        }
+
+        try {
+            $client = VmInstanceUtil::buildProxmoxClientForNode($vmNode);
+            $nodesResult = $client->getNodes();
+            if (!$nodesResult['ok'] || empty($nodesResult['nodes'])) {
+                return ApiResponse::error(
+                    'Could not get Proxmox nodes: ' . ($nodesResult['error'] ?? 'unknown'),
+                    'PROXMOX_ERROR',
+                    503
+                );
+            }
+
+            $availableNodes = array_values(array_filter(array_map(
+                static fn ($node): string => is_array($node) && isset($node['node']) && is_string($node['node']) ? trim($node['node']) : '',
+                $nodesResult['nodes']
+            )));
+
+            $requestedNode = trim((string) $request->query->get('pve_node', ''));
+            if ($requestedNode === '' && $request->getMethod() !== 'GET') {
+                $body = json_decode($request->getContent(), true);
+                if (is_array($body) && isset($body['pve_node'])) {
+                    $requestedNode = trim((string) $body['pve_node']);
+                }
+            }
+            if ($requestedNode !== '' && !in_array($requestedNode, $availableNodes, true)) {
+                return ApiResponse::error('Selected Proxmox node is not available', 'INVALID_PROXMOX_NODE', 400, [
+                    'available_nodes' => $availableNodes,
+                ]);
+            }
+
+            $pveNode = $requestedNode !== '' ? $requestedNode : $availableNodes[0];
+
+            return [
+                'vmNode' => $vmNode,
+                'client' => $client,
+                'pveNode' => $pveNode,
+                'availableNodes' => $availableNodes,
+            ];
+        } catch (\Throwable $e) {
+            App::getInstance(true)->getLogger()->error('Node firewall context failed for ID ' . $id . ': ' . $e->getMessage());
+
+            return ApiResponse::error('Failed to connect to Proxmox: ' . $e->getMessage(), 'PROXMOX_ERROR', 500);
+        }
+    }
+
+    private function nodeFirewallPath(string $pveNode, string $suffix = ''): string
+    {
+        return '/api2/json/nodes/' . rawurlencode($pveNode) . '/firewall' . $suffix;
+    }
+
+    /** @return list<array{pos:int,type:string,action:string,proto:string,dport:string,source:string,comment:string,enabled:bool}>|null */
+    private function fetchNodeFirewallRules(array $ctx): ?array
+    {
+        $res = $ctx['client']->apiGet($this->nodeFirewallPath($ctx['pveNode'], '/rules'));
+        if (!$res['ok'] || !is_array($res['data'] ?? null)) {
+            return null;
+        }
+
+        $rules = [];
+        foreach ($res['data'] as $r) {
+            if (!is_array($r) || !in_array($r['type'] ?? '', ['in', 'out'], true)) {
+                continue;
+            }
+            $rules[] = [
+                'pos' => (int) ($r['pos'] ?? 0),
+                'type' => (string) $r['type'],
+                'action' => strtoupper((string) ($r['action'] ?? '')),
+                'proto' => (string) ($r['proto'] ?? ''),
+                'dport' => (string) ($r['dport'] ?? ''),
+                'source' => (string) ($r['source'] ?? ''),
+                'comment' => (string) ($r['comment'] ?? ''),
+                'enabled' => (int) ($r['enable'] ?? 0) === 1,
+            ];
+        }
+        usort($rules, static fn ($a, $b) => $a['pos'] <=> $b['pos']);
+
+        return $rules;
+    }
+
+    private static function validateFirewallRule(array $b): array | string
+    {
+        $type = strtolower((string) ($b['type'] ?? 'in'));
+        $action = strtoupper((string) ($b['action'] ?? 'ACCEPT'));
+        $proto = strtolower(trim((string) ($b['proto'] ?? '')));
+        $dport = preg_replace('/\s+/', '', (string) ($b['dport'] ?? ''));
+        $source = trim((string) ($b['source'] ?? ''));
+        $comment = mb_substr(preg_replace('/[^\p{L}\p{N} ._:\/-]/u', '', (string) ($b['comment'] ?? '')), 0, 80);
+
+        if (!in_array($type, ['in', 'out'], true)) {
+            return 'Direction must be in or out';
+        }
+        if (!in_array($action, self::FIREWALL_ACTIONS, true)) {
+            return 'Action must be ACCEPT, DROP or REJECT';
+        }
+        if ($proto !== '' && !in_array($proto, self::FIREWALL_PROTOCOLS, true)) {
+            return 'Unsupported protocol';
+        }
+        if ($dport !== '') {
+            if (!in_array($proto, ['tcp', 'udp'], true)) {
+                return 'Ports require tcp or udp';
+            }
+            if (!preg_match('/^\d{1,5}(:\d{1,5})?(,\d{1,5}(:\d{1,5})?){0,9}$/', $dport)) {
+                return 'Ports must look like 80, 8000:8100 or 80,443';
+            }
+            foreach (preg_split('/[,:]/', $dport) ?: [] as $p) {
+                if ((int) $p < 1 || (int) $p > 65535) {
+                    return 'Ports must be between 1 and 65535';
+                }
+            }
+        }
+        if ($source !== '' && !self::validFirewallCidr($source)) {
+            return 'Source must be an IP address or CIDR range';
+        }
+
+        $rule = ['type' => $type, 'action' => $action, 'enable' => 1];
+        foreach (['proto' => $proto, 'dport' => $dport, 'source' => $source, 'comment' => $comment] as $k => $v) {
+            if ($v !== '') {
+                $rule[$k] = $v;
+            }
+        }
+
+        return $rule;
+    }
+
+    private static function validFirewallCidr(string $v): bool
+    {
+        [$ip, $mask] = array_pad(explode('/', $v, 2), 2, null);
+        if (!filter_var($ip, FILTER_VALIDATE_IP)) {
+            return false;
+        }
+        if ($mask === null) {
+            return true;
+        }
+        $max = str_contains((string) $ip, ':') ? 128 : 32;
+
+        return ctype_digit($mask) && (int) $mask >= 0 && (int) $mask <= $max;
+    }
+
+    private function jsonBody(Request $request): array | Response
+    {
+        $data = json_decode($request->getContent(), true);
+        if (json_last_error() !== JSON_ERROR_NONE || !is_array($data)) {
+            return ApiResponse::error('Invalid JSON in request body', 'INVALID_JSON', 400);
+        }
+
+        return $data;
     }
 
     private static function emitVdsEvent(string $eventName, array $payload): void

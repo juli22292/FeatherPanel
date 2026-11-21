@@ -680,7 +680,7 @@ class ServerFilesController
 
             $path = $this->getPathFromQuery();
 
-            // Reject JSON bodies – file saves must be raw text/binary
+            // Reject JSON bodies - file saves must be raw text/binary
             $contentType = $request->headers->get('Content-Type', '');
             if (stripos($contentType, 'application/json') !== false) {
                 return ApiResponse::error('JSON body not allowed for file writes. Send raw text/binary.', 'INVALID_CONTENT_TYPE', 415);
@@ -1260,7 +1260,22 @@ class ServerFilesController
                 if (!is_string($sourcePath) || trim($sourcePath) === '') {
                     continue;
                 }
-                $sources[] = $this->normalizeAbsolutePath($sourcePath);
+                $normalizedSourcePath = $this->normalizeAbsolutePath($sourcePath);
+                // Copying "." / ".." / the server root into a child of itself recursively
+                // nests until the disk fills (seen as infinite ". - copy" trees).
+                $sourceBase = basename($normalizedSourcePath);
+                if (
+                    $normalizedSourcePath === '/'
+                    || $sourceBase === '.'
+                    || $sourceBase === '..'
+                ) {
+                    return ApiResponse::error(
+                        'Cannot copy the server root or relative path entries "." / ".."',
+                        'INVALID_COPY_SOURCE',
+                        400
+                    );
+                }
+                $sources[] = $normalizedSourcePath;
             }
             if ($sources === []) {
                 return ApiResponse::error('No valid files were provided to copy', 'INVALID_COPY_REQUEST', 400);
@@ -1268,6 +1283,13 @@ class ServerFilesController
             if ($copyName !== null && count($sources) > 1) {
                 return ApiResponse::error(
                     'name cannot be used when copying multiple files; each source is copied into the destination directory under its own filename',
+                    'INVALID_COPY_NAME',
+                    400
+                );
+            }
+            if ($copyName !== null && ($copyName === '.' || $copyName === '..')) {
+                return ApiResponse::error(
+                    'Cannot use "." or ".." as a destination name',
                     'INVALID_COPY_NAME',
                     400
                 );
@@ -1948,9 +1970,9 @@ class ServerFilesController
                 $requestId = is_array($response->getData()) ? ($response->getData()['request_id'] ?? null) : null;
                 $status = $response->getStatusCode() ?: 500;
                 $errorLower = strtolower((string) $error);
-                $hint = 'Use a direct binary download URL (with Content-Length), not an HTML page. Prefer CDN/object URLs. For Paper jars use fill.papermc.io/v3 (api.papermc.io/v2 is sunset). download.getbukkit.org often fails DNS — use cdn.getbukkit.org or Paper fill-data URLs.';
+                $hint = 'Use a direct binary download URL (with Content-Length), not an HTML page. Prefer CDN/object URLs. For Paper jars use fill.papermc.io/v3 (api.papermc.io/v2 is sunset). download.getbukkit.org often fails DNS - use cdn.getbukkit.org or Paper fill-data URLs.';
                 if (str_contains($errorLower, 'dns') || str_contains($errorLower, 'no such host') || str_contains($errorLower, 'network/dns')) {
-                    $hint = 'DNS/network failure reaching that hostname from Wings — almost always a dead/bad download URL, not a panel outage. Retry pull_file with another direct CDN URL.';
+                    $hint = 'DNS/network failure reaching that hostname from Wings - almost always a dead/bad download URL, not a panel outage. Retry pull_file with another direct CDN URL.';
                 } elseif (str_contains($errorLower, 'html page') || str_contains($errorLower, 'content-length')) {
                     $hint = 'That URL is not a direct file download. Use a final object/CDN URL that returns the binary with Content-Length.';
                 } elseif (str_contains($errorLower, 'tls') || str_contains($errorLower, 'certificate')) {
@@ -2478,7 +2500,7 @@ class ServerFilesController
             // Get the file path from query parameters
             $path = $this->getPathFromQuery();
 
-            // Reject JSON bodies – file uploads must be raw text/binary
+            // Reject JSON bodies - file uploads must be raw text/binary
             $contentType = $request->headers->get('Content-Type', '');
             if (stripos($contentType, 'application/json') !== false) {
                 return ApiResponse::error('JSON body not allowed for file uploads. Send raw text/binary.', 'INVALID_CONTENT_TYPE', 415);
@@ -2535,6 +2557,18 @@ class ServerFilesController
         }
     }
 
+    /**
+     * Chunk size in bytes for chunked uploads, clamped to 5-90 MB so a part
+     * (plus request overhead) always stays under Cloudflare's 100 MB limit.
+     */
+    public static function uploadChunkSizeBytes(mixed $settingMb): int
+    {
+        $mb = is_numeric($settingMb) ? (int) $settingMb : 50;
+        $mb = max(5, min(90, $mb));
+
+        return $mb * 1024 * 1024;
+    }
+
     #[OA\Get(
         path: '/api/user/servers/{uuidShort}/upload-file',
         summary: 'Get file upload URL',
@@ -2557,6 +2591,9 @@ class ServerFilesController
                     properties: [
                         new OA\Property(property: 'upload_url', type: 'string', description: 'Signed Wings file upload URL'),
                         new OA\Property(property: 'expires_in', type: 'integer', description: 'Token lifetime in seconds', example: 900),
+                        new OA\Property(property: 'chunked', type: 'boolean', description: 'Node supports resumable chunked uploads'),
+                        new OA\Property(property: 'chunk_upload_url', type: 'string', nullable: true, description: 'Signed Wings chunked upload base URL (/upload/chunk)'),
+                        new OA\Property(property: 'chunk_size', type: 'integer', nullable: true, description: 'Part size in bytes'),
                     ]
                 )
             ),
@@ -2595,10 +2632,22 @@ class ServerFilesController
             $jwtToken = $jwtService->generateFileUploadToken($server['uuid'], $user['uuid'], '', $ignoredFiles);
             $uploadUrl = rtrim($wingsBaseUrl, '/') . '/upload/file?token=' . $jwtToken;
 
-            return ApiResponse::success([
+            $data = [
                 'upload_url' => $uploadUrl,
                 'expires_in' => $expiresIn,
-            ]);
+                'chunked' => false,
+            ];
+            // Resumable chunked uploads (FeatherWings): the browser sends big files in
+            // parts below the proxy's request limit (Cloudflare: 100 MB).
+            if (DaemonCapabilities::fromNode($node)->supports(DaemonCapabilities::FEATURE_CHUNKED_UPLOAD)) {
+                $data['chunked'] = true;
+                $data['chunk_upload_url'] = rtrim($wingsBaseUrl, '/') . '/upload/chunk?token=' . $jwtToken;
+                $data['chunk_size'] = self::uploadChunkSizeBytes(
+                    App::getInstance(true)->getConfig()->getSetting(ConfigInterface::SERVER_UPLOAD_CHUNK_SIZE_MB, '50')
+                );
+            }
+
+            return ApiResponse::success($data);
         } catch (\Exception $e) {
             return $this->handleWingsError($e, 'get upload url');
         }

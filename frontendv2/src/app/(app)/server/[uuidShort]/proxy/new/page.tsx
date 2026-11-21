@@ -213,7 +213,7 @@ export default function CreateProxyPage() {
                 title={t('serverProxy.createProxy')}
                 description={t('serverProxy.createModalDescription')}
                 actions={
-                    <div className='flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-3'>
+                    <div className='flex w-full flex-wrap gap-2 sm:w-auto sm:flex-nowrap sm:items-center sm:gap-3'>
                         <Button variant='glass' size='default' onClick={() => safeBack(router)} disabled={saving}>
                             {t('common.cancel')}
                         </Button>
@@ -477,7 +477,6 @@ export default function CreateProxyPage() {
 
                 <div className='space-y-8 lg:col-span-4'>
                     <FormSection className='group relative space-y-4 overflow-hidden border-blue-500/10 bg-blue-500/5'>
-                        <div className='pointer-events-none absolute -right-6 -bottom-6 h-24 w-24 bg-blue-500/10 blur-2xl transition-transform duration-1000 group-hover:scale-150' />
                         <div className='relative z-10 flex h-10 w-10 items-center justify-center rounded-xl border border-blue-500/20 bg-blue-500/10'>
                             <Info className='h-5 w-5 text-blue-500' />
                         </div>

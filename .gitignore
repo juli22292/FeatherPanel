@@ -42,6 +42,8 @@ backend/tests/*
 !backend/tests/Telemetry/SentryTelemetryTest.php
 !backend/tests/Updates/
 !backend/tests/Updates/*.php
+!backend/tests/Observability/
+!backend/tests/Observability/*.php
 runner/async-runner.out
 todokutzu.md
 TODO.txt
@@ -61,3 +63,4 @@ Untitled
 .env
 .env.*
 !.env.example
+FeatherTail/

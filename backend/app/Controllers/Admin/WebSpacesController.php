@@ -22,8 +22,10 @@ use App\Chat\User;
 use App\Chat\WebNode;
 use App\Chat\WebPlate;
 use App\Chat\WebSpace;
+use App\Chat\WebSpaceDomain;
 use App\Chat\HostingPackage;
 use App\Helpers\ApiResponse;
+use App\Helpers\WebSpaceWafRules;
 use OpenApi\Attributes as OA;
 use App\Chat\WebSpaceSchedule;
 use App\Helpers\DnsProvisioner;
@@ -182,7 +184,18 @@ class WebSpacesController
             $fields['waf_enabled'] = !empty($content['waf_enabled']) ? 1 : 0;
         }
         if (array_key_exists('waf_deny_ips', $content)) {
+            $badIp = WebSpaceWafRules::firstInvalidIp($content['waf_deny_ips']);
+            if ($badIp !== null) {
+                return ApiResponse::error('Invalid blocked IP or CIDR: ' . substr($badIp, 0, 64), 'INVALID_WAF_IP', 422);
+            }
             $fields['waf_deny_ips'] = $content['waf_deny_ips'];
+        }
+        if (array_key_exists('waf_deny_paths', $content)) {
+            $badPath = WebSpaceWafRules::firstInvalidPath($content['waf_deny_paths']);
+            if ($badPath !== null) {
+                return ApiResponse::error('Invalid blocked path: ' . substr($badPath, 0, 64), 'INVALID_WAF_PATH', 422);
+            }
+            $fields['waf_deny_paths'] = $content['waf_deny_paths'];
         }
         if (array_key_exists('database_limit', $content)) {
             $fields['database_limit'] = max(0, (int) $content['database_limit']);
@@ -243,6 +256,26 @@ class WebSpacesController
                 'MISSING_ACME_EMAIL',
                 400,
             );
+        }
+
+        // Reject a domain owned by another WebSpace up front with a clear 409
+        // instead of letting the model swallow it and surface a generic 500.
+        $requestedDomains = [];
+        foreach (['domains', 'domain_routes'] as $domainKey) {
+            if (isset($fields[$domainKey]) && is_array($fields[$domainKey])) {
+                foreach ($fields[$domainKey] as $entry) {
+                    $requestedDomains[] = is_array($entry) ? (string) ($entry['domain'] ?? '') : (string) $entry;
+                }
+            }
+        }
+        foreach ($requestedDomains as $requestedDomain) {
+            if (WebSpaceDomain::findOwnerId($requestedDomain, (int) ($space['id'] ?? 0)) !== null) {
+                return ApiResponse::error(
+                    'Domain ' . substr(strtolower(trim($requestedDomain)), 0, 253) . ' is already used by another WebSpace',
+                    'DOMAIN_IN_USE',
+                    409,
+                );
+            }
         }
 
         if (!WebSpace::update($uuid, $fields)) {
@@ -1130,7 +1163,7 @@ class WebSpacesController
         $result = DnsProvisioner::provisionARecords($webNode, $domains, $space);
         if (!$result['ok']) {
             return ApiResponse::error(
-                'DNS provision failed — link a DNS zone or configure DNS credentials on the web node',
+                'DNS provision failed - link a DNS zone or configure DNS credentials on the web node',
                 'DNS_PROVISION_FAILED',
                 502,
                 $result,

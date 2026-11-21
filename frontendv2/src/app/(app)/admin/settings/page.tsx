@@ -16,7 +16,10 @@ See the LICENSE file or <https://www.gnu.org/licenses/>.
 'use client';
 
 import { AdminPageTips } from '@/components/admin/AdminPageTips';
+import { EmailProviderHint } from '@/components/admin/EmailProviderHint';
+import { SettingsAccordionSections } from '@/components/admin/SettingsAccordionSections';
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { applyMailProviderPreset, shouldShowMailSetting } from '@/lib/mail-providers';
 import { useSearchParams, useRouter, usePathname } from 'next/navigation';
 import { useTranslation } from '@/contexts/TranslationContext';
 import { adminSettingsApi, OrganizedSettings, Setting } from '@/lib/admin-settings-api';
@@ -61,6 +64,8 @@ import {
 import { reopenSetup } from '@/lib/setup-wizard';
 import { copyToClipboard, cn } from '@/lib/utils';
 import { ImageAttachmentField } from '@/components/featherui/ImageAttachmentField';
+import { matchesAdminSettingQuery, resolveAdminSettingLabel } from '@/lib/admin-settings-search';
+import { groupSearchText } from '@/lib/admin-settings-groups';
 
 interface LogData {
     success: boolean;
@@ -74,6 +79,7 @@ const UPDATE_PROGRESS_STORAGE_KEY = 'featherpanel:update_in_progress';
 const UPDATE_PROGRESS_TTL_MS = 10 * 60 * 1000;
 
 const ADMIN_SETTING_DISPLAY_NAMES: Record<string, string> = {
+    server_require_subdomain: 'Require subdomain before server start',
     server_lifecycle_hooks_enabled: 'Lifecycle hooks (pre-start / pre-stop / post-start / crash)',
     server_lifecycle_hooks_container_shell_enabled: 'Container Shell (docker exec) for lifecycle hooks & schedules',
     auth_shell_tagline: 'Auth marketing tagline',
@@ -96,6 +102,8 @@ const ADMIN_SETTING_DISPLAY_NAMES: Record<string, string> = {
     login_default_method: 'Default login method',
     login_methods_order: 'Login methods order',
     login_hidden_methods: 'Hidden login methods',
+    vnc_proxy_via_panel: 'Proxy VNC via panel',
+    vnc_use_pve_redirect: 'Open Proxmox noVNC in new tab',
 };
 
 function formatSettingName(name: string, key: string) {
@@ -109,35 +117,26 @@ function formatSettingName(name: string, key: string) {
         .join(' ');
 }
 
-function settingValueAsSearchText(setting: Setting): string {
-    if (setting.type === 'password') return '';
-    const v = setting.value;
-    if (v === null || v === undefined) return '';
-    return String(v);
-}
-
 function matchesSettingsQuery(
     query: string,
     settingKey: string,
     currentSetting: Setting,
     categoryKey: string,
     categoryName: string,
+    t: (key: string) => string,
 ): boolean {
-    const trimmed = query.trim().toLowerCase();
-    if (!trimmed) return true;
-    const haystack = [
+    const { title, description } = resolveAdminSettingLabel(settingKey, currentSetting, t);
+    const extra = groupSearchText(categoryKey, settingKey, t);
+    return matchesAdminSettingQuery(
+        query,
         settingKey,
-        formatSettingName(currentSetting.name, settingKey),
-        currentSetting.description,
-        currentSetting.placeholder,
-        settingValueAsSearchText(currentSetting),
+        currentSetting,
         categoryKey,
         categoryName,
-    ]
-        .join('\n')
-        .toLowerCase();
-    const terms = trimmed.split(/\s+/).filter(Boolean);
-    return terms.every((term) => haystack.includes(term));
+        title,
+        description,
+        extra,
+    );
 }
 
 function SettingFieldRow({
@@ -145,11 +144,14 @@ function SettingFieldRow({
     currentSetting,
     onSettingChange,
     t,
+    switchBooleans = false,
 }: {
     settingKey: string;
     currentSetting: Setting;
     onSettingChange: (key: string, value: string | number | boolean) => void;
     t: (key: string) => string;
+    /** Render true/false selects as switches (value stays the string 'true' / 'false'). */
+    switchBooleans?: boolean;
 }) {
     const labelKey = `admin.settings.fields.${settingKey}.label`;
     const descriptionKey = `admin.settings.fields.${settingKey}.description`;
@@ -157,14 +159,21 @@ function SettingFieldRow({
     const translatedLabel = t(labelKey);
     const translatedDescription = t(descriptionKey);
 
-    const formattedName =
-        translatedLabel !== labelKey ? translatedLabel : formatSettingName(currentSetting.name, settingKey);
+    const rawName = translatedLabel !== labelKey ? translatedLabel : formatSettingName(currentSetting.name, settingKey);
+    const formattedName = switchBooleans ? rawName.replace(/^Vds\s+/i, '') : rawName;
+    const isBoolSelect =
+        switchBooleans &&
+        currentSetting.type === 'select' &&
+        currentSetting.options.length === 2 &&
+        currentSetting.options.includes('true') &&
+        currentSetting.options.includes('false');
     const description = translatedDescription !== descriptionKey ? translatedDescription : currentSetting.description;
 
     if (
         settingKey === 'telemetry' ||
         currentSetting.type === 'toggle' ||
-        (currentSetting.type as string) === 'boolean'
+        (currentSetting.type as string) === 'boolean' ||
+        isBoolSelect
     ) {
         return (
             <div className='fp-surface-inset hover:border-primary/25 flex flex-row items-center justify-between gap-4 rounded-xl border p-4 transition-colors'>
@@ -180,7 +189,10 @@ function SettingFieldRow({
                         currentSetting.value === true || currentSetting.value === 'true' || currentSetting.value === 1
                     }
                     onCheckedChange={(checked: boolean) =>
-                        onSettingChange(settingKey, settingKey === 'telemetry' ? String(checked) : checked)
+                        onSettingChange(
+                            settingKey,
+                            settingKey === 'telemetry' || isBoolSelect ? String(checked) : checked,
+                        )
                     }
                     className='shrink-0'
                 />
@@ -287,6 +299,7 @@ export default function SettingsPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [sendingTestEmail, setSendingTestEmail] = useState(false);
+    const [testingStorage, setTestingStorage] = useState(false);
     const [organizedSettings, setOrganizedSettings] = useState<OrganizedSettings | null>(null);
     const [settings, setSettings] = useState<Record<string, Setting>>({});
     const [initialSettings, setInitialSettings] = useState<Record<string, Setting>>({});
@@ -316,14 +329,14 @@ export default function SettingsPage() {
             let n = 0;
             for (const [settingKey, setting] of Object.entries(data.settings)) {
                 const currentSetting = settings[settingKey] || setting;
-                if (matchesSettingsQuery(searchTrimmed, settingKey, currentSetting, catKey, data.category.name)) {
+                if (matchesSettingsQuery(searchTrimmed, settingKey, currentSetting, catKey, data.category.name, t)) {
                     n += 1;
                 }
             }
             counts[catKey] = n;
         }
         return counts;
-    }, [organizedSettings, settings, searchTrimmed]);
+    }, [organizedSettings, settings, searchTrimmed, t]);
 
     const anySearchMatch = useMemo(
         () => !searchTrimmed || Object.values(categoryMatchCounts).some((c) => c > 0),
@@ -407,7 +420,7 @@ export default function SettingsPage() {
             let n = 0;
             for (const [settingKey, setting] of Object.entries(data.settings)) {
                 const currentSetting = settings[settingKey] || setting;
-                if (matchesSettingsQuery(searchTrimmed, settingKey, currentSetting, catKey, data.category.name)) {
+                if (matchesSettingsQuery(searchTrimmed, settingKey, currentSetting, catKey, data.category.name, t)) {
                     n += 1;
                 }
             }
@@ -424,9 +437,42 @@ export default function SettingsPage() {
         if (firstWithMatches !== resolvedTab) {
             router.replace(`${pathname}?category=${encodeURIComponent(firstWithMatches)}`);
         }
-    }, [organizedSettings, categoryKeys, settings, searchTrimmed, urlCategory, pathname, router]);
+    }, [organizedSettings, categoryKeys, settings, searchTrimmed, urlCategory, pathname, router, t]);
 
     const handleSettingChange = (key: string, value: string | number | boolean) => {
+        if (key === 'mail_provider_preset') {
+            const next: Record<string, string> = {};
+            applyMailProviderPreset(String(value), (k, v) => {
+                next[k] = v;
+            });
+            setSettings((prev) => {
+                const updated = { ...prev };
+                for (const [k, v] of Object.entries(next)) {
+                    if (!updated[k]) continue;
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    updated[k] = { ...updated[k], value: v as any };
+                }
+                return updated;
+            });
+            return;
+        }
+
+        if (key === 'mail_api_region') {
+            const region = String(value).trim();
+            const presetId = String(settings.mail_provider_preset?.value ?? '');
+            setSettings((prev) => {
+                const updated: Record<string, Setting> = { ...prev };
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                updated[key] = { ...prev[key], value: value as any };
+                if (presetId === 'ses_smtp' && region && updated.smtp_host) {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    updated.smtp_host = { ...updated.smtp_host, value: `email-smtp.${region}.amazonaws.com` as any };
+                }
+                return updated;
+            });
+            return;
+        }
+
         setSettings((prev) => ({
             ...prev,
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -434,10 +480,15 @@ export default function SettingsPage() {
         }));
     };
 
-    const unsaved = Object.entries(settings).some(([key, setting]) => {
-        const initial = initialSettings[key];
-        return Boolean(initial) && String(initial.value) !== String(setting.value);
-    });
+    const dirtyKeys = new Set(
+        Object.entries(settings)
+            .filter(([key, setting]) => {
+                const initial = initialSettings[key];
+                return Boolean(initial) && String(initial.value) !== String(setting.value);
+            })
+            .map(([key]) => key),
+    );
+    const unsaved = dirtyKeys.size > 0;
 
     const handleDiscard = () => {
         setSettings(JSON.parse(JSON.stringify(initialSettings)));
@@ -498,6 +549,22 @@ export default function SettingsPage() {
         });
     };
 
+    const handleTestBackupStorage = async () => {
+        setTestingStorage(true);
+        try {
+            const response = await axios.post('/api/admin/settings/backup-storage/test');
+            if (response.data.success) {
+                toast.success(t('admin.settings.storage_test.success'));
+            } else {
+                toast.error(getApiErrorMessageFromPayload(response.data, t, 'admin.settings.storage_test.failed'));
+            }
+        } catch (error: unknown) {
+            toast.error(getApiErrorMessage(error, t, 'admin.settings.storage_test.failed'));
+        } finally {
+            setTestingStorage(false);
+        }
+    };
+
     const handleSendTestEmail = async () => {
         setSendingTestEmail(true);
         try {
@@ -529,8 +596,11 @@ export default function SettingsPage() {
             case 'security':
                 return Shield;
             case 'database':
+            case 'backup_storage':
                 return Database;
             case 'server':
+            case 'servers':
+            case 'vds':
                 return Server;
             case 'seo':
                 return Search;
@@ -670,6 +740,14 @@ export default function SettingsPage() {
                                     >
                                         <Icon className='mr-2 h-4 w-4 shrink-0 opacity-80' />
                                         <span className='min-w-0 flex-1 truncate text-left'>{data.category.name}</span>
+                                        {Object.keys(data.settings).some((k) => dirtyKeys.has(k)) && (
+                                            <span
+                                                className='ml-2 h-2 w-2 shrink-0 rounded-full bg-amber-500'
+                                                title={t('admin.settings.sections.unsaved')}
+                                            >
+                                                <span className='sr-only'>{t('admin.settings.sections.unsaved')}</span>
+                                            </span>
+                                        )}
                                         {showCount ? (
                                             <span
                                                 className={cn(
@@ -690,7 +768,15 @@ export default function SettingsPage() {
 
                     <div className='min-w-0 flex-1 space-y-6'>
                         {Object.entries(organizedSettings).map(([key, data]) => {
+                            const mailTransport = String(settings.mail_transport?.value ?? 'smtp');
+                            const mailPresetId = String(settings.mail_provider_preset?.value ?? 'custom');
                             const filteredEntries = Object.entries(data.settings).filter(([settingKey, setting]) => {
+                                if (
+                                    key === 'email' &&
+                                    !shouldShowMailSetting(settingKey, mailTransport, mailPresetId)
+                                ) {
+                                    return false;
+                                }
                                 const currentSetting = settings[settingKey] || setting;
                                 return matchesSettingsQuery(
                                     searchTrimmed,
@@ -698,6 +784,7 @@ export default function SettingsPage() {
                                     currentSetting,
                                     key,
                                     data.category.name,
+                                    t,
                                 );
                             });
                             const totalInCategory = Object.keys(data.settings).length;
@@ -775,9 +862,44 @@ export default function SettingsPage() {
                                             </div>
                                         ) : (
                                             <div className='space-y-6'>
+                                                {key === 'backup_storage' && (
+                                                    <div className='border-border/50 rounded-2xl border p-6'>
+                                                        <div className='flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center'>
+                                                            <div className='space-y-1'>
+                                                                <h3 className='text-foreground flex items-center gap-2 text-base font-semibold'>
+                                                                    <Database className='text-primary h-5 w-5' />
+                                                                    {t('admin.settings.storage_test.title')}
+                                                                </h3>
+                                                                <p className='text-muted-foreground max-w-xl text-sm'>
+                                                                    {t('admin.settings.storage_test.description')}
+                                                                </p>
+                                                            </div>
+                                                            <Button
+                                                                onClick={handleTestBackupStorage}
+                                                                disabled={testingStorage}
+                                                                className='w-full shrink-0 sm:w-auto'
+                                                            >
+                                                                {testingStorage ? (
+                                                                    <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+                                                                ) : (
+                                                                    <Send className='mr-2 h-4 w-4' />
+                                                                )}
+                                                                {testingStorage
+                                                                    ? t('admin.settings.storage_test.testing')
+                                                                    : t('admin.settings.storage_test.button')}
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                )}
                                                 {key === 'email' && (
                                                     <div className='space-y-4'>
-                                                        <div className='border-border/50 from-primary/5 to-primary/10 rounded-2xl border bg-linear-to-br p-6'>
+                                                        <EmailProviderHint
+                                                            presetId={String(
+                                                                settings.mail_provider_preset?.value ?? 'custom',
+                                                            )}
+                                                            t={t}
+                                                        />
+                                                        <div className='border-border/50 rounded-2xl border p-6'>
                                                             <div className='flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center'>
                                                                 <div className='space-y-1'>
                                                                     <h3 className='text-foreground flex items-center gap-2 text-base font-semibold'>
@@ -815,18 +937,29 @@ export default function SettingsPage() {
                                                         </div>
                                                     </div>
                                                 )}
-                                                {filteredEntries.map(([settingKey, setting]) => {
-                                                    const currentSetting = settings[settingKey] || setting;
-                                                    return (
-                                                        <SettingFieldRow
-                                                            key={settingKey}
-                                                            settingKey={settingKey}
-                                                            currentSetting={currentSetting}
-                                                            onSettingChange={handleSettingChange}
-                                                            t={t}
-                                                        />
-                                                    );
-                                                })}
+                                                <SettingsAccordionSections
+                                                    key={key}
+                                                    categoryKey={key}
+                                                    entries={filteredEntries}
+                                                    settings={settings}
+                                                    searching={searchTrimmed !== ''}
+                                                    renderField={(settingKey, currentSetting) => (
+                                                        <div
+                                                            className={cn(
+                                                                'fp-setting-row',
+                                                                dirtyKeys.has(settingKey) && 'fp-setting-dirty',
+                                                            )}
+                                                        >
+                                                            <SettingFieldRow
+                                                                settingKey={settingKey}
+                                                                currentSetting={currentSetting}
+                                                                onSettingChange={handleSettingChange}
+                                                                t={t}
+                                                                switchBooleans
+                                                            />
+                                                        </div>
+                                                    )}
+                                                />
                                             </div>
                                         )}
                                     </PageCard>

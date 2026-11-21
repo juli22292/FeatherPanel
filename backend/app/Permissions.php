@@ -48,6 +48,8 @@ class Permissions
     public const ADMIN_USERS_EDIT = 'admin.users.edit';
     /** Delete users */
     public const ADMIN_USERS_DELETE = 'admin.users.delete';
+    /** View the panel as another user (audit logged) */
+    public const ADMIN_USERS_IMPERSONATE = 'admin.users.impersonate';
 
     // Admin Banned IPs Permissions
     /** View banned panel IPs */
@@ -88,14 +90,24 @@ class Permissions
     public const ADMIN_SPELLS_DELETE = 'admin.spells.delete';
 
     // Admin Nodes Permissions
-    /** View nodes */
+    /** View Wings/game nodes */
     public const ADMIN_NODES_VIEW = 'admin.nodes.view';
-    /** Create new nodes */
+    /** Create new Wings/game nodes */
     public const ADMIN_NODES_CREATE = 'admin.nodes.create';
-    /** Edit existing nodes */
+    /** Edit existing Wings/game nodes */
     public const ADMIN_NODES_EDIT = 'admin.nodes.edit';
-    /** Delete nodes */
+    /** Delete Wings/game nodes */
     public const ADMIN_NODES_DELETE = 'admin.nodes.delete';
+
+    // Admin Web Nodes Permissions
+    /** View web hosting nodes */
+    public const ADMIN_WEB_NODES_VIEW = 'admin.web_nodes.view';
+    /** Create web hosting nodes */
+    public const ADMIN_WEB_NODES_CREATE = 'admin.web_nodes.create';
+    /** Edit web hosting nodes (token, packages, self-update) */
+    public const ADMIN_WEB_NODES_EDIT = 'admin.web_nodes.edit';
+    /** Delete web hosting nodes */
+    public const ADMIN_WEB_NODES_DELETE = 'admin.web_nodes.delete';
 
     // Admin Roles Permissions
     /** View roles */
@@ -295,6 +307,10 @@ class Permissions
     /** Create personal API keys even when user API key creation is disabled panel-wide */
     public const USER_API_KEYS_CREATE = 'user.api_keys.create';
 
+    // User Servers Permissions
+    /** Use servers without a panel subdomain when subdomain is required panel-wide */
+    public const USER_SERVERS_BYPASS_SUBDOMAIN_REQUIREMENT = 'user.servers.bypass_subdomain_requirement';
+
     // Admin Tickets Permissions
     /** View support tickets */
     public const ADMIN_TICKETS_VIEW = 'admin.tickets.view';
@@ -349,9 +365,21 @@ class Permissions
     /** Manage ticket messages */
     public const ADMIN_TICKET_MESSAGES_MANAGE = 'admin.ticket_messages.manage';
 
+    // Admin VM Nodes Permissions
+    /** View VDS/Proxmox nodes */
+    public const ADMIN_VM_NODES_VIEW = 'admin.vm_nodes.view';
+    /** Create VDS/Proxmox nodes */
+    public const ADMIN_VM_NODES_CREATE = 'admin.vm_nodes.create';
+    /** Edit VDS/Proxmox nodes (storage, firewall, ISOs, templates) */
+    public const ADMIN_VM_NODES_EDIT = 'admin.vm_nodes.edit';
+    /** Delete VDS/Proxmox nodes */
+    public const ADMIN_VM_NODES_DELETE = 'admin.vm_nodes.delete';
+
     // Admin VM Instances Permissions
     /** View VM instances */
     public const ADMIN_VM_INSTANCES_VIEW = 'admin.vm_instances.view';
+    /** Create VM instances */
+    public const ADMIN_VM_INSTANCES_CREATE = 'admin.vm_instances.create';
     /** Edit existing VM instances */
     public const ADMIN_VM_INSTANCES_EDIT = 'admin.vm_instances.edit';
     /** Delete VM instances */
@@ -376,6 +404,46 @@ class Permissions
     public const ADMIN_WEBSPACES_EDIT = 'admin.webspaces.edit';
     /** Delete webspaces */
     public const ADMIN_WEBSPACES_DELETE = 'admin.webspaces.delete';
+
+    // Admin Mail Hosts Permissions
+    /** View mail hosts */
+    public const ADMIN_MAIL_HOSTS_VIEW = 'admin.mail_hosts.view';
+    /** Create mail hosts */
+    public const ADMIN_MAIL_HOSTS_CREATE = 'admin.mail_hosts.create';
+    /** Edit mail hosts */
+    public const ADMIN_MAIL_HOSTS_EDIT = 'admin.mail_hosts.edit';
+    /** Delete mail hosts */
+    public const ADMIN_MAIL_HOSTS_DELETE = 'admin.mail_hosts.delete';
+
+    // Admin DNS Hosts Permissions
+    /** View DNS hosts */
+    public const ADMIN_DNS_HOSTS_VIEW = 'admin.dns_hosts.view';
+    /** Create DNS hosts */
+    public const ADMIN_DNS_HOSTS_CREATE = 'admin.dns_hosts.create';
+    /** Edit DNS hosts */
+    public const ADMIN_DNS_HOSTS_EDIT = 'admin.dns_hosts.edit';
+    /** Delete DNS hosts */
+    public const ADMIN_DNS_HOSTS_DELETE = 'admin.dns_hosts.delete';
+
+    // Admin Hosting Packages Permissions
+    /** View hosting packages */
+    public const ADMIN_HOSTING_PACKAGES_VIEW = 'admin.hosting_packages.view';
+    /** Create hosting packages */
+    public const ADMIN_HOSTING_PACKAGES_CREATE = 'admin.hosting_packages.create';
+    /** Edit hosting packages */
+    public const ADMIN_HOSTING_PACKAGES_EDIT = 'admin.hosting_packages.edit';
+    /** Delete hosting packages */
+    public const ADMIN_HOSTING_PACKAGES_DELETE = 'admin.hosting_packages.delete';
+
+    // Admin AbuseIPDB Permissions
+    /** View AbuseIPDB status and lookups */
+    public const ADMIN_ABUSEIPDB_VIEW = 'admin.abuseipdb.view';
+    /** Run AbuseIPDB scans and actions */
+    public const ADMIN_ABUSEIPDB_MANAGE = 'admin.abuseipdb.manage';
+
+    // Admin Audit Log Permissions
+    /** View the admin audit log */
+    public const ADMIN_AUDIT_LOG_VIEW = 'admin.audit_log.view';
 
     // Admin Wings Backups Permissions
     /** View Wings backups */
@@ -426,6 +494,12 @@ class Permissions
                 'value' => self::ADMIN_USERS_DELETE,
                 'category' => 'Admin Users',
                 'description' => 'Delete users',
+            ],
+            [
+                'constant' => 'ADMIN_USERS_IMPERSONATE',
+                'value' => self::ADMIN_USERS_IMPERSONATE,
+                'category' => 'Admin Users',
+                'description' => 'View the panel as another user (audit logged)',
             ],
             [
                 'constant' => 'ADMIN_BLOCKED_IPS_VIEW',
@@ -521,25 +595,49 @@ class Permissions
                 'constant' => 'ADMIN_NODES_VIEW',
                 'value' => self::ADMIN_NODES_VIEW,
                 'category' => 'Admin Nodes',
-                'description' => 'View nodes',
+                'description' => 'View Wings/game nodes',
             ],
             [
                 'constant' => 'ADMIN_NODES_CREATE',
                 'value' => self::ADMIN_NODES_CREATE,
                 'category' => 'Admin Nodes',
-                'description' => 'Create new nodes',
+                'description' => 'Create new Wings/game nodes',
             ],
             [
                 'constant' => 'ADMIN_NODES_EDIT',
                 'value' => self::ADMIN_NODES_EDIT,
                 'category' => 'Admin Nodes',
-                'description' => 'Edit existing nodes',
+                'description' => 'Edit existing Wings/game nodes',
             ],
             [
                 'constant' => 'ADMIN_NODES_DELETE',
                 'value' => self::ADMIN_NODES_DELETE,
                 'category' => 'Admin Nodes',
-                'description' => 'Delete nodes',
+                'description' => 'Delete Wings/game nodes',
+            ],
+            [
+                'constant' => 'ADMIN_WEB_NODES_VIEW',
+                'value' => self::ADMIN_WEB_NODES_VIEW,
+                'category' => 'Admin Web Nodes',
+                'description' => 'View web hosting nodes',
+            ],
+            [
+                'constant' => 'ADMIN_WEB_NODES_CREATE',
+                'value' => self::ADMIN_WEB_NODES_CREATE,
+                'category' => 'Admin Web Nodes',
+                'description' => 'Create web hosting nodes',
+            ],
+            [
+                'constant' => 'ADMIN_WEB_NODES_EDIT',
+                'value' => self::ADMIN_WEB_NODES_EDIT,
+                'category' => 'Admin Web Nodes',
+                'description' => 'Edit web hosting nodes (token, packages, self-update)',
+            ],
+            [
+                'constant' => 'ADMIN_WEB_NODES_DELETE',
+                'value' => self::ADMIN_WEB_NODES_DELETE,
+                'category' => 'Admin Web Nodes',
+                'description' => 'Delete web hosting nodes',
             ],
             [
                 'constant' => 'ADMIN_ROLES_VIEW',
@@ -1010,6 +1108,12 @@ class Permissions
                 'description' => 'Create personal API keys even when user API key creation is disabled panel-wide',
             ],
             [
+                'constant' => 'USER_SERVERS_BYPASS_SUBDOMAIN_REQUIREMENT',
+                'value' => self::USER_SERVERS_BYPASS_SUBDOMAIN_REQUIREMENT,
+                'category' => 'User Servers',
+                'description' => 'Use servers without a panel subdomain when subdomain is required panel-wide',
+            ],
+            [
                 'constant' => 'ADMIN_TICKETS_VIEW',
                 'value' => self::ADMIN_TICKETS_VIEW,
                 'category' => 'Admin Tickets',
@@ -1136,10 +1240,40 @@ class Permissions
                 'description' => 'Manage ticket messages',
             ],
             [
+                'constant' => 'ADMIN_VM_NODES_VIEW',
+                'value' => self::ADMIN_VM_NODES_VIEW,
+                'category' => 'Admin VM Nodes',
+                'description' => 'View VDS/Proxmox nodes',
+            ],
+            [
+                'constant' => 'ADMIN_VM_NODES_CREATE',
+                'value' => self::ADMIN_VM_NODES_CREATE,
+                'category' => 'Admin VM Nodes',
+                'description' => 'Create VDS/Proxmox nodes',
+            ],
+            [
+                'constant' => 'ADMIN_VM_NODES_EDIT',
+                'value' => self::ADMIN_VM_NODES_EDIT,
+                'category' => 'Admin VM Nodes',
+                'description' => 'Edit VDS/Proxmox nodes (storage, firewall, ISOs, templates)',
+            ],
+            [
+                'constant' => 'ADMIN_VM_NODES_DELETE',
+                'value' => self::ADMIN_VM_NODES_DELETE,
+                'category' => 'Admin VM Nodes',
+                'description' => 'Delete VDS/Proxmox nodes',
+            ],
+            [
                 'constant' => 'ADMIN_VM_INSTANCES_VIEW',
                 'value' => self::ADMIN_VM_INSTANCES_VIEW,
                 'category' => 'Admin VM Instances',
                 'description' => 'View VM instances',
+            ],
+            [
+                'constant' => 'ADMIN_VM_INSTANCES_CREATE',
+                'value' => self::ADMIN_VM_INSTANCES_CREATE,
+                'category' => 'Admin VM Instances',
+                'description' => 'Create VM instances',
             ],
             [
                 'constant' => 'ADMIN_VM_INSTANCES_EDIT',
@@ -1200,6 +1334,96 @@ class Permissions
                 'value' => self::ADMIN_WEBSPACES_DELETE,
                 'category' => 'Admin WebSpaces',
                 'description' => 'Delete webspaces',
+            ],
+            [
+                'constant' => 'ADMIN_MAIL_HOSTS_VIEW',
+                'value' => self::ADMIN_MAIL_HOSTS_VIEW,
+                'category' => 'Admin Mail Hosts',
+                'description' => 'View mail hosts',
+            ],
+            [
+                'constant' => 'ADMIN_MAIL_HOSTS_CREATE',
+                'value' => self::ADMIN_MAIL_HOSTS_CREATE,
+                'category' => 'Admin Mail Hosts',
+                'description' => 'Create mail hosts',
+            ],
+            [
+                'constant' => 'ADMIN_MAIL_HOSTS_EDIT',
+                'value' => self::ADMIN_MAIL_HOSTS_EDIT,
+                'category' => 'Admin Mail Hosts',
+                'description' => 'Edit mail hosts',
+            ],
+            [
+                'constant' => 'ADMIN_MAIL_HOSTS_DELETE',
+                'value' => self::ADMIN_MAIL_HOSTS_DELETE,
+                'category' => 'Admin Mail Hosts',
+                'description' => 'Delete mail hosts',
+            ],
+            [
+                'constant' => 'ADMIN_DNS_HOSTS_VIEW',
+                'value' => self::ADMIN_DNS_HOSTS_VIEW,
+                'category' => 'Admin DNS Hosts',
+                'description' => 'View DNS hosts',
+            ],
+            [
+                'constant' => 'ADMIN_DNS_HOSTS_CREATE',
+                'value' => self::ADMIN_DNS_HOSTS_CREATE,
+                'category' => 'Admin DNS Hosts',
+                'description' => 'Create DNS hosts',
+            ],
+            [
+                'constant' => 'ADMIN_DNS_HOSTS_EDIT',
+                'value' => self::ADMIN_DNS_HOSTS_EDIT,
+                'category' => 'Admin DNS Hosts',
+                'description' => 'Edit DNS hosts',
+            ],
+            [
+                'constant' => 'ADMIN_DNS_HOSTS_DELETE',
+                'value' => self::ADMIN_DNS_HOSTS_DELETE,
+                'category' => 'Admin DNS Hosts',
+                'description' => 'Delete DNS hosts',
+            ],
+            [
+                'constant' => 'ADMIN_HOSTING_PACKAGES_VIEW',
+                'value' => self::ADMIN_HOSTING_PACKAGES_VIEW,
+                'category' => 'Admin Hosting Packages',
+                'description' => 'View hosting packages',
+            ],
+            [
+                'constant' => 'ADMIN_HOSTING_PACKAGES_CREATE',
+                'value' => self::ADMIN_HOSTING_PACKAGES_CREATE,
+                'category' => 'Admin Hosting Packages',
+                'description' => 'Create hosting packages',
+            ],
+            [
+                'constant' => 'ADMIN_HOSTING_PACKAGES_EDIT',
+                'value' => self::ADMIN_HOSTING_PACKAGES_EDIT,
+                'category' => 'Admin Hosting Packages',
+                'description' => 'Edit hosting packages',
+            ],
+            [
+                'constant' => 'ADMIN_HOSTING_PACKAGES_DELETE',
+                'value' => self::ADMIN_HOSTING_PACKAGES_DELETE,
+                'category' => 'Admin Hosting Packages',
+                'description' => 'Delete hosting packages',
+            ],
+            [
+                'constant' => 'ADMIN_ABUSEIPDB_VIEW',
+                'value' => self::ADMIN_ABUSEIPDB_VIEW,
+                'category' => 'Admin AbuseIPDB',
+                'description' => 'View AbuseIPDB status and lookups',
+            ],
+            [
+                'constant' => 'ADMIN_ABUSEIPDB_MANAGE',
+                'value' => self::ADMIN_ABUSEIPDB_MANAGE,
+                'category' => 'Admin AbuseIPDB',
+                'description' => 'Run AbuseIPDB scans and actions',
+            ],
+            [
+                'constant' => 'ADMIN_AUDIT_LOG_VIEW',
+                'value' => self::ADMIN_AUDIT_LOG_VIEW,
+                'category' => 'Admin Audit Log',
+                'description' => 'View the admin audit log',
             ],
             [
                 'constant' => 'ADMIN_WINGS_BACKUPS_VIEW',

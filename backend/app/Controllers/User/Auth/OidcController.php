@@ -20,7 +20,9 @@ namespace App\Controllers\User\Auth;
 use App\App;
 use App\Chat\User;
 use App\Cache\Cache;
+use App\Chat\SsoIdentity;
 use App\Helpers\ApiResponse;
+use App\Helpers\OAuthStateCookie;
 use OpenApi\Attributes as OA;
 use App\Config\ConfigInterface;
 use App\Helpers\PanelIpBlockGuard;
@@ -100,7 +102,7 @@ class OidcController
         }
 
         $cached = Cache::get('oidc_state_' . $state);
-        if (!is_array($cached) || !isset($cached['nonce'], $cached['provider_uuid'])) {
+        if (!is_array($cached) || !isset($cached['nonce'], $cached['provider_uuid']) || !OAuthStateCookie::matches($request, $state)) {
             return new RedirectResponse('/auth/login?error=oidc_invalid_state');
         }
 
@@ -149,6 +151,9 @@ class OidcController
             'code' => $code,
             'redirect_uri' => $redirectUri,
         ];
+        if (isset($cached['code_verifier']) && is_string($cached['code_verifier']) && $cached['code_verifier'] !== '') {
+            $basePostFields['code_verifier'] = $cached['code_verifier'];
+        }
 
         $supportedTokenAuthMethods = $discovery['token_endpoint_auth_methods_supported'] ?? null;
         $tokenAuthMethods = ['client_secret_basic'];
@@ -334,16 +339,26 @@ class OidcController
 
         $providerId = $providerUuid;
 
+        if (!SsoController::emailDomainAllowed(is_string($email) ? $email : null)) {
+            return $this->oidcErrorRedirect('sso_email_domain_not_allowed', $isLinkFlow);
+        }
+
         if ($isLinkFlow) {
             return $this->completeAccountLink($cached['link_user_uuid'], $providerId, $subject, $email);
         }
 
         $user = $this->findUserByOidcSubject($providerId, $subject);
-        if (!$user && $email && $emailVerifiedStrict) {
+        if (!$user) {
+            $identity = SsoIdentity::findByProviderSubject('oidc:' . $providerId, $subject);
+            $user = $identity !== null ? User::getUserById((int) $identity['user_id']) : null;
+        }
+        // Linking by email is opt in (Settings > OAuth > auto-link by verified email).
+        if (!$user && $email && $emailVerifiedStrict && SsoController::autoLinkEnabled()) {
             $user = User::getUserByEmail($email);
         }
 
-        $autoProvision = ($provider['auto_provision'] ?? 'false') === 'true';
+        $autoProvision = ($provider['auto_provision'] ?? 'false') === 'true'
+            && $app->getConfig()->getSetting(ConfigInterface::REGISTRATION_ENABLED, 'true') === 'true';
 
         if (!$user && !$autoProvision) {
             return new RedirectResponse('/auth/login?error=oidc_user_not_found');
@@ -368,9 +383,12 @@ class OidcController
             ]);
         }
 
-        $loginController = new LoginController();
+        if (($user['deleted'] ?? 'false') !== 'true' && ($user['banned'] ?? 'false') !== 'true') {
+            SsoIdentity::link((int) $user['id'], 'oidc:' . $providerId, $subject, is_string($email) ? $email : null);
+        }
 
-        return $loginController->completeLogin($user, '/dashboard');
+        // The login page finishes the sign-in so two factor, ban and deletion checks apply.
+        return SsoController::loginHandoff($user, 'oidc:' . $providerId);
     }
 
     /**
@@ -385,6 +403,11 @@ class OidcController
             return ApiResponse::error('Unauthorized', 'UNAUTHORIZED', 401);
         }
 
+        $linkedProvider = (string) ($user['oidc_provider'] ?? '');
+        if ($linkedProvider !== '' && !empty($user['id']) && SsoController::isLastLoginMethod($user, 'oidc:' . $linkedProvider)) {
+            return ApiResponse::error('Set a password or link another provider before removing your last sign-in method', 'SSO_LAST_LOGIN_METHOD', 409);
+        }
+
         $updated = User::updateUser((string) $user['uuid'], [
             'oidc_provider' => null,
             'oidc_subject' => null,
@@ -393,6 +416,10 @@ class OidcController
 
         if (!$updated) {
             return ApiResponse::error('Failed to unlink OIDC account', 'OIDC_UNLINK_FAILED', 500);
+        }
+        if ($linkedProvider !== '' && !empty($user['id'])) {
+            SsoIdentity::unlink((int) $user['id'], 'oidc:' . $linkedProvider);
+            SsoController::audit((string) $user['uuid'], 'sso_unlink', 'Unlinked OIDC sign-in');
         }
 
         return ApiResponse::success([], 'OIDC account unlinked successfully', 200);
@@ -428,9 +455,11 @@ class OidcController
 
         $state = bin2hex(random_bytes(16));
         $nonce = bin2hex(random_bytes(16));
+        [$codeVerifier, $codeChallenge] = SsoController::pkcePair();
         $stateData = [
             'nonce' => $nonce,
             'provider_uuid' => $providerUuid,
+            'code_verifier' => $codeVerifier,
         ];
         if ($linkUserUuid !== null) {
             $stateData['link_user_uuid'] = $linkUserUuid;
@@ -446,9 +475,14 @@ class OidcController
             'scope' => $scopes,
             'state' => $state,
             'nonce' => $nonce,
+            'code_challenge' => $codeChallenge,
+            'code_challenge_method' => 'S256',
         ]);
 
-        return new RedirectResponse($discovery['authorization_endpoint'] . '?' . $query);
+        $response = new RedirectResponse($discovery['authorization_endpoint'] . '?' . $query);
+        OAuthStateCookie::attach($response, $state);
+
+        return $response;
     }
 
     private function oidcErrorRedirect(string $errorCode, bool $accountSettings): RedirectResponse
@@ -479,6 +513,12 @@ class OidcController
         if (!$updated) {
             return new RedirectResponse('/dashboard/account?tab=settings&error=oidc_link_failed');
         }
+        $previous = (string) ($user['oidc_provider'] ?? '');
+        if ($previous !== '' && $previous !== $providerId) {
+            SsoIdentity::unlink((int) $user['id'], 'oidc:' . $previous);
+        }
+        SsoIdentity::link((int) $user['id'], 'oidc:' . $providerId, $subject, $email);
+        SsoController::audit($userUuid, 'sso_link', 'Linked OIDC sign-in');
 
         return new RedirectResponse('/dashboard/account?tab=settings&linked=oidc');
     }
@@ -614,6 +654,7 @@ class OidcController
             return null;
         }
 
+        User::updateUser($uuid, ['password_set' => 'false']);
         AbuseIPDBRegistrationGuard::applyAutoBanIfNeeded($uuid, $abuseDecision);
 
         return User::getUserByUuid($uuid);

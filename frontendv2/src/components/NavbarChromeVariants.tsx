@@ -267,8 +267,9 @@ function NavbarMainRow({
 
     return (
         <div className='relative flex min-w-0 flex-1 items-center gap-x-2 self-stretch sm:gap-x-3'>
-            {/* Title / header content keeps its width (up to 40%); the search shrinks first. */}
-            <div className='flex max-w-[calc(100%-6.5rem)] min-w-0 flex-[1_0_auto] items-center gap-2 sm:max-w-[45%] md:max-w-[40%]'>
+            {/* Title / header content keeps its width (up to 40%); the search shrinks first. On phones it
+                shrinks (and truncates) so the bell and avatar are never pushed off screen. */}
+            <div className='flex max-w-[calc(100%-6.5rem)] min-w-0 flex-[1_1_0%] items-center gap-2 sm:max-w-[45%] sm:flex-[1_0_auto] md:max-w-[40%]'>
                 <div className='min-w-0 flex-1'>
                     {headerContent ?? (
                         <h1
@@ -296,7 +297,7 @@ function NavbarMainRow({
             <NavbarCenterSearch variant={variant} compact={Boolean(headerContent)} />
 
             {/* Never shrinks below its content, so the search gives way first. */}
-            <div className='flex flex-[1_0_auto] items-center justify-end'>
+            <div className='ml-auto flex flex-[0_0_auto] items-center justify-end sm:flex-[1_0_auto]'>
                 <NavbarActionsCluster
                     compactSearch={Boolean(headerContent)}
                     variant={variant}
@@ -408,14 +409,14 @@ export function NavbarModernChrome(props: NavbarChromeProps) {
     return (
         <header
             className={cn(
-                'z-30 shrink-0 px-3 pt-3 pb-2 sm:px-4 lg:px-6',
+                'z-30 shrink-0 px-3 pt-3 pb-2 sm:px-6 lg:px-8',
                 navbarSticky ? 'sticky top-0' : 'relative',
                 desktopHoverDock && 'lg:static lg:top-auto',
             )}
         >
             <div
                 className={cn(
-                    'fp-chrome-surface mx-auto flex h-12 max-w-450 items-center gap-x-2 rounded-2xl border px-2.5 sm:h-13 sm:gap-x-3 sm:px-3.5',
+                    'fp-chrome-surface mx-auto flex h-12 w-full max-w-(--fp-content-max,80rem) items-center gap-x-2 rounded-2xl border px-2.5 sm:h-13 sm:gap-x-3 sm:px-3.5',
                     navbarGlowClass,
                 )}
             >

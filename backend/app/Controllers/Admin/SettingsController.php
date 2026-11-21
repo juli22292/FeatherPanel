@@ -25,6 +25,7 @@ use App\Helpers\ApiResponse;
 use OpenApi\Attributes as OA;
 use App\Config\ConfigInterface;
 use App\Telemetry\UmamiTelemetry;
+use App\Mail\MailTemplateRenderer;
 use App\CloudFlare\CloudFlareRealIP;
 use App\Telemetry\UmamiTelemetryState;
 use App\Plugins\Events\Events\SettingsEvent;
@@ -153,12 +154,44 @@ class SettingsController
         ConfigInterface::MODULE_WEB_ENABLED,
         ConfigInterface::MODULE_VDS_ENABLED,
         ConfigInterface::PTERODACTYL_IMPORTER_VISIBILITY,
+        ConfigInterface::VNC_PROXY_VIA_PANEL,
+        ConfigInterface::VNC_USE_PVE_REDIRECT,
+        ConfigInterface::VDS_GRAPHS_ENABLED,
+        ConfigInterface::VDS_GRAPHS_MAX_TIMEFRAME,
+        ConfigInterface::VDS_CONSOLE_PASTE_ENABLED,
+        ConfigInterface::VDS_CONSOLE_SCREENSHOT_ENABLED,
+        ConfigInterface::VDS_CTRL_ALT_DEL_ENABLED,
+        ConfigInterface::VDS_ISO_MODE,
+        ConfigInterface::VDS_ISO_LIBRARY_ONLY,
+        ConfigInterface::VDS_ISO_USER_UPLOAD_ENABLED,
+        ConfigInterface::VDS_ISO_USER_URL_ENABLED,
+        ConfigInterface::VDS_ISO_USER_REQUIRE_APPROVAL,
+        ConfigInterface::VDS_RESCUE_ENABLED,
+        ConfigInterface::VDS_SNAPSHOTS_ENABLED,
+        ConfigInterface::VDS_SNAPSHOTS_INCLUDE_RAM,
+        ConfigInterface::VDS_MONITOR_ENABLED,
+        ConfigInterface::VDS_NOTIFY_DOWN_ENABLED,
+        ConfigInterface::VDS_NOTIFY_HIGH_CPU_ENABLED,
+        ConfigInterface::VDS_NOTIFY_BACKUP_FAILED_ENABLED,
+        ConfigInterface::VDS_FIREWALL_ENABLED,
+        ConfigInterface::VDS_FIREWALL_ALLOW_POLICY,
+        ConfigInterface::VDS_SCHEDULES_ENABLED,
+        ConfigInterface::VDS_SCHEDULES_ALLOW_HOURLY,
+        ConfigInterface::VDS_REAUTH_MODE,
+        ConfigInterface::VDS_BANDWIDTH_ENABLED,
+        ConfigInterface::VDS_BANDWIDTH_COUNT,
+        ConfigInterface::VDS_BANDWIDTH_ACTION,
+        ConfigInterface::VDS_SUSPEND_SHOW_REASON,
+        ConfigInterface::VDS_EXPIRY_STOP_VM,
+        ConfigInterface::VDS_PLACEMENT_STRATEGY,
+        ConfigInterface::VDS_MIGRATION_ENABLED,
     ];
 
     private $app;
     private $settings;
     private $sensitiveSettings = [
         ConfigInterface::SMTP_PASS,
+        ConfigInterface::MAIL_API_KEY,
         ConfigInterface::TURNSTILE_KEY_PRIV,
         ConfigInterface::CHATBOT_GOOGLE_AI_API_KEY,
         ConfigInterface::CHATBOT_OPENROUTER_API_KEY,
@@ -166,12 +199,14 @@ class SettingsController
         ConfigInterface::CHATBOT_GROK_API_KEY,
         ConfigInterface::CHATBOT_PERPLEXITY_API_KEY,
         ConfigInterface::DISCORD_OAUTH_CLIENT_SECRET,
+        ConfigInterface::SSO_GOOGLE_CLIENT_SECRET,
+        ConfigInterface::SSO_GITHUB_CLIENT_SECRET,
         ConfigInterface::HCAPTCHA_SECRET_KEY,
         ConfigInterface::RECAPTCHA_SECRET_KEY,
         ConfigInterface::FRIENDLY_CAPTCHA_SECRET_KEY,
-        ConfigInterface::REFORGE_CAPTCHA_SECRET_KEY,
         ConfigInterface::ABUSEIPDB_API_KEY,
         ConfigInterface::TEMP_FILES_API_TOKEN,
+        ConfigInterface::APP_PWA_VAPID_PRIVATE,
         // Add other sensitive settings here
     ];
 
@@ -189,6 +224,7 @@ class SettingsController
                 ConfigInterface::APP_TIMEZONE,
                 ConfigInterface::APP_SSO_REDIRECT_PATH,
                 ConfigInterface::APP_SSO_TOKEN_LIFETIME_MINUTES,
+                ConfigInterface::API_CLIENTS_ALLOW_PUBLIC_KEY_AUTH,
                 ConfigInterface::APP_BACKGROUND_IMAGE_URL,
                 ConfigInterface::APP_BACKGROUND_LOCK,
                 ConfigInterface::APP_LOCALE_DEFAULT,
@@ -224,6 +260,68 @@ class SettingsController
                 ConfigInterface::MODULE_WEB_ENABLED,
                 ConfigInterface::MODULE_VDS_ENABLED,
                 ConfigInterface::PTERODACTYL_IMPORTER_VISIBILITY,
+            ],
+        ],
+        'vds' => [
+            'name' => 'VDS',
+            'description' => 'Virtual server (Proxmox) console, VNC, graphs, snapshots, rescue/ISO actions and monitoring notifications. Panel proxy needs async-runner and reverse-proxy /vnc-proxy* → :9100.',
+            'icon' => 'server',
+            'settings' => [
+                ConfigInterface::VNC_PROXY_VIA_PANEL,
+                ConfigInterface::VNC_USE_PVE_REDIRECT,
+                ConfigInterface::VDS_GRAPHS_ENABLED,
+                ConfigInterface::VDS_GRAPHS_MAX_TIMEFRAME,
+                ConfigInterface::VDS_CONSOLE_PASTE_ENABLED,
+                ConfigInterface::VDS_CONSOLE_PASTE_MAX_CHARS,
+                ConfigInterface::VDS_CONSOLE_SCREENSHOT_ENABLED,
+                ConfigInterface::VDS_CTRL_ALT_DEL_ENABLED,
+                ConfigInterface::VDS_ISO_MODE,
+                ConfigInterface::VDS_ISO_ALLOWED_ISOS,
+                ConfigInterface::VDS_ISO_LIBRARY_ONLY,
+                ConfigInterface::VDS_ISO_USER_UPLOAD_ENABLED,
+                ConfigInterface::VDS_ISO_USER_URL_ENABLED,
+                ConfigInterface::VDS_ISO_USER_MAX_SIZE_MB,
+                ConfigInterface::VDS_ISO_USER_MAX_PER_USER,
+                ConfigInterface::VDS_ISO_USER_URL_DOMAINS,
+                ConfigInterface::VDS_ISO_USER_REQUIRE_APPROVAL,
+                ConfigInterface::VDS_RESCUE_ENABLED,
+                ConfigInterface::VDS_SNAPSHOTS_ENABLED,
+                ConfigInterface::VDS_SNAPSHOTS_DEFAULT_LIMIT,
+                ConfigInterface::VDS_SNAPSHOTS_INCLUDE_RAM,
+                ConfigInterface::VDS_MONITOR_ENABLED,
+                ConfigInterface::VDS_MONITOR_INTERVAL_MINUTES,
+                ConfigInterface::VDS_NOTIFY_DOWN_ENABLED,
+                ConfigInterface::VDS_NOTIFY_HIGH_CPU_ENABLED,
+                ConfigInterface::VDS_HIGH_CPU_THRESHOLD,
+                ConfigInterface::VDS_HIGH_CPU_DURATION_MINUTES,
+                ConfigInterface::VDS_NOTIFY_BACKUP_FAILED_ENABLED,
+                ConfigInterface::VDS_NOTIFY_COOLDOWN_HOURS,
+                ConfigInterface::VDS_SUSPEND_SHOW_REASON,
+                ConfigInterface::VDS_SUSPEND_MESSAGE,
+                ConfigInterface::VDS_EXPIRY_WARN_DAYS,
+                ConfigInterface::VDS_EXPIRY_STOP_VM,
+                ConfigInterface::VDS_PLACEMENT_STRATEGY,
+                ConfigInterface::VDS_PLACEMENT_OVERCOMMIT_PERCENT,
+                ConfigInterface::VDS_MIGRATION_ENABLED,
+                ConfigInterface::VDS_CONSOLE_BRAND_NAME,
+                ConfigInterface::VDS_CONSOLE_BRAND_LOGO,
+                ConfigInterface::VDS_REAUTH_MODE,
+                ConfigInterface::VDS_REAUTH_ACTIONS,
+                ConfigInterface::VDS_BANDWIDTH_ENABLED,
+                ConfigInterface::VDS_BANDWIDTH_LIMIT_GB,
+                ConfigInterface::VDS_BANDWIDTH_COUNT,
+                ConfigInterface::VDS_BANDWIDTH_ACTION,
+                ConfigInterface::VDS_BANDWIDTH_THROTTLE_MBIT,
+                ConfigInterface::VDS_BANDWIDTH_WARN_PERCENT,
+                ConfigInterface::VDS_FIREWALL_ENABLED,
+                ConfigInterface::VDS_FIREWALL_MAX_RULES,
+                ConfigInterface::VDS_FIREWALL_ALLOW_POLICY,
+                ConfigInterface::VDS_FIREWALL_PRESETS,
+                ConfigInterface::VDS_SCHEDULES_ENABLED,
+                ConfigInterface::VDS_SCHEDULES_MAX_PER_VDS,
+                ConfigInterface::VDS_SCHEDULES_ACTIONS,
+                ConfigInterface::VDS_SCHEDULES_ALLOW_HOURLY,
+                ConfigInterface::VDS_SCHEDULES_MAX_KEEP,
             ],
         ],
         'links' => [
@@ -297,13 +395,6 @@ class SettingsController
                 ConfigInterface::RECAPTCHA_V3_ACTION,
                 ConfigInterface::FRIENDLY_CAPTCHA_SITE_KEY,
                 ConfigInterface::FRIENDLY_CAPTCHA_SECRET_KEY,
-                ConfigInterface::REFORGE_CAPTCHA_SITE_KEY,
-                ConfigInterface::REFORGE_CAPTCHA_SECRET_KEY,
-                ConfigInterface::REFORGE_CAPTCHA_WIDGET_TYPE,
-                ConfigInterface::REFORGE_CAPTCHA_THEME,
-                ConfigInterface::REFORGE_CAPTCHA_SIZE,
-                ConfigInterface::REFORGE_CAPTCHA_LANG,
-                ConfigInterface::REFORGE_CAPTCHA_MIN_SCORE,
                 ConfigInterface::REGISTRATION_ENABLED,
 
                 ConfigInterface::REGISTRATION_REQUIRE_EMAIL_VERIFICATION,
@@ -338,12 +429,17 @@ class SettingsController
             'icon' => 'mail',
             'settings' => [
                 ConfigInterface::SMTP_ENABLED,
+                ConfigInterface::MAIL_PROVIDER_PRESET,
+                ConfigInterface::MAIL_TRANSPORT,
+                ConfigInterface::SMTP_FROM,
                 ConfigInterface::SMTP_HOST,
                 ConfigInterface::SMTP_PORT,
                 ConfigInterface::SMTP_USER,
                 ConfigInterface::SMTP_PASS,
-                ConfigInterface::SMTP_FROM,
                 ConfigInterface::SMTP_ENCRYPTION,
+                ConfigInterface::MAIL_API_KEY,
+                ConfigInterface::MAIL_API_DOMAIN,
+                ConfigInterface::MAIL_API_REGION,
             ],
         ],
         'status_page' => [
@@ -352,6 +448,8 @@ class SettingsController
             'icon' => 'activity',
             'settings' => [
                 ConfigInterface::STATUS_PAGE_ENABLED,
+                ConfigInterface::MAINTENANCE_MODE_ENABLED,
+                ConfigInterface::MAINTENANCE_MODE_MESSAGE,
                 ConfigInterface::STATUS_PAGE_PUBLIC_ENABLED,
                 ConfigInterface::STATUS_PAGE_SHOW_NODE_STATUS,
                 ConfigInterface::STATUS_PAGE_SHOW_LOAD_USAGE,
@@ -378,12 +476,21 @@ class SettingsController
         ],
         'oauth' => [
             'name' => 'OAuth',
-            'description' => 'Discord OAuth configuration. For OIDC/SSO use Admin → OIDC / SSO Providers.',
+            'description' => 'Discord, Google and GitHub sign-in, plus shared SSO rules. For OIDC/SSO use Admin → OIDC / SSO Providers.',
             'icon' => 'shield',
             'settings' => [
                 ConfigInterface::DISCORD_OAUTH_ENABLED,
                 ConfigInterface::DISCORD_OAUTH_CLIENT_ID,
                 ConfigInterface::DISCORD_OAUTH_CLIENT_SECRET,
+                ConfigInterface::SSO_GOOGLE_ENABLED,
+                ConfigInterface::SSO_GOOGLE_CLIENT_ID,
+                ConfigInterface::SSO_GOOGLE_CLIENT_SECRET,
+                ConfigInterface::SSO_GITHUB_ENABLED,
+                ConfigInterface::SSO_GITHUB_CLIENT_ID,
+                ConfigInterface::SSO_GITHUB_CLIENT_SECRET,
+                ConfigInterface::SSO_ALLOWED_EMAIL_DOMAINS,
+                ConfigInterface::SSO_ALLOW_REGISTRATION,
+                ConfigInterface::SSO_AUTO_LINK_VERIFIED_EMAIL,
             ],
         ],
         'servers' => [
@@ -405,11 +512,13 @@ class SettingsController
                 ConfigInterface::SERVER_ALLOW_USER_MADE_FIREWALL,
                 ConfigInterface::SERVER_ALLOW_USER_MADE_PROXY,
                 ConfigInterface::SERVER_PROXY_MAX_PER_SERVER,
+                ConfigInterface::SERVER_UPLOAD_CHUNK_SIZE_MB,
                 ConfigInterface::SERVER_ALLOW_CROSS_REALM_SPELL_CHANGE,
                 ConfigInterface::SERVER_ALLOW_USER_SERVER_DELETION,
                 ConfigInterface::SERVER_ALLOW_USER_MADE_IMPORT,
                 ConfigInterface::SERVER_ALLOW_USER_MADE_FASTDL,
                 ConfigInterface::SERVER_ALLOW_USER_MADE_SUBDOMAINS,
+                ConfigInterface::SERVER_REQUIRE_SUBDOMAIN,
                 ConfigInterface::SERVER_AUTO_START_ON_NODE_RECONNECT,
                 ConfigInterface::SERVER_AUTO_START_STAGGER_SECONDS,
                 ConfigInterface::SERVER_AUTO_START_INITIAL_DELAY_SECONDS,
@@ -426,6 +535,7 @@ class SettingsController
             'icon' => 'bot',
             'settings' => [
                 ConfigInterface::CHATBOT_ENABLED,
+                ConfigInterface::CHATBOT_EDITOR_HELPER_ENABLED,
                 ConfigInterface::CHATBOT_AI_PROVIDER,
                 ConfigInterface::CHATBOT_TEMPERATURE,
                 ConfigInterface::CHATBOT_MAX_TOKENS,
@@ -479,6 +589,9 @@ class SettingsController
                 ConfigInterface::APP_PWA_DESCRIPTION,
                 ConfigInterface::APP_PWA_THEME_COLOR,
                 ConfigInterface::APP_PWA_BG_COLOR,
+                ConfigInterface::APP_PWA_PUSH_ENABLED,
+                ConfigInterface::APP_PWA_VAPID_SUBJECT,
+                ConfigInterface::APP_PWA_VAPID_PUBLIC,
             ],
         ],
         'other' => [
@@ -497,6 +610,8 @@ class SettingsController
     public function __construct()
     {
         $this->app = App::getInstance(true);
+        $this->settingsCategories[\App\Services\Storage\StorageSettings::CATEGORY] = \App\Services\Storage\StorageSettings::category();
+        $this->sensitiveSettings = array_merge($this->sensitiveSettings, \App\Services\Storage\StorageSettings::SENSITIVE);
         $this->settings = [
             ConfigInterface::MODULE_GAME_ENABLED => [
                 'name' => ConfigInterface::MODULE_GAME_ENABLED,
@@ -545,6 +660,654 @@ class SettingsController
                 'validation' => 'required|string|max:255',
                 'options' => ['true', 'false'],
                 'category' => 'modules',
+            ],
+            ConfigInterface::VNC_PROXY_VIA_PANEL => [
+                'name' => ConfigInterface::VNC_PROXY_VIA_PANEL,
+                'value' => $this->app
+                    ->getConfig()
+                    ->getSetting(
+                        ConfigInterface::VNC_PROXY_VIA_PANEL,
+                        'false',
+                    ),
+                'description' => 'Proxy VNC through the panel (wss://panel/vnc-proxy/{token}). Requires async-runner and reverse-proxy forwarding /vnc-proxy* to it. Hides Proxmox from the browser.',
+                'type' => 'select',
+                'required' => true,
+                'placeholder' => 'false',
+                'validation' => 'required|string|max:255',
+                'options' => ['true', 'false'],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VNC_USE_PVE_REDIRECT => [
+                'name' => ConfigInterface::VNC_USE_PVE_REDIRECT,
+                'value' => $this->app
+                    ->getConfig()
+                    ->getSetting(
+                        ConfigInterface::VNC_USE_PVE_REDIRECT,
+                        'false',
+                    ),
+                'description' => 'Open Proxmox noVNC in a new tab (creates a short-lived PVE console user). Takes priority over the panel VNC proxy when enabled.',
+                'type' => 'select',
+                'required' => true,
+                'placeholder' => 'false',
+                'validation' => 'required|string|max:255',
+                'options' => ['true', 'false'],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_GRAPHS_ENABLED => [
+                'name' => ConfigInterface::VDS_GRAPHS_ENABLED,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_GRAPHS_ENABLED, 'true'),
+                'description' => 'Show resource history graphs (Proxmox RRD data) on the VDS console.',
+                'type' => 'select',
+                'required' => true,
+                'placeholder' => 'true',
+                'validation' => 'required|string|in:true,false',
+                'options' => ['true', 'false'],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_GRAPHS_MAX_TIMEFRAME => [
+                'name' => ConfigInterface::VDS_GRAPHS_MAX_TIMEFRAME,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_GRAPHS_MAX_TIMEFRAME, 'week'),
+                'description' => 'Longest time range users can pick in the VDS resource graphs.',
+                'type' => 'select',
+                'required' => true,
+                'placeholder' => 'week',
+                'validation' => 'required|string|in:hour,day,week,month,year',
+                'options' => ['hour', 'day', 'week', 'month', 'year'],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_CONSOLE_PASTE_ENABLED => [
+                'name' => ConfigInterface::VDS_CONSOLE_PASTE_ENABLED,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_CONSOLE_PASTE_ENABLED, 'true'),
+                'description' => 'Allow typing text and pasting the clipboard into the VDS console (sent as key presses over VNC).',
+                'type' => 'select',
+                'required' => true,
+                'placeholder' => 'true',
+                'validation' => 'required|string|in:true,false',
+                'options' => ['true', 'false'],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_CONSOLE_PASTE_MAX_CHARS => [
+                'name' => ConfigInterface::VDS_CONSOLE_PASTE_MAX_CHARS,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_CONSOLE_PASTE_MAX_CHARS, '2000'),
+                'description' => 'Maximum number of characters a single paste may send to the VDS console.',
+                'type' => 'number',
+                'required' => true,
+                'placeholder' => '2000',
+                'validation' => 'required|integer|min:1|max:20000',
+                'options' => [],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_CONSOLE_SCREENSHOT_ENABLED => [
+                'name' => ConfigInterface::VDS_CONSOLE_SCREENSHOT_ENABLED,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_CONSOLE_SCREENSHOT_ENABLED, 'true'),
+                'description' => 'Show the screenshot button on the VDS console (captured in the browser as PNG).',
+                'type' => 'select',
+                'required' => true,
+                'placeholder' => 'true',
+                'validation' => 'required|string|in:true,false',
+                'options' => ['true', 'false'],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_CTRL_ALT_DEL_ENABLED => [
+                'name' => ConfigInterface::VDS_CTRL_ALT_DEL_ENABLED,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_CTRL_ALT_DEL_ENABLED, 'true'),
+                'description' => 'Allow sending Ctrl+Alt+Del from the VDS console actions menu.',
+                'type' => 'select',
+                'required' => true,
+                'placeholder' => 'true',
+                'validation' => 'required|string|in:true,false',
+                'options' => ['true', 'false'],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_ISO_MODE => [
+                'name' => ConfigInterface::VDS_ISO_MODE,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_ISO_MODE, 'provider'),
+                'description' => 'Who can supply ISOs for VDS users: provider = only ISOs from the admin library / allowed storages, provider_user = users may also upload or download their own ISOs, disabled = no ISO mounting for users. Can be overridden per VDS.',
+                'type' => 'select',
+                'required' => true,
+                'placeholder' => 'provider',
+                'validation' => 'required|string|in:provider,provider_user,disabled',
+                'options' => ['provider', 'provider_user', 'disabled'],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_ISO_ALLOWED_STORAGES => [
+                'name' => ConfigInterface::VDS_ISO_ALLOWED_STORAGES,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_ISO_ALLOWED_STORAGES, ''),
+                'description' => 'Comma separated Proxmox storages users may pick ISOs from. Empty = every storage with ISO content.',
+                'type' => 'text',
+                'required' => false,
+                'placeholder' => '',
+                'validation' => 'nullable|string|max:1024',
+                'options' => [],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_ISO_ALLOWED_ISOS => [
+                'name' => ConfigInterface::VDS_ISO_ALLOWED_ISOS,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_ISO_ALLOWED_ISOS, ''),
+                'description' => 'Comma or newline separated ISO file names or volids (wildcards * allowed) users may mount. Empty = all ISOs on the allowed storages.',
+                'type' => 'textarea',
+                'required' => false,
+                'placeholder' => '',
+                'validation' => 'nullable|string|max:8192',
+                'options' => [],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_FIREWALL_ENABLED => [
+                'name' => ConfigInterface::VDS_FIREWALL_ENABLED,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_FIREWALL_ENABLED, 'false'),
+                'description' => 'Let VDS users manage their own Proxmox VM firewall (rules, presets, inbound policy). Requires the Proxmox datacenter firewall to be enabled. Off by default.',
+                'type' => 'select',
+                'required' => true,
+                'placeholder' => 'false',
+                'validation' => 'required|string|in:true,false',
+                'options' => ['true', 'false'],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_FIREWALL_MAX_RULES => [
+                'name' => ConfigInterface::VDS_FIREWALL_MAX_RULES,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_FIREWALL_MAX_RULES, '50'),
+                'description' => 'Maximum firewall rules per VDS.',
+                'type' => 'number',
+                'required' => true,
+                'placeholder' => '50',
+                'validation' => 'required|integer|min:1|max:500',
+                'options' => [],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_FIREWALL_ALLOW_POLICY => [
+                'name' => ConfigInterface::VDS_FIREWALL_ALLOW_POLICY,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_FIREWALL_ALLOW_POLICY, 'true'),
+                'description' => 'Allow users to change the default inbound policy (ACCEPT / DROP / REJECT) of their VDS firewall.',
+                'type' => 'select',
+                'required' => true,
+                'placeholder' => 'true',
+                'validation' => 'required|string|in:true,false',
+                'options' => ['true', 'false'],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_FIREWALL_PRESETS => [
+                'name' => ConfigInterface::VDS_FIREWALL_PRESETS,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_FIREWALL_PRESETS, 'ssh,web,rdp,mail,dns,ping'),
+                'description' => 'Comma separated rule presets offered to users: ssh, web, rdp, mail, dns, ping, ftp, mysql, minecraft. Empty = no presets.',
+                'type' => 'text',
+                'required' => false,
+                'placeholder' => 'ssh,web,rdp,mail,dns,ping',
+                'validation' => 'nullable|string|max:500',
+                'options' => [],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_SCHEDULES_ENABLED => [
+                'name' => ConfigInterface::VDS_SCHEDULES_ENABLED,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_SCHEDULES_ENABLED, 'true'),
+                'description' => 'Let VDS users create scheduled tasks (auto reboot, auto snapshot with rotation) executed by the panel cron.',
+                'type' => 'select',
+                'required' => true,
+                'placeholder' => 'true',
+                'validation' => 'required|string|in:true,false',
+                'options' => ['true', 'false'],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_SCHEDULES_MAX_PER_VDS => [
+                'name' => ConfigInterface::VDS_SCHEDULES_MAX_PER_VDS,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_SCHEDULES_MAX_PER_VDS, '5'),
+                'description' => 'Maximum scheduled tasks per VDS.',
+                'type' => 'number',
+                'required' => true,
+                'placeholder' => '5',
+                'validation' => 'required|integer|min:0|max:50',
+                'options' => [],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_SCHEDULES_ACTIONS => [
+                'name' => ConfigInterface::VDS_SCHEDULES_ACTIONS,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_SCHEDULES_ACTIONS, 'reboot,snapshot'),
+                'description' => 'Comma separated schedule actions users may pick: reboot, snapshot.',
+                'type' => 'text',
+                'required' => false,
+                'placeholder' => 'reboot,snapshot',
+                'validation' => 'nullable|string|max:200',
+                'options' => [],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_SCHEDULES_ALLOW_HOURLY => [
+                'name' => ConfigInterface::VDS_SCHEDULES_ALLOW_HOURLY,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_SCHEDULES_ALLOW_HOURLY, 'false'),
+                'description' => 'Allow hourly schedules (otherwise only daily and weekly).',
+                'type' => 'select',
+                'required' => true,
+                'placeholder' => 'false',
+                'validation' => 'required|string|in:true,false',
+                'options' => ['true', 'false'],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_SCHEDULES_MAX_KEEP => [
+                'name' => ConfigInterface::VDS_SCHEDULES_MAX_KEEP,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_SCHEDULES_MAX_KEEP, '5'),
+                'description' => 'Maximum automatic snapshots a snapshot schedule may keep (still limited by the VDS snapshot limit).',
+                'type' => 'number',
+                'required' => true,
+                'placeholder' => '5',
+                'validation' => 'required|integer|min:1|max:50',
+                'options' => [],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_REAUTH_MODE => [
+                'name' => ConfigInterface::VDS_REAUTH_MODE,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_REAUTH_MODE, 'off'),
+                'description' => 'Ask users to re-confirm dangerous VDS actions: off, password = account password, 2fa_or_password = 2FA code when the user has 2FA enabled, otherwise the password.',
+                'type' => 'select',
+                'required' => true,
+                'placeholder' => 'off',
+                'validation' => 'required|string|in:off,password,2fa_or_password',
+                'options' => ['off', 'password', '2fa_or_password'],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_REAUTH_ACTIONS => [
+                'name' => ConfigInterface::VDS_REAUTH_ACTIONS,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_REAUTH_ACTIONS, 'reinstall,rollback,restore'),
+                'description' => 'Comma separated actions that need re-confirmation: reinstall, rollback (snapshot), restore (backup), firewall_policy.',
+                'type' => 'text',
+                'required' => false,
+                'placeholder' => 'reinstall,rollback,restore',
+                'validation' => 'nullable|string|max:200',
+                'options' => [],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_BANDWIDTH_ENABLED => [
+                'name' => ConfigInterface::VDS_BANDWIDTH_ENABLED,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_BANDWIDTH_ENABLED, 'true'),
+                'description' => 'Count monthly VDS traffic (sampled by the VDS monitor cron, which must be enabled).',
+                'type' => 'select',
+                'required' => true,
+                'placeholder' => 'true',
+                'validation' => 'required|string|in:true,false',
+                'options' => ['true', 'false'],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_BANDWIDTH_LIMIT_GB => [
+                'name' => ConfigInterface::VDS_BANDWIDTH_LIMIT_GB,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_BANDWIDTH_LIMIT_GB, '0'),
+                'description' => 'Default monthly traffic limit per VDS in GB. 0 = unlimited. Can be overridden per VDS.',
+                'type' => 'number',
+                'required' => true,
+                'placeholder' => '0',
+                'validation' => 'required|integer|min:0|max:10000000',
+                'options' => [],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_BANDWIDTH_COUNT => [
+                'name' => ConfigInterface::VDS_BANDWIDTH_COUNT,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_BANDWIDTH_COUNT, 'both'),
+                'description' => 'Which traffic counts towards the limit: both directions, outbound only or inbound only.',
+                'type' => 'select',
+                'required' => true,
+                'placeholder' => 'both',
+                'validation' => 'required|string|in:both,out,in',
+                'options' => ['both', 'out', 'in'],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_BANDWIDTH_ACTION => [
+                'name' => ConfigInterface::VDS_BANDWIDTH_ACTION,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_BANDWIDTH_ACTION, 'notify'),
+                'description' => 'What happens when a VDS exceeds its monthly limit: notify only, throttle the network interfaces, or suspend the VDS. Throttle/suspend are lifted automatically when the next month starts.',
+                'type' => 'select',
+                'required' => true,
+                'placeholder' => 'notify',
+                'validation' => 'required|string|in:notify,throttle,suspend',
+                'options' => ['notify', 'throttle', 'suspend'],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_BANDWIDTH_THROTTLE_MBIT => [
+                'name' => ConfigInterface::VDS_BANDWIDTH_THROTTLE_MBIT,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_BANDWIDTH_THROTTLE_MBIT, '10'),
+                'description' => 'Network speed (Mbit/s) applied to every interface of a throttled VDS.',
+                'type' => 'number',
+                'required' => true,
+                'placeholder' => '10',
+                'validation' => 'required|integer|min:1|max:100000',
+                'options' => [],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_BANDWIDTH_WARN_PERCENT => [
+                'name' => ConfigInterface::VDS_BANDWIDTH_WARN_PERCENT,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_BANDWIDTH_WARN_PERCENT, '80'),
+                'description' => 'Notify users when this percentage of the monthly limit is used. 0 = no early warning.',
+                'type' => 'number',
+                'required' => true,
+                'placeholder' => '80',
+                'validation' => 'required|integer|min:0|max:100',
+                'options' => [],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_SUSPEND_SHOW_REASON => [
+                'name' => ConfigInterface::VDS_SUSPEND_SHOW_REASON,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_SUSPEND_SHOW_REASON, 'true'),
+                'description' => 'Show the suspension reason to the VDS owner on the suspended screen.',
+                'type' => 'select',
+                'required' => true,
+                'placeholder' => 'true',
+                'validation' => 'required|string|in:true,false',
+                'options' => ['true', 'false'],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_SUSPEND_MESSAGE => [
+                'name' => ConfigInterface::VDS_SUSPEND_MESSAGE,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_SUSPEND_MESSAGE, ''),
+                'description' => 'Custom message shown to users on a suspended VDS (e.g. how to contact billing). Empty = default text.',
+                'type' => 'text',
+                'required' => false,
+                'placeholder' => '',
+                'validation' => 'nullable|string|max:500',
+                'options' => [],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_EXPIRY_WARN_DAYS => [
+                'name' => ConfigInterface::VDS_EXPIRY_WARN_DAYS,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_EXPIRY_WARN_DAYS, '3'),
+                'description' => 'Notify the owner this many days before a VDS expires (0 = no warning).',
+                'type' => 'number',
+                'required' => true,
+                'placeholder' => '3',
+                'validation' => 'required|integer|min:0|max:60',
+                'options' => [],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_EXPIRY_STOP_VM => [
+                'name' => ConfigInterface::VDS_EXPIRY_STOP_VM,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_EXPIRY_STOP_VM, 'true'),
+                'description' => 'Also power off a VDS when it is auto-suspended because it expired.',
+                'type' => 'select',
+                'required' => true,
+                'placeholder' => 'true',
+                'validation' => 'required|string|in:true,false',
+                'options' => ['true', 'false'],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_PLACEMENT_STRATEGY => [
+                'name' => ConfigInterface::VDS_PLACEMENT_STRATEGY,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_PLACEMENT_STRATEGY, 'most_free_memory'),
+                'description' => 'How the recommended node for new VDS is picked in the node capacity overview and the create form.',
+                'type' => 'select',
+                'required' => true,
+                'placeholder' => 'most_free_memory',
+                'validation' => 'required|string|in:most_free_memory,most_free_disk,fewest_instances',
+                'options' => ['most_free_memory', 'most_free_disk', 'fewest_instances'],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_PLACEMENT_OVERCOMMIT_PERCENT => [
+                'name' => ConfigInterface::VDS_PLACEMENT_OVERCOMMIT_PERCENT,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_PLACEMENT_OVERCOMMIT_PERCENT, '100'),
+                'description' => 'Memory that may be allocated per node, as a percentage of its physical RAM (100 = no overcommit). Full nodes are never recommended.',
+                'type' => 'number',
+                'required' => true,
+                'placeholder' => '100',
+                'validation' => 'required|integer|min:50|max:1000',
+                'options' => [],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_MIGRATION_ENABLED => [
+                'name' => ConfigInterface::VDS_MIGRATION_ENABLED,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_MIGRATION_ENABLED, 'false'),
+                'description' => 'Allow admins to live-migrate a VDS to another Proxmox node of the same cluster (needs shared or migratable storage).',
+                'type' => 'select',
+                'required' => true,
+                'placeholder' => 'false',
+                'validation' => 'required|string|in:true,false',
+                'options' => ['true', 'false'],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_CONSOLE_BRAND_NAME => [
+                'name' => ConfigInterface::VDS_CONSOLE_BRAND_NAME,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_CONSOLE_BRAND_NAME, ''),
+                'description' => 'White-label name shown on the VDS console screen header. Empty = default.',
+                'type' => 'text',
+                'required' => false,
+                'placeholder' => '',
+                'validation' => 'nullable|string|max:64',
+                'options' => [],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_CONSOLE_BRAND_LOGO => [
+                'name' => ConfigInterface::VDS_CONSOLE_BRAND_LOGO,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_CONSOLE_BRAND_LOGO, ''),
+                'description' => 'White-label logo URL (https) shown on the VDS console screen header. Empty = none.',
+                'type' => 'text',
+                'required' => false,
+                'placeholder' => '',
+                'validation' => 'nullable|string|max:500',
+                'options' => [],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_ISO_LIBRARY_ONLY => [
+                'name' => ConfigInterface::VDS_ISO_LIBRARY_ONLY,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_ISO_LIBRARY_ONLY, 'true'),
+                'description' => 'Default on: only offer provider ISOs registered in Admin → VDS ISO library. Set to false to also list unregistered ISO files on the allowed storages (advanced).',
+                'type' => 'select',
+                'required' => true,
+                'placeholder' => 'true',
+                'validation' => 'required|string|in:true,false',
+                'options' => ['true', 'false'],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_ISO_USER_STORAGE => [
+                'name' => ConfigInterface::VDS_ISO_USER_STORAGE,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_ISO_USER_STORAGE, ''),
+                'description' => 'Proxmox storage (must allow ISO content) that receives user uploaded / downloaded ISOs on the node of each VDS. Required for user ISOs.',
+                'type' => 'text',
+                'required' => false,
+                'placeholder' => '',
+                'validation' => 'nullable|string|max:64',
+                'options' => [],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_ISO_USER_UPLOAD_ENABLED => [
+                'name' => ConfigInterface::VDS_ISO_USER_UPLOAD_ENABLED,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_ISO_USER_UPLOAD_ENABLED, 'true'),
+                'description' => 'Let users upload an ISO file from their computer (when the ISO mode allows user ISOs).',
+                'type' => 'select',
+                'required' => true,
+                'placeholder' => 'true',
+                'validation' => 'required|string|in:true,false',
+                'options' => ['true', 'false'],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_ISO_USER_URL_ENABLED => [
+                'name' => ConfigInterface::VDS_ISO_USER_URL_ENABLED,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_ISO_USER_URL_ENABLED, 'true'),
+                'description' => 'Let users have Proxmox download an ISO from a URL (when the ISO mode allows user ISOs).',
+                'type' => 'select',
+                'required' => true,
+                'placeholder' => 'true',
+                'validation' => 'required|string|in:true,false',
+                'options' => ['true', 'false'],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_ISO_USER_MAX_SIZE_MB => [
+                'name' => ConfigInterface::VDS_ISO_USER_MAX_SIZE_MB,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_ISO_USER_MAX_SIZE_MB, '4096'),
+                'description' => 'Maximum size of a user ISO in MB.',
+                'type' => 'number',
+                'required' => true,
+                'placeholder' => '4096',
+                'validation' => 'required|integer|min:1|max:102400',
+                'options' => [],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_ISO_USER_MAX_PER_USER => [
+                'name' => ConfigInterface::VDS_ISO_USER_MAX_PER_USER,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_ISO_USER_MAX_PER_USER, '3'),
+                'description' => 'Maximum number of ISOs a single user may keep (across all VDS).',
+                'type' => 'number',
+                'required' => true,
+                'placeholder' => '3',
+                'validation' => 'required|integer|min:0|max:100',
+                'options' => [],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_ISO_USER_URL_DOMAINS => [
+                'name' => ConfigInterface::VDS_ISO_USER_URL_DOMAINS,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_ISO_USER_URL_DOMAINS, ''),
+                'description' => 'Comma or newline separated domains users may download ISOs from (subdomains included, e.g. debian.org). Empty = any public host.',
+                'type' => 'textarea',
+                'required' => false,
+                'placeholder' => '',
+                'validation' => 'nullable|string|max:4096',
+                'options' => [],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_ISO_USER_REQUIRE_APPROVAL => [
+                'name' => ConfigInterface::VDS_ISO_USER_REQUIRE_APPROVAL,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_ISO_USER_REQUIRE_APPROVAL, 'false'),
+                'description' => 'New user ISOs stay pending until an admin approves them in the VDS ISO library.',
+                'type' => 'select',
+                'required' => true,
+                'placeholder' => 'false',
+                'validation' => 'required|string|in:true,false',
+                'options' => ['true', 'false'],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_RESCUE_ENABLED => [
+                'name' => ConfigInterface::VDS_RESCUE_ENABLED,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_RESCUE_ENABLED, 'false'),
+                'description' => 'Allow users to reboot their VDS into a rescue ISO from the console actions menu (QEMU only).',
+                'type' => 'select',
+                'required' => true,
+                'placeholder' => 'false',
+                'validation' => 'required|string|in:true,false',
+                'options' => ['true', 'false'],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_RESCUE_ISO => [
+                'name' => ConfigInterface::VDS_RESCUE_ISO,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_RESCUE_ISO, ''),
+                'description' => 'Proxmox volid of the rescue ISO, e.g. local:iso/systemrescue.iso. Rescue mode stays hidden while empty.',
+                'type' => 'text',
+                'required' => false,
+                'placeholder' => '',
+                'validation' => 'nullable|string|max:512',
+                'options' => [],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_SNAPSHOTS_ENABLED => [
+                'name' => ConfigInterface::VDS_SNAPSHOTS_ENABLED,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_SNAPSHOTS_ENABLED, 'true'),
+                'description' => 'Enable the VDS snapshots tab (Proxmox snapshots: list, create, rollback, delete).',
+                'type' => 'select',
+                'required' => true,
+                'placeholder' => 'true',
+                'validation' => 'required|string|in:true,false',
+                'options' => ['true', 'false'],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_SNAPSHOTS_DEFAULT_LIMIT => [
+                'name' => ConfigInterface::VDS_SNAPSHOTS_DEFAULT_LIMIT,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_SNAPSHOTS_DEFAULT_LIMIT, '3'),
+                'description' => 'Default number of snapshots per VDS. Can be overridden per VDS in the admin instance editor. 0 disables creating snapshots.',
+                'type' => 'number',
+                'required' => true,
+                'placeholder' => '3',
+                'validation' => 'required|integer|min:0|max:100',
+                'options' => [],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_SNAPSHOTS_INCLUDE_RAM => [
+                'name' => ConfigInterface::VDS_SNAPSHOTS_INCLUDE_RAM,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_SNAPSHOTS_INCLUDE_RAM, 'false'),
+                'description' => 'Let users include the RAM state when creating a snapshot of a running QEMU VDS (uses more storage).',
+                'type' => 'select',
+                'required' => true,
+                'placeholder' => 'false',
+                'validation' => 'required|string|in:true,false',
+                'options' => ['true', 'false'],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_MONITOR_ENABLED => [
+                'name' => ConfigInterface::VDS_MONITOR_ENABLED,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_MONITOR_ENABLED, 'true'),
+                'description' => 'Run the VDS monitor cron that powers the down, high CPU and backup failed notifications.',
+                'type' => 'select',
+                'required' => true,
+                'placeholder' => 'true',
+                'validation' => 'required|string|in:true,false',
+                'options' => ['true', 'false'],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_MONITOR_INTERVAL_MINUTES => [
+                'name' => ConfigInterface::VDS_MONITOR_INTERVAL_MINUTES,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_MONITOR_INTERVAL_MINUTES, '5'),
+                'description' => 'How often (minutes) the VDS monitor checks Proxmox.',
+                'type' => 'number',
+                'required' => true,
+                'placeholder' => '5',
+                'validation' => 'required|integer|min:1|max:60',
+                'options' => [],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_NOTIFY_DOWN_ENABLED => [
+                'name' => ConfigInterface::VDS_NOTIFY_DOWN_ENABLED,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_NOTIFY_DOWN_ENABLED, 'true'),
+                'description' => 'Notify users when their VDS stops unexpectedly (not through a panel power action).',
+                'type' => 'select',
+                'required' => true,
+                'placeholder' => 'true',
+                'validation' => 'required|string|in:true,false',
+                'options' => ['true', 'false'],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_NOTIFY_HIGH_CPU_ENABLED => [
+                'name' => ConfigInterface::VDS_NOTIFY_HIGH_CPU_ENABLED,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_NOTIFY_HIGH_CPU_ENABLED, 'true'),
+                'description' => 'Notify users when their VDS stays above the CPU threshold.',
+                'type' => 'select',
+                'required' => true,
+                'placeholder' => 'true',
+                'validation' => 'required|string|in:true,false',
+                'options' => ['true', 'false'],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_HIGH_CPU_THRESHOLD => [
+                'name' => ConfigInterface::VDS_HIGH_CPU_THRESHOLD,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_HIGH_CPU_THRESHOLD, '90'),
+                'description' => 'CPU usage (percent of all vCPUs) that counts as high for VDS notifications.',
+                'type' => 'number',
+                'required' => true,
+                'placeholder' => '90',
+                'validation' => 'required|integer|min:1|max:100',
+                'options' => [],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_HIGH_CPU_DURATION_MINUTES => [
+                'name' => ConfigInterface::VDS_HIGH_CPU_DURATION_MINUTES,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_HIGH_CPU_DURATION_MINUTES, '15'),
+                'description' => 'How long (minutes) CPU must stay above the threshold before users are notified.',
+                'type' => 'number',
+                'required' => true,
+                'placeholder' => '15',
+                'validation' => 'required|integer|min:1|max:1440',
+                'options' => [],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_NOTIFY_BACKUP_FAILED_ENABLED => [
+                'name' => ConfigInterface::VDS_NOTIFY_BACKUP_FAILED_ENABLED,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_NOTIFY_BACKUP_FAILED_ENABLED, 'true'),
+                'description' => 'Notify users when a VDS backup fails.',
+                'type' => 'select',
+                'required' => true,
+                'placeholder' => 'true',
+                'validation' => 'required|string|in:true,false',
+                'options' => ['true', 'false'],
+                'category' => 'vds',
+            ],
+            ConfigInterface::VDS_NOTIFY_COOLDOWN_HOURS => [
+                'name' => ConfigInterface::VDS_NOTIFY_COOLDOWN_HOURS,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::VDS_NOTIFY_COOLDOWN_HOURS, '6'),
+                'description' => 'Minimum hours between two notifications of the same kind for the same VDS and user.',
+                'type' => 'number',
+                'required' => true,
+                'placeholder' => '6',
+                'validation' => 'required|integer|min:1|max:168',
+                'options' => [],
+                'category' => 'vds',
             ],
             ConfigInterface::PTERODACTYL_IMPORTER_VISIBILITY => [
                 'name' => ConfigInterface::PTERODACTYL_IMPORTER_VISIBILITY,
@@ -771,12 +1534,25 @@ class SettingsController
                 'value' => $this->app
                     ->getConfig()
                     ->getSetting(ConfigInterface::APP_SSO_TOKEN_LIFETIME_MINUTES, '5'),
-                'description' => 'Default lifetime in minutes for admin-generated SSO login tokens (1–1440)',
+                'description' => 'Default lifetime in minutes for admin-generated SSO login tokens (1-1440)',
                 'type' => 'number',
                 'required' => true,
                 'placeholder' => '5',
                 'validation' => 'required|integer|min:1|max:1440',
                 'options' => [],
+                'category' => 'app',
+            ],
+            ConfigInterface::API_CLIENTS_ALLOW_PUBLIC_KEY_AUTH => [
+                'name' => ConfigInterface::API_CLIENTS_ALLOW_PUBLIC_KEY_AUTH,
+                'value' => $this->app
+                    ->getConfig()
+                    ->getSetting(ConfigInterface::API_CLIENTS_ALLOW_PUBLIC_KEY_AUTH, 'true'),
+                'description' => 'Allow API clients to authenticate with their public key as a Bearer token (set to false to require the private key)',
+                'type' => 'select',
+                'required' => true,
+                'placeholder' => 'true',
+                'validation' => 'required|string|max:255',
+                'options' => ['true', 'false'],
                 'category' => 'app',
             ],
             ConfigInterface::APP_TIMEZONE => [
@@ -994,7 +1770,7 @@ class SettingsController
                         ConfigInterface::APP_BACKDROP_DARKEN_DEFAULT,
                         '0',
                     ),
-                'description' => 'Default backdrop darken overlay in percent (0–100)',
+                'description' => 'Default backdrop darken overlay in percent (0-100)',
                 'type' => 'number',
                 'required' => true,
                 'placeholder' => '0',
@@ -1188,7 +1964,7 @@ class SettingsController
                 'value' => $this->app
                     ->getConfig()
                     ->getSetting(ConfigInterface::SMTP_ENABLED, 'false'),
-                'description' => 'The SMTP enabled of the application',
+                'description' => 'Enable outbound panel email (SMTP or HTTP API providers)',
                 'type' => 'select',
                 'required' => true,
                 'placeholder' => 'false',
@@ -1196,16 +1972,74 @@ class SettingsController
                 'options' => ['true', 'false'],
                 'category' => 'email',
             ],
+            ConfigInterface::MAIL_PROVIDER_PRESET => [
+                'name' => ConfigInterface::MAIL_PROVIDER_PRESET,
+                'value' => $this->app
+                    ->getConfig()
+                    ->getSetting(ConfigInterface::MAIL_PROVIDER_PRESET, 'custom'),
+                'description' => 'UI provider preset (autofills transport and SMTP defaults; not used by the mail runner)',
+                'type' => 'select',
+                'required' => true,
+                'placeholder' => 'custom',
+                'validation' => 'required|string|max:64',
+                'options' => [
+                    'custom',
+                    'resend',
+                    'resend_smtp',
+                    'brevo',
+                    'brevo_smtp',
+                    'sendgrid',
+                    'sendgrid_smtp',
+                    'mailgun',
+                    'mailgun_smtp',
+                    'postmark',
+                    'postmark_smtp',
+                    'mailersend',
+                    'mailersend_smtp',
+                    'sparkpost',
+                    'sparkpost_smtp',
+                    'ses',
+                    'ses_smtp',
+                    'gmail',
+                    'outlook',
+                    'mailtrap',
+                    'smtp2go',
+                ],
+                'category' => 'email',
+            ],
+            ConfigInterface::MAIL_TRANSPORT => [
+                'name' => ConfigInterface::MAIL_TRANSPORT,
+                'value' => $this->app
+                    ->getConfig()
+                    ->getSetting(ConfigInterface::MAIL_TRANSPORT, 'smtp'),
+                'description' => 'Delivery method: smtp (lettre) or an HTTP API provider',
+                'type' => 'select',
+                'required' => true,
+                'placeholder' => 'smtp',
+                'validation' => 'required|string|in:smtp,resend,sendgrid,mailgun,postmark,brevo,mailersend,sparkpost,ses',
+                'options' => [
+                    'smtp',
+                    'resend',
+                    'sendgrid',
+                    'mailgun',
+                    'postmark',
+                    'brevo',
+                    'mailersend',
+                    'sparkpost',
+                    'ses',
+                ],
+                'category' => 'email',
+            ],
             ConfigInterface::SMTP_HOST => [
                 'name' => ConfigInterface::SMTP_HOST,
                 'value' => $this->app
                     ->getConfig()
                     ->getSetting(ConfigInterface::SMTP_HOST, 'localhost'),
-                'description' => 'The SMTP host of the application',
+                'description' => 'SMTP hostname (used when mail transport is smtp)',
                 'type' => 'text',
-                'required' => true,
+                'required' => false,
                 'placeholder' => 'localhost',
-                'validation' => 'required|string|max:255',
+                'validation' => 'string|max:255',
                 'options' => [],
                 'category' => 'email',
             ],
@@ -1214,11 +2048,11 @@ class SettingsController
                 'value' => $this->app
                     ->getConfig()
                     ->getSetting(ConfigInterface::SMTP_PORT, '587'),
-                'description' => 'The SMTP port of the application',
+                'description' => 'SMTP port (used when mail transport is smtp)',
                 'type' => 'number',
-                'required' => true,
+                'required' => false,
                 'placeholder' => '587',
-                'validation' => 'required|integer|min:1|max:65535',
+                'validation' => 'integer|min:1|max:65535',
                 'options' => [],
                 'category' => 'email',
             ],
@@ -1230,11 +2064,11 @@ class SettingsController
                         ConfigInterface::SMTP_USER,
                         'example@example.com',
                     ),
-                'description' => 'The SMTP user of the application',
+                'description' => 'SMTP username (used when mail transport is smtp)',
                 'type' => 'text',
-                'required' => true,
+                'required' => false,
                 'placeholder' => 'example@example.com',
-                'validation' => 'required|string|max:255',
+                'validation' => 'string|max:255',
                 'options' => [],
                 'category' => 'email',
             ],
@@ -1244,9 +2078,9 @@ class SettingsController
                     ConfigInterface::SMTP_PASS,
                     'password',
                 ),
-                'description' => 'The SMTP password of the application',
+                'description' => 'SMTP password or app password (used when mail transport is smtp)',
                 'type' => 'password',
-                'required' => true,
+                'required' => false,
                 'placeholder' => 'Enter password to change',
                 'validation' => 'string|max:255',
                 'options' => [],
@@ -1261,7 +2095,7 @@ class SettingsController
                         ConfigInterface::SMTP_FROM,
                         'noreply@featherpanel.com',
                     ),
-                'description' => 'The SMTP from of the application',
+                'description' => 'From address for all outbound panel mail (must be verified with your provider)',
                 'type' => 'text',
                 'required' => true,
                 'placeholder' => 'noreply@featherpanel.com',
@@ -1274,12 +2108,54 @@ class SettingsController
                 'value' => $this->app
                     ->getConfig()
                     ->getSetting(ConfigInterface::SMTP_ENCRYPTION, 'tls'),
-                'description' => 'SMTP encryption: starttls/tls for port 587 (e.g. Brevo), ssl for port 465 SMTPS, none for plain SMTP',
+                'description' => 'SMTP encryption: starttls/tls for port 587, ssl for port 465 SMTPS, none for plain SMTP',
                 'type' => 'select',
-                'required' => true,
+                'required' => false,
                 'placeholder' => 'starttls',
-                'validation' => 'required|string|in:starttls,tls,ssl,none',
+                'validation' => 'string|in:starttls,tls,ssl,none',
                 'options' => ['starttls', 'tls', 'ssl', 'none'],
+                'category' => 'email',
+            ],
+            ConfigInterface::MAIL_API_KEY => [
+                'name' => ConfigInterface::MAIL_API_KEY,
+                'value' => $this->maskSensitiveSetting(
+                    ConfigInterface::MAIL_API_KEY,
+                    '',
+                ),
+                'description' => 'API key for HTTP mail providers. For Amazon SES use ACCESS_KEY:SECRET_KEY',
+                'type' => 'password',
+                'required' => false,
+                'placeholder' => 'Enter API key to change',
+                'validation' => 'string|max:512',
+                'options' => [],
+                'category' => 'email',
+                'sensitive' => true,
+                'max_length' => 512,
+            ],
+            ConfigInterface::MAIL_API_DOMAIN => [
+                'name' => ConfigInterface::MAIL_API_DOMAIN,
+                'value' => $this->app
+                    ->getConfig()
+                    ->getSetting(ConfigInterface::MAIL_API_DOMAIN, ''),
+                'description' => 'Mailgun sending domain (required for Mailgun API)',
+                'type' => 'text',
+                'required' => false,
+                'placeholder' => 'mg.example.com',
+                'validation' => 'string|max:255',
+                'options' => [],
+                'category' => 'email',
+            ],
+            ConfigInterface::MAIL_API_REGION => [
+                'name' => ConfigInterface::MAIL_API_REGION,
+                'value' => $this->app
+                    ->getConfig()
+                    ->getSetting(ConfigInterface::MAIL_API_REGION, 'us'),
+                'description' => 'Provider region: us/eu (Mailgun, SparkPost), or AWS SES region (e.g. us-east-1)',
+                'type' => 'text',
+                'required' => false,
+                'placeholder' => 'us',
+                'validation' => 'string|max:64',
+                'options' => [],
                 'category' => 'email',
             ],
             ConfigInterface::CAPTCHA_PROVIDER => [
@@ -1287,7 +2163,7 @@ class SettingsController
                 'value' => $this->app
                     ->getConfig()
                     ->getSetting(ConfigInterface::CAPTCHA_PROVIDER, 'turnstile'),
-                'description' => 'Captcha service provider (Turnstile, hCaptcha, Google reCAPTCHA, Friendly Captcha, or reForge Captcha)',
+                'description' => 'Captcha service provider (Turnstile, hCaptcha, Google reCAPTCHA, or Friendly Captcha)',
                 'type' => 'select',
                 'required' => true,
                 'placeholder' => 'turnstile',
@@ -1297,7 +2173,6 @@ class SettingsController
                     'hcaptcha',
                     'recaptcha',
                     'friendlycaptcha',
-                    'reforge',
                 ],
                 'category' => 'security',
             ],
@@ -1416,7 +2291,7 @@ class SettingsController
                 'value' => $this->app
                     ->getConfig()
                     ->getSetting(ConfigInterface::RECAPTCHA_V3_MIN_SCORE, '0.5'),
-                'description' => 'Minimum v3 score (0.0–1.0). Higher is stricter. Ignored when version is v2.',
+                'description' => 'Minimum v3 score (0.0-1.0). Higher is stricter. Ignored when version is v2.',
                 'type' => 'text',
                 'required' => true,
                 'placeholder' => '0.5',
@@ -1464,99 +2339,6 @@ class SettingsController
                 'options' => [],
                 'category' => 'security',
                 'sensitive' => true,
-            ],
-            ConfigInterface::REFORGE_CAPTCHA_SITE_KEY => [
-                'name' => ConfigInterface::REFORGE_CAPTCHA_SITE_KEY,
-                'value' => $this->app
-                    ->getConfig()
-                    ->getSetting(ConfigInterface::REFORGE_CAPTCHA_SITE_KEY, ''),
-                'description' => 'reForge Captcha public site key (from dashboard → Sites)',
-                'type' => 'text',
-                'required' => false,
-                'placeholder' => 'site_...',
-                'validation' => 'string|max:255',
-                'options' => [],
-                'category' => 'security',
-            ],
-            ConfigInterface::REFORGE_CAPTCHA_SECRET_KEY => [
-                'name' => ConfigInterface::REFORGE_CAPTCHA_SECRET_KEY,
-                'value' => $this->maskSensitiveSetting(
-                    ConfigInterface::REFORGE_CAPTCHA_SECRET_KEY,
-                    '',
-                ),
-                'description' => 'reForge Captcha secret key (server-side only; never expose to the browser)',
-                'type' => 'password',
-                'required' => false,
-                'placeholder' => 'Enter secret key to change',
-                'validation' => 'string|max:255',
-                'options' => [],
-                'category' => 'security',
-                'sensitive' => true,
-            ],
-            ConfigInterface::REFORGE_CAPTCHA_WIDGET_TYPE => [
-                'name' => ConfigInterface::REFORGE_CAPTCHA_WIDGET_TYPE,
-                'value' => $this->app
-                    ->getConfig()
-                    ->getSetting(ConfigInterface::REFORGE_CAPTCHA_WIDGET_TYPE, 'checkbox'),
-                'description' => 'reForge Captcha widget challenge type (checkbox or image)',
-                'type' => 'select',
-                'required' => true,
-                'placeholder' => 'checkbox',
-                'validation' => 'required|string|max:32',
-                'options' => ['checkbox', 'image'],
-                'category' => 'security',
-            ],
-            ConfigInterface::REFORGE_CAPTCHA_THEME => [
-                'name' => ConfigInterface::REFORGE_CAPTCHA_THEME,
-                'value' => $this->app
-                    ->getConfig()
-                    ->getSetting(ConfigInterface::REFORGE_CAPTCHA_THEME, 'auto'),
-                'description' => 'reForge Captcha widget colour theme',
-                'type' => 'select',
-                'required' => true,
-                'placeholder' => 'auto',
-                'validation' => 'required|string|max:16',
-                'options' => ['auto', 'dark', 'light'],
-                'category' => 'security',
-            ],
-            ConfigInterface::REFORGE_CAPTCHA_SIZE => [
-                'name' => ConfigInterface::REFORGE_CAPTCHA_SIZE,
-                'value' => $this->app
-                    ->getConfig()
-                    ->getSetting(ConfigInterface::REFORGE_CAPTCHA_SIZE, 'normal'),
-                'description' => 'reForge Captcha widget size',
-                'type' => 'select',
-                'required' => true,
-                'placeholder' => 'normal',
-                'validation' => 'required|string|max:16',
-                'options' => ['normal', 'compact'],
-                'category' => 'security',
-            ],
-            ConfigInterface::REFORGE_CAPTCHA_LANG => [
-                'name' => ConfigInterface::REFORGE_CAPTCHA_LANG,
-                'value' => $this->app
-                    ->getConfig()
-                    ->getSetting(ConfigInterface::REFORGE_CAPTCHA_LANG, ''),
-                'description' => 'Optional reForge Captcha widget UI language (e.g. en, nl, de). Leave empty for default.',
-                'type' => 'text',
-                'required' => false,
-                'placeholder' => 'en',
-                'validation' => 'string|max:16',
-                'options' => [],
-                'category' => 'security',
-            ],
-            ConfigInterface::REFORGE_CAPTCHA_MIN_SCORE => [
-                'name' => ConfigInterface::REFORGE_CAPTCHA_MIN_SCORE,
-                'value' => $this->app
-                    ->getConfig()
-                    ->getSetting(ConfigInterface::REFORGE_CAPTCHA_MIN_SCORE, '0.5'),
-                'description' => 'Minimum reForge Captcha verify score (0.0–1.0) when the verify API returns a score (stricter = higher)',
-                'type' => 'text',
-                'required' => true,
-                'placeholder' => '0.5',
-                'validation' => 'required|string|max:10',
-                'options' => [],
-                'category' => 'security',
             ],
             ConfigInterface::EMAIL_LOGIN_ENABLED => [
                 'name' => ConfigInterface::EMAIL_LOGIN_ENABLED,
@@ -1615,7 +2397,7 @@ class SettingsController
                 'value' => $this->app
                     ->getConfig()
                     ->getSetting(ConfigInterface::AUTH_SHELL_TAGLINE, ''),
-                'description' => 'Short marketing line under the brand on the auth left panel. This is auth-only copy — it does NOT use SEO description. Leave empty for the default translated tagline.',
+                'description' => 'Short marketing line under the brand on the auth left panel. This is auth-only copy - it does NOT use SEO description. Leave empty for the default translated tagline.',
                 'type' => 'textarea',
                 'required' => false,
                 'placeholder' => 'Manage your game servers from anywhere.',
@@ -2294,6 +3076,103 @@ class SettingsController
                 'sensitive' => true,
                 'category' => 'oauth',
             ],
+            ConfigInterface::SSO_GOOGLE_ENABLED => [
+                'name' => ConfigInterface::SSO_GOOGLE_ENABLED,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::SSO_GOOGLE_ENABLED, 'false'),
+                'description' => 'Enable sign in with Google. Callback URL: ' . $this->app->getConfig()->getSetting(ConfigInterface::APP_URL, 'https://featherpanel.mythical.systems') . '/api/user/auth/sso/google/callback',
+                'type' => 'select',
+                'required' => true,
+                'placeholder' => 'false',
+                'validation' => 'required|string|max:255',
+                'options' => ['true', 'false'],
+                'category' => 'oauth',
+            ],
+            ConfigInterface::SSO_GOOGLE_CLIENT_ID => [
+                'name' => ConfigInterface::SSO_GOOGLE_CLIENT_ID,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::SSO_GOOGLE_CLIENT_ID, ''),
+                'description' => 'The Google OAuth client ID',
+                'type' => 'text',
+                'required' => false,
+                'placeholder' => '',
+                'validation' => 'string|max:2048',
+                'options' => [],
+                'category' => 'oauth',
+            ],
+            ConfigInterface::SSO_GOOGLE_CLIENT_SECRET => [
+                'name' => ConfigInterface::SSO_GOOGLE_CLIENT_SECRET,
+                'value' => $this->maskSensitiveSetting(ConfigInterface::SSO_GOOGLE_CLIENT_SECRET, ''),
+                'description' => 'The Google OAuth client secret',
+                'type' => 'password',
+                'required' => false,
+                'placeholder' => 'Enter client secret to change',
+                'sensitive' => true,
+                'category' => 'oauth',
+            ],
+            ConfigInterface::SSO_GITHUB_ENABLED => [
+                'name' => ConfigInterface::SSO_GITHUB_ENABLED,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::SSO_GITHUB_ENABLED, 'false'),
+                'description' => 'Enable sign in with GitHub. Callback URL: ' . $this->app->getConfig()->getSetting(ConfigInterface::APP_URL, 'https://featherpanel.mythical.systems') . '/api/user/auth/sso/github/callback',
+                'type' => 'select',
+                'required' => true,
+                'placeholder' => 'false',
+                'validation' => 'required|string|max:255',
+                'options' => ['true', 'false'],
+                'category' => 'oauth',
+            ],
+            ConfigInterface::SSO_GITHUB_CLIENT_ID => [
+                'name' => ConfigInterface::SSO_GITHUB_CLIENT_ID,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::SSO_GITHUB_CLIENT_ID, ''),
+                'description' => 'The GitHub OAuth app client ID',
+                'type' => 'text',
+                'required' => false,
+                'placeholder' => '',
+                'validation' => 'string|max:2048',
+                'options' => [],
+                'category' => 'oauth',
+            ],
+            ConfigInterface::SSO_GITHUB_CLIENT_SECRET => [
+                'name' => ConfigInterface::SSO_GITHUB_CLIENT_SECRET,
+                'value' => $this->maskSensitiveSetting(ConfigInterface::SSO_GITHUB_CLIENT_SECRET, ''),
+                'description' => 'The GitHub OAuth app client secret',
+                'type' => 'password',
+                'required' => false,
+                'placeholder' => 'Enter client secret to change',
+                'sensitive' => true,
+                'category' => 'oauth',
+            ],
+            ConfigInterface::SSO_ALLOWED_EMAIL_DOMAINS => [
+                'name' => ConfigInterface::SSO_ALLOWED_EMAIL_DOMAINS,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::SSO_ALLOWED_EMAIL_DOMAINS, ''),
+                'description' => 'Comma separated email domains allowed to sign in or register through Google, GitHub or OIDC (for example example.com, corp.example.org). Leave empty to allow any domain.',
+                'type' => 'text',
+                'required' => false,
+                'placeholder' => '',
+                'validation' => 'string|max:2048',
+                'options' => [],
+                'category' => 'oauth',
+            ],
+            ConfigInterface::SSO_ALLOW_REGISTRATION => [
+                'name' => ConfigInterface::SSO_ALLOW_REGISTRATION,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::SSO_ALLOW_REGISTRATION, 'false'),
+                'description' => 'Create a new panel account when someone signs in with Google or GitHub and no account is linked yet. Also requires registration to be enabled.',
+                'type' => 'select',
+                'required' => true,
+                'placeholder' => 'false',
+                'validation' => 'required|string|max:255',
+                'options' => ['true', 'false'],
+                'category' => 'oauth',
+            ],
+            ConfigInterface::SSO_AUTO_LINK_VERIFIED_EMAIL => [
+                'name' => ConfigInterface::SSO_AUTO_LINK_VERIFIED_EMAIL,
+                'value' => $this->app->getConfig()->getSetting(ConfigInterface::SSO_AUTO_LINK_VERIFIED_EMAIL, 'false'),
+                'description' => 'Link a Google, GitHub or OIDC sign-in to an existing account with the same verified email. Off by default: users link providers from their account settings instead.',
+                'type' => 'select',
+                'required' => true,
+                'placeholder' => 'false',
+                'validation' => 'required|string|max:255',
+                'options' => ['true', 'false'],
+                'category' => 'oauth',
+            ],
             ConfigInterface::SERVER_ALLOW_EGG_CHANGE => [
                 'name' => ConfigInterface::SERVER_ALLOW_EGG_CHANGE,
                 'value' => $this->app
@@ -2569,6 +3448,22 @@ class SettingsController
                 'options' => [],
                 'category' => 'servers',
             ],
+            ConfigInterface::SERVER_UPLOAD_CHUNK_SIZE_MB => [
+                'name' => ConfigInterface::SERVER_UPLOAD_CHUNK_SIZE_MB,
+                'value' => $this->app
+                    ->getConfig()
+                    ->getSetting(
+                        ConfigInterface::SERVER_UPLOAD_CHUNK_SIZE_MB,
+                        '50',
+                    ),
+                'description' => 'Part size in MB for chunked file uploads to FeatherWings nodes. Keep it below your proxy\'s request limit (Cloudflare allows 100 MB). Files larger than this are sent in parts and can resume after a reload.',
+                'type' => 'number',
+                'required' => true,
+                'placeholder' => '50',
+                'validation' => 'required|integer|min:5|max:90',
+                'options' => [],
+                'category' => 'servers',
+            ],
             ConfigInterface::SERVER_ALLOW_USER_MADE_IMPORT => [
                 'name' => ConfigInterface::SERVER_ALLOW_USER_MADE_IMPORT,
                 'value' => $this->app
@@ -2594,6 +3489,22 @@ class SettingsController
                         'false',
                     ),
                 'description' => 'Allow users to create and manage server subdomains',
+                'type' => 'select',
+                'required' => true,
+                'placeholder' => 'false',
+                'validation' => 'required|string|max:255',
+                'options' => ['true', 'false'],
+                'category' => 'servers',
+            ],
+            ConfigInterface::SERVER_REQUIRE_SUBDOMAIN => [
+                'name' => ConfigInterface::SERVER_REQUIRE_SUBDOMAIN,
+                'value' => $this->app
+                    ->getConfig()
+                    ->getSetting(
+                        ConfigInterface::SERVER_REQUIRE_SUBDOMAIN,
+                        'false',
+                    ),
+                'description' => 'Require users to create a panel subdomain before starting a server. Hides allocation IPs until a subdomain exists. Enable "Allow user-made subdomains" first. Roles with user.servers.bypass_subdomain_requirement are exempt.',
                 'type' => 'select',
                 'required' => true,
                 'placeholder' => 'false',
@@ -2724,6 +3635,19 @@ class SettingsController
                 'type' => 'select',
                 'required' => true,
                 'placeholder' => 'false',
+                'validation' => 'required|string|max:255',
+                'options' => ['true', 'false'],
+                'category' => 'chatbot',
+            ],
+            ConfigInterface::CHATBOT_EDITOR_HELPER_ENABLED => [
+                'name' => ConfigInterface::CHATBOT_EDITOR_HELPER_ENABLED,
+                'value' => $this->app
+                    ->getConfig()
+                    ->getSetting(ConfigInterface::CHATBOT_EDITOR_HELPER_ENABLED, 'true'),
+                'description' => 'Enable the optional AI helper in the server file editor and crash console (explains errors and suggests a diff; never auto-writes files). Requires the chatbot to be enabled with a real AI provider.',
+                'type' => 'select',
+                'required' => true,
+                'placeholder' => 'true',
                 'validation' => 'required|string|max:255',
                 'options' => ['true', 'false'],
                 'category' => 'chatbot',
@@ -2862,6 +3786,45 @@ class SettingsController
                 'required' => true,
                 'placeholder' => '#ffffff',
                 'validation' => 'required|string|max:7',
+                'options' => [],
+                'category' => 'pwa',
+            ],
+            ConfigInterface::APP_PWA_PUSH_ENABLED => [
+                'name' => ConfigInterface::APP_PWA_PUSH_ENABLED,
+                'value' => $this->app
+                    ->getConfig()
+                    ->getSetting(ConfigInterface::APP_PWA_PUSH_ENABLED, 'false'),
+                'description' => 'Allow users to enable Web Push notifications (requires PWA on; VAPID keys are generated automatically)',
+                'type' => 'select',
+                'required' => true,
+                'placeholder' => 'false',
+                'validation' => 'required|string|max:255',
+                'options' => ['true', 'false'],
+                'category' => 'pwa',
+            ],
+            ConfigInterface::APP_PWA_VAPID_SUBJECT => [
+                'name' => ConfigInterface::APP_PWA_VAPID_SUBJECT,
+                'value' => $this->app
+                    ->getConfig()
+                    ->getSetting(ConfigInterface::APP_PWA_VAPID_SUBJECT, ''),
+                'description' => 'VAPID contact (mailto:you@example.com or https://your.panel). Leave blank to use mailto:noreply@APP_URL host',
+                'type' => 'text',
+                'required' => false,
+                'placeholder' => 'mailto:admin@example.com',
+                'validation' => 'nullable|string|max:255',
+                'options' => [],
+                'category' => 'pwa',
+            ],
+            ConfigInterface::APP_PWA_VAPID_PUBLIC => [
+                'name' => ConfigInterface::APP_PWA_VAPID_PUBLIC,
+                'value' => $this->app
+                    ->getConfig()
+                    ->getSetting(ConfigInterface::APP_PWA_VAPID_PUBLIC, ''),
+                'description' => 'VAPID public key (auto-generated when Web Push is enabled; read-only)',
+                'type' => 'text',
+                'required' => false,
+                'placeholder' => 'Generated automatically',
+                'validation' => 'nullable|string|max:255',
                 'options' => [],
                 'category' => 'pwa',
             ],
@@ -3177,6 +4140,32 @@ class SettingsController
                 'placeholder' => 'false',
                 'validation' => 'required|string|max:255',
                 'options' => ['true', 'false'],
+                'category' => 'status_page',
+            ],
+            ConfigInterface::MAINTENANCE_MODE_ENABLED => [
+                'name' => ConfigInterface::MAINTENANCE_MODE_ENABLED,
+                'value' => $this->app
+                    ->getConfig()
+                    ->getSetting(ConfigInterface::MAINTENANCE_MODE_ENABLED, 'false'),
+                'description' => 'Maintenance mode: only staff with admin dashboard access can use the panel. Everyone else sees the maintenance notice and the status page',
+                'type' => 'select',
+                'required' => true,
+                'placeholder' => 'false',
+                'validation' => 'required|string|max:255',
+                'options' => ['true', 'false'],
+                'category' => 'status_page',
+            ],
+            ConfigInterface::MAINTENANCE_MODE_MESSAGE => [
+                'name' => ConfigInterface::MAINTENANCE_MODE_MESSAGE,
+                'value' => $this->app
+                    ->getConfig()
+                    ->getSetting(ConfigInterface::MAINTENANCE_MODE_MESSAGE, ''),
+                'description' => 'Message shown to users during maintenance (optional)',
+                'type' => 'text',
+                'required' => false,
+                'placeholder' => 'We are upgrading the panel and will be back shortly.',
+                'validation' => 'nullable|string|max:1000',
+                'options' => [],
                 'category' => 'status_page',
             ],
             ConfigInterface::STATUS_PAGE_PUBLIC_ENABLED => [
@@ -3513,6 +4502,7 @@ class SettingsController
                 'category' => 'other',
             ],
         ];
+        $this->settings = array_merge($this->settings, \App\Services\Storage\StorageSettings::definitions(fn (string $k, string $d): string => $this->maskSensitiveSetting($k, $d)));
     }
 
     public function telemetryStatus(Request $request): Response
@@ -3893,6 +4883,24 @@ class SettingsController
         $app = App::getInstance(true);
         $updatedSettings = [];
 
+        $mailValidationError = $this->validateMailSettingsBeforeUpdate($data);
+        if ($mailValidationError !== null) {
+            return $mailValidationError;
+        }
+
+        // Custom JavaScript runs in every visitor's browser: changing it needs a confirmed session.
+        if (array_key_exists(ConfigInterface::CUSTOM_JS, $data) && isset($this->settings[ConfigInterface::CUSTOM_JS])) {
+            $normalizeJs = static fn (string $js): string => trim(str_replace("\r\n", "\n", $js));
+            $incomingJs = $this->normalizeSettingValueForStorage($this->settings[ConfigInterface::CUSTOM_JS], $data[ConfigInterface::CUSTOM_JS]);
+            $currentJs = (string) ($this->settings[ConfigInterface::CUSTOM_JS]['value'] ?? '');
+            if ($normalizeJs((string) $incomingJs) !== $normalizeJs($currentJs)) {
+                $reauth = \App\Helpers\StepUpAuth::require($request, \App\Helpers\StepUpAuth::ACTION_CUSTOM_JS);
+                if ($reauth !== null) {
+                    return $reauth;
+                }
+            }
+        }
+
         // Validate and update each setting
         foreach ($data as $setting => $value) {
             if (!is_string($setting) || !isset($this->settings[$setting])) {
@@ -3904,6 +4912,14 @@ class SettingsController
             }
 
             $settingConfig = $this->settings[$setting];
+
+            // VAPID keys are generated by the panel; ignore client writes to them.
+            if (
+                $setting === ConfigInterface::APP_PWA_VAPID_PUBLIC
+                || $setting === ConfigInterface::APP_PWA_VAPID_PRIVATE
+            ) {
+                continue;
+            }
 
             // Handle sensitive settings - only update if value is not masked
             if ($this->isSensitiveSetting($setting)) {
@@ -3976,6 +4992,13 @@ class SettingsController
 
         // Log the activity
         if (!empty($updatedSettings)) {
+            if (
+                in_array(ConfigInterface::APP_PWA_PUSH_ENABLED, $updatedSettings, true)
+                && $app->getConfig()->getSetting(ConfigInterface::APP_PWA_PUSH_ENABLED, 'false') === 'true'
+            ) {
+                \App\Services\Notifications\WebPushNotifier::ensureVapidKeys();
+            }
+
             if (
                 in_array(ConfigInterface::CUSTOM_CSS, $updatedSettings, true)
                 || in_array(ConfigInterface::CUSTOM_JS, $updatedSettings, true)
@@ -4189,7 +5212,7 @@ class SettingsController
     #[OA\Post(
         path: '/api/admin/settings/email/test',
         summary: 'Send test email to current user',
-        description: 'Send a test email to the currently authenticated user to verify SMTP configuration. This is useful for testing email settings, especially with providers like SendGrid that require email verification.',
+        description: 'Send a test email to the currently authenticated user to verify email configuration (SMTP or HTTP API providers).',
         tags: ['Admin - Settings'],
         responses: [
             new OA\Response(
@@ -4212,7 +5235,7 @@ class SettingsController
             ),
             new OA\Response(
                 response: 400,
-                description: 'Bad request - SMTP not enabled or user has no email',
+                description: 'Bad request - email not enabled or user has no email',
             ),
             new OA\Response(response: 401, description: 'Unauthorized'),
             new OA\Response(
@@ -4240,13 +5263,13 @@ class SettingsController
             );
         }
 
-        // Check if SMTP is enabled
+        // Check if outbound mail is enabled
         $smtpEnabled = $this->app
             ->getConfig()
             ->getSetting(ConfigInterface::SMTP_ENABLED, 'false');
         if ($smtpEnabled !== 'true') {
             return ApiResponse::error(
-                'SMTP is not enabled. Please enable and configure SMTP settings first.',
+                'Email is not enabled. Please enable and configure email settings first.',
                 'SMTP_NOT_ENABLED',
                 400,
             );
@@ -4264,6 +5287,12 @@ class SettingsController
 
         // Create test email content
         $subject = '[TEST] Email Configuration Test from ' . $appName;
+        $mailUser = [
+            'username' => MailTemplateRenderer::escape($user['username'] ?? ''),
+            'email' => MailTemplateRenderer::escape($user['email'] ?? ''),
+        ];
+        $mailAppName = MailTemplateRenderer::escape($appName);
+        $mailAppUrl = MailTemplateRenderer::escape($appUrl);
         $body = <<<HTML
         <!DOCTYPE html>
         <html>
@@ -4285,10 +5314,10 @@ class SettingsController
                             <tr>
                                 <td style="padding: 40px;">
                                     <p style="margin: 0 0 20px 0; color: #374151; font-size: 16px; line-height: 1.6;">
-                                        Hello <strong>{$user['username']}</strong>,
+                                        Hello <strong>{$mailUser['username']}</strong>,
                                     </p>
                                     <p style="margin: 0 0 20px 0; color: #374151; font-size: 16px; line-height: 1.6;">
-                                        This is a test email from <strong>{$appName}</strong> to verify that your SMTP email configuration is working correctly.
+                                        This is a test email from <strong>{$mailAppName}</strong> to verify that your email configuration is working correctly.
                                     </p>
                                     <div style="background-color: #f0fdf4; border-left: 4px solid #10b981; padding: 16px; margin: 20px 0; border-radius: 4px;">
                                         <p style="margin: 0; color: #065f46; font-size: 14px; line-height: 1.5;">
@@ -4297,19 +5326,19 @@ class SettingsController
                                     </div>
                                     <p style="margin: 20px 0 0 0; color: #6b7280; font-size: 14px; line-height: 1.6;">
                                         <strong>Email Details:</strong><br>
-                                        • Recipient: {$user['email']}<br>
+                                        • Recipient: {$mailUser['email']}<br>
                                         • Sent at: {date('Y-m-d H:i:s')}<br>
-                                        • From: {$appName}
+                                        • From: {$mailAppName}
                                     </p>
                                 </td>
                             </tr>
                             <tr>
                                 <td style="padding: 30px 40px; background-color: #f9fafb; border-top: 1px solid #e5e7eb; border-radius: 0 0 8px 8px;">
                                     <p style="margin: 0 0 10px 0; color: #6b7280; font-size: 13px; text-align: center;">
-                                        This is an automated test email from {$appName}
+                                        This is an automated test email from {$mailAppName}
                                     </p>
                                     <p style="margin: 0; color: #9ca3af; font-size: 12px; text-align: center;">
-                                        <a href="{$appUrl}" style="color: #8b5cf6; text-decoration: none;">{$appUrl}</a>
+                                        <a href="{$mailAppUrl}" style="color: #8b5cf6; text-decoration: none;">{$mailAppUrl}</a>
                                     </p>
                                 </td>
                             </tr>
@@ -4336,7 +5365,7 @@ class SettingsController
 
         if ($queueId === true) {
             return ApiResponse::error(
-                'SMTP disabled skipping enqueue/send',
+                'Email disabled skipping enqueue/send',
                 'SMTP_DISABLED',
                 400,
             );
@@ -4647,6 +5676,142 @@ class SettingsController
         }
 
         return $organized;
+    }
+
+    /**
+     * Validate outbound mail settings using the merged request + existing config before writes.
+     *
+     * @param array<string,mixed> $data Keys submitted in this request
+     */
+    private function validateMailSettingsBeforeUpdate(array $data): ?Response
+    {
+        $mailKeys = [
+            ConfigInterface::SMTP_ENABLED,
+            ConfigInterface::MAIL_TRANSPORT,
+            ConfigInterface::SMTP_HOST,
+            ConfigInterface::SMTP_PORT,
+            ConfigInterface::SMTP_USER,
+            ConfigInterface::SMTP_FROM,
+            ConfigInterface::MAIL_API_KEY,
+            ConfigInterface::MAIL_API_DOMAIN,
+            ConfigInterface::MAIL_API_REGION,
+        ];
+        $touchedMail = false;
+        foreach ($mailKeys as $key) {
+            if (array_key_exists($key, $data)) {
+                $touchedMail = true;
+                break;
+            }
+        }
+        if (!$touchedMail) {
+            return null;
+        }
+
+        $config = $this->app->getConfig();
+        $resolve = function (string $key, string $default = '') use ($data, $config): string {
+            if (!array_key_exists($key, $data)) {
+                return (string) $config->getSetting($key, $default);
+            }
+            $value = $data[$key];
+            if ($this->isSensitiveSetting($key) && ($value === '••••••••' || $value === '' || $value === null)) {
+                return (string) $config->getSetting($key, $default);
+            }
+            if (is_bool($value)) {
+                return $value ? 'true' : 'false';
+            }
+            if (is_array($value) || is_object($value)) {
+                return $default;
+            }
+
+            return trim((string) $value);
+        };
+
+        $enabled = $resolve(ConfigInterface::SMTP_ENABLED, 'false') === 'true';
+        if (!$enabled) {
+            return null;
+        }
+
+        $transport = strtolower($resolve(ConfigInterface::MAIL_TRANSPORT, 'smtp'));
+        $from = $resolve(ConfigInterface::SMTP_FROM, '');
+        if ($from === '' || !filter_var($from, FILTER_VALIDATE_EMAIL)) {
+            return ApiResponse::error(
+                'A valid From address (smtp_from) is required when email is enabled',
+                'MAIL_FROM_REQUIRED',
+                400,
+            );
+        }
+
+        $apiTransports = [
+            'resend',
+            'sendgrid',
+            'mailgun',
+            'postmark',
+            'brevo',
+            'mailersend',
+            'sparkpost',
+            'ses',
+        ];
+
+        if ($transport === 'smtp') {
+            $host = $resolve(ConfigInterface::SMTP_HOST, '');
+            if ($host === '') {
+                return ApiResponse::error(
+                    'SMTP host is required when mail transport is smtp',
+                    'MAIL_SMTP_HOST_REQUIRED',
+                    400,
+                );
+            }
+
+            return null;
+        }
+
+        if (!in_array($transport, $apiTransports, true)) {
+            return ApiResponse::error(
+                'Invalid mail_transport value',
+                'INVALID_MAIL_TRANSPORT',
+                400,
+            );
+        }
+
+        $apiKey = $resolve(ConfigInterface::MAIL_API_KEY, '');
+        if ($apiKey === '') {
+            return ApiResponse::error(
+                'API key (mail_api_key) is required for HTTP mail providers',
+                'MAIL_API_KEY_REQUIRED',
+                400,
+            );
+        }
+
+        if ($transport === 'mailgun') {
+            $domain = $resolve(ConfigInterface::MAIL_API_DOMAIN, '');
+            if ($domain === '') {
+                return ApiResponse::error(
+                    'Mailgun sending domain (mail_api_domain) is required',
+                    'MAIL_API_DOMAIN_REQUIRED',
+                    400,
+                );
+            }
+        }
+
+        if ($transport === 'ses') {
+            $region = $resolve(ConfigInterface::MAIL_API_REGION, '');
+            if ($region === '') {
+                return ApiResponse::error(
+                    'AWS SES region (mail_api_region) is required (e.g. us-east-1)',
+                    'MAIL_API_REGION_REQUIRED',
+                    400,
+                );
+            }
+            if (!str_contains($apiKey, ':')) {
+                return ApiResponse::error(
+                    'Amazon SES API key must be ACCESS_KEY:SECRET_KEY',
+                    'MAIL_SES_KEY_FORMAT',
+                    400,
+                );
+            }
+        }
+
+        return null;
     }
 
     /**

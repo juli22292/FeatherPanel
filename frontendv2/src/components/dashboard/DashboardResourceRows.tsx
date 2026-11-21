@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import { useTranslation } from '@/contexts/TranslationContext';
 import { getApiErrorMessage } from '@/lib/api-errors';
+import { ServiceExpiryChip } from '@/components/common/ServiceExpiryChip';
 import {
     displayStatus,
     formatCpu,
@@ -110,7 +111,10 @@ function Meter({ label, value, percent }: { label: string; value: string; percen
             </div>
             <div className='bg-muted mt-1.5 h-1 overflow-hidden rounded-full'>
                 <div
-                    className={cn('h-full rounded-full transition-[width] duration-500', tone)}
+                    className={cn(
+                        'h-full rounded-full transition-[width] duration-700 ease-out motion-reduce:transition-none',
+                        tone,
+                    )}
                     style={{ width: `${percent === null ? 0 : Math.min(100, Math.max(percent, 0))}%` }}
                 />
             </div>
@@ -369,13 +373,14 @@ export function DashboardServerRow({
                     <span className='flex min-w-0 items-center gap-2'>
                         <span className='truncate text-sm font-semibold'>{server.name}</span>
                     </span>
-                    <span className='mt-0.5 flex min-w-0 items-center gap-2'>
+                    <span className='mt-0.5 flex min-w-0 flex-wrap items-center gap-2'>
                         <StatusLabel status={status} />
                         {(server.node?.name || server.spell?.name) && (
                             <span className='text-muted-foreground/80 hidden min-w-0 truncate text-xs sm:inline'>
                                 {[server.spell?.name, server.node?.name].filter(Boolean).join(' · ')}
                             </span>
                         )}
+                        <ServiceExpiryChip expiresAt={server.expires_at} compact className='h-5 px-2 text-[10px]' />
                     </span>
                 </span>
             </Link>
@@ -482,9 +487,11 @@ export function DashboardServerGaugeCard({
 }) {
     const { t, status, accessible, href, powerButtons, usage } = useServerPresentation(server, live);
     const banner = server.spell?.banner;
-    const address = server.allocation
-        ? `${server.allocation.ip_alias || server.allocation.alias || server.allocation.ip}:${server.allocation.port}`
-        : null;
+    const address = server.subdomain_requirement?.enforced
+        ? t('serverSubdomains.requirementAddressPending')
+        : server.allocation
+          ? `${server.allocation.ip_alias || server.allocation.alias || server.allocation.ip}:${server.allocation.port}`
+          : null;
     const pct = (used: number, limit: number) => (limit > 0 ? getUsagePercentage(used, limit) : null);
     const ofLimit = (limit: number, format: (n: number) => string) =>
         limit > 0 ? t('dashboard.home.gauges.of', { limit: format(limit) }) : t('dashboard.home.gauges.unlimited');
@@ -514,8 +521,9 @@ export function DashboardServerGaugeCard({
             )}
             <div
                 className={cn(
-                    'from-primary/30 via-primary/10 to-muted relative bg-linear-to-br bg-cover bg-center',
+                    'relative bg-cover bg-center',
                     images ? 'h-24' : 'h-10',
+                    images && banner ? 'bg-muted' : 'bg-muted/60',
                 )}
                 style={
                     images && banner
@@ -523,7 +531,9 @@ export function DashboardServerGaugeCard({
                         : undefined
                 }
             >
-                <span className='from-card/90 absolute inset-0 bg-linear-to-t to-transparent' aria-hidden />
+                {images && banner ? (
+                    <span className='from-card/90 absolute inset-0 bg-linear-to-t to-transparent' aria-hidden />
+                ) : null}
                 {tag && (
                     <span className='bg-background/70 absolute top-2.5 left-2.5 max-w-[60%] truncate rounded-md px-2 py-0.5 text-[11px] font-medium backdrop-blur-sm'>
                         {tag}

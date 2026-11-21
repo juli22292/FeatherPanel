@@ -42,6 +42,7 @@ import { AttentionWidget } from '@/components/admin/AttentionWidget';
 import { NodesOverviewWidget } from '@/components/admin/NodesOverviewWidget';
 import { RecentServersWidget } from '@/components/admin/RecentServersWidget';
 import { SupportTicketsWidget } from '@/components/admin/SupportTicketsWidget';
+import { DonationNudge } from '@/components/admin/DonationNudge';
 import { CloudHubWidget } from '@/components/admin/CloudHubWidget';
 import { AdminWidgetFrame } from '@/components/admin/AdminWidgetFrame';
 import { Button } from '@/components/featherui/Button';
@@ -184,18 +185,20 @@ export default function AdminDashboardPage() {
 
             <SetupBanner />
 
+            <DonationNudge />
+
             {/* The hero below greets and links the main tasks; this row keeps the page tools. */}
-            <div className='flex justify-end'>
-                <div className='flex flex-wrap items-center gap-2'>
+            <div className='flex sm:justify-end'>
+                <div className='animate-in fade-in grid w-full grid-cols-2 gap-2 duration-300 motion-reduce:animate-none sm:flex sm:w-auto sm:flex-wrap sm:items-center'>
                     <Button
                         type='button'
-                        variant='ghost'
+                        variant='secondary'
                         onClick={() => {
                             refresh();
                             refreshHealth();
                         }}
                         loading={loading}
-                        className='gap-2 px-4'
+                        className='min-h-11 gap-2 px-4 sm:min-h-9'
                     >
                         {!loading && <RefreshCw className='h-4 w-4' aria-hidden />}
                         {t('common.refresh')}
@@ -205,7 +208,10 @@ export default function AdminDashboardPage() {
                         variant={isCustomizing ? 'warning' : 'secondary'}
                         onClick={() => setIsCustomizing(!isCustomizing)}
                         aria-pressed={isCustomizing}
-                        className={cn('gap-2 px-4', isCustomizing && 'text-amber-800 dark:text-amber-400')}
+                        className={cn(
+                            'min-h-11 gap-2 px-4 sm:min-h-9',
+                            isCustomizing && 'text-amber-800 dark:text-amber-400',
+                        )}
                     >
                         <SlidersHorizontal className='h-4 w-4' aria-hidden />
                         <span className='hidden sm:inline'>
@@ -220,13 +226,13 @@ export default function AdminDashboardPage() {
                         variant='secondary'
                         onClick={clearCache}
                         loading={isClearingCache}
-                        className='gap-2 px-4'
+                        className='min-h-11 gap-2 px-4 sm:min-h-9'
                     >
                         {!isClearingCache && <Trash2 className='h-4 w-4' />}
                         <span className='hidden sm:inline'>{t('admin.dashboard.clear_cache')}</span>
                         <span className='sm:hidden'>{t('admin.dashboard.clear')}</span>
                     </Button>
-                    <Button asChild variant='secondary' className='gap-2 px-4'>
+                    <Button asChild variant='secondary' className='min-h-11 gap-2 px-4 sm:min-h-9'>
                         <Link href='/admin/settings'>
                             <Settings className='h-4 w-4' />
                             <span className='hidden sm:inline'>{t('admin.dashboard.global_settings')}</span>

@@ -237,6 +237,13 @@ export interface Server {
         domain: string;
         subdomain: string;
     };
+    /** Present when the panel may require a subdomain before start/restart. */
+    subdomain_requirement?: {
+        required: boolean;
+        compliant: boolean;
+        bypassed: boolean;
+        enforced: boolean;
+    };
 
     // Access control
     is_subuser: boolean;
@@ -351,6 +358,14 @@ export interface BackupItem {
     created_at: string;
     updated_at: string;
     completed_at?: string;
+    destination_id?: number | null;
+    /** Bring-your-own storage the backup lives on (null = node disk / panel storage). */
+    destination?: {
+        id: number;
+        name: string | null;
+        provider: string | null;
+        state: 'active' | 'error' | 'revoked' | 'orphaned' | null;
+    } | null;
 }
 
 export interface BackupsResponse {
@@ -369,8 +384,18 @@ export interface BackupsResponse {
         backup_retention_mode_override?: string | null;
         effective_backup_retention_mode?: string;
         fifo_rolling_enabled?: boolean;
+        limit_usage?: BackupLimitUsage;
     };
     message?: string;
+}
+
+/** Backups that use the server backup limit. Backups on the user's own storage are not counted unless the admin says so. */
+export interface BackupLimitUsage {
+    used: number;
+    limit: number;
+    total: number;
+    byo_counts_toward_limit: boolean;
+    byo_enabled: boolean;
 }
 export interface ImportItem {
     id: number;
