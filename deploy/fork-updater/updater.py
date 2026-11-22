@@ -10,9 +10,11 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import hashlib
 import hmac
 import json
 import os
+import platform
 import re
 import shutil
 import subprocess
@@ -28,6 +30,8 @@ from pathlib import Path
 
 REPOSITORY = "juli22292/FeatherPanel"
 SERVICES = ("backend", "frontendv2", "mcp", "async-runner")
+ARCHITECTURES = {"x86_64": "amd64", "aarch64": "arm64"}
+MAX_ASSET_SIZE = 2 * 1024**3 - 1
 VERSION_PATTERN = re.compile(r"^v(\d+)\.(\d+)\.(\d+)(?:\.(\d+))?$")
 INSTALLED_VERSION_PATTERN = re.compile(r"define\('APP_VERSION',\s*'(v\d+\.\d+\.\d+(?:\.\d+)?)'\)")
 
@@ -100,6 +104,66 @@ class Updater:
         expected = {f"ghcr.io/juli22292/featherpanel-{service}:{tag}" for service in SERVICES}
         if not expected.issubset(images) or any("mythicalltd/featherpanel" in image for image in images):
             raise RuntimeError("Compose must use this fork's four published images")
+
+    def load_release_images(self, tag: str) -> None:
+        version_parts(tag)
+        architecture = ARCHITECTURES.get(platform.machine())
+        if not architecture:
+            raise RuntimeError("GitHub image archives are unavailable for this architecture")
+
+        request = urllib.request.Request(
+            f"https://api.github.com/repos/{REPOSITORY}/releases/tags/{tag}",
+            headers={"Accept": "application/vnd.github+json", "User-Agent": "FeatherPanel-Fork-Updater"},
+        )
+        with urllib.request.urlopen(request, timeout=15) as response:
+            release = json.load(response)
+        if (not isinstance(release, dict) or release.get("tag_name") != tag
+                or release.get("draft") or release.get("prerelease")):
+            raise RuntimeError("GitHub did not return the requested stable release")
+
+        names = {f"featherpanel-{service}-linux-{architecture}-{tag}.tar.gz": service for service in SERVICES}
+        assets = {asset["name"]: asset for asset in release.get("assets", [])
+                  if isinstance(asset, dict) and isinstance(asset.get("name"), str) and asset["name"] in names}
+        for name in names:
+            asset = assets.get(name, {})
+            size = asset.get("size")
+            if (asset.get("state") != "uploaded" or not isinstance(size, int) or not 0 < size <= MAX_ASSET_SIZE
+                    or not re.fullmatch(r"sha256:[0-9a-f]{64}", str(asset.get("digest")))):
+                raise RuntimeError(f"The release is missing a valid Docker image archive: {name}")
+
+        with tempfile.TemporaryDirectory(prefix="release-images-", dir=self.backup_root) as directory:
+            for name, service in names.items():
+                asset = assets[name]
+                path = Path(directory) / name
+                url = f"https://github.com/{REPOSITORY}/releases/download/{tag}/{name}"
+                self.download_image(url, path, asset["size"], asset["digest"])
+                expected = f"ghcr.io/juli22292/featherpanel-{service}:{tag}"
+                with tarfile.open(path, "r:gz") as archive:
+                    entry = archive.getmember("manifest.json")
+                    if not entry.isfile() or entry.size > 1024 * 1024:
+                        raise RuntimeError(f"Invalid Docker manifest: {name}")
+                    with archive.extractfile(entry) as manifest_file:
+                        manifest = json.load(manifest_file)
+                if (not isinstance(manifest, list) or len(manifest) != 1
+                        or not isinstance(manifest[0], dict) or manifest[0].get("RepoTags") != [expected]):
+                    raise RuntimeError(f"The archive does not contain exactly the expected tag: {expected}")
+                run(["docker", "load", "--input", str(path)])
+                run(["docker", "image", "inspect", expected])
+                path.unlink()
+
+    @staticmethod
+    def download_image(url: str, path: Path, size: int, digest: str) -> None:
+        checksum = hashlib.sha256()
+        received = 0
+        with urllib.request.urlopen(url, timeout=30) as response, path.open("xb") as output:
+            while chunk := response.read(1024 * 1024):
+                received += len(chunk)
+                if received > size:
+                    raise RuntimeError("The downloaded image exceeds its published size")
+                checksum.update(chunk)
+                output.write(chunk)
+        if received != size or "sha256:" + checksum.hexdigest() != digest:
+            raise RuntimeError("The downloaded image does not match the published size and SHA-256")
 
     def backup(self, current: str) -> Path:
         self.backup_root.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -180,11 +244,17 @@ class Updater:
 
             env = dict(os.environ, FEATHERPANEL_IMAGE_TAG=target)
             self.check_compose_images(target, env)
-            run(self.compose() + ["pull", *SERVICES], env=env)
+            try:
+                run(self.compose() + ["pull", *SERVICES], env=env)
+            except RuntimeError as pull_error:
+                try:
+                    self.load_release_images(target)
+                except Exception as asset_error:
+                    raise RuntimeError(f"Docker pull failed ({pull_error}); GitHub image archives unavailable: {asset_error}") from asset_error
             backup_dir = self.backup(current)
             self.set_image_tag(target)
             try:
-                run(self.compose() + ["up", "-d", "--no-build", "--no-deps", *SERVICES])
+                run(self.compose() + ["up", "-d", "--no-build", "--no-deps", "--pull", "never", *SERVICES])
                 self.wait_until_healthy(target)
             except Exception as error:
                 raise RuntimeError(f"Backup preserved at {backup_dir}: {error}") from error
