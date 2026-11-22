@@ -31,6 +31,7 @@ use App\Helpers\ApiResponse;
 use OpenApi\Attributes as OA;
 use App\Chat\VmInstanceActivity;
 use App\Services\Vm\VmInstanceUtil;
+use App\Services\Vm\VmGuestAccounts;
 use App\CloudFlare\CloudFlareRealIP;
 use App\Plugins\Events\Events\VdsEvent;
 use Symfony\Component\HttpFoundation\Request;
@@ -2144,6 +2145,9 @@ class VmUserInstanceController
      */
     private static function resolveAccessPassword(array $vmInstance): ?string
     {
+        if (VmGuestAccounts::managesLxcRootPassword($vmInstance)) {
+            return null;
+        }
         $notesRaw = isset($vmInstance['notes']) && is_string($vmInstance['notes']) ? trim($vmInstance['notes']) : '';
         if ($notesRaw !== '') {
             $notes = json_decode($notesRaw, true);

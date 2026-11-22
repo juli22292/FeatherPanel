@@ -105,10 +105,7 @@ final class VmUserGuestAccessController
 
             $password = VmGuestAccounts::password();
             $hash = VmGuestAccounts::passwordHash($password);
-            VmGuestAccounts::forgetPassword($db, $vm, $name);
             if (!$client->setPassword($name, $hash)) {
-                $db->commit();
-
                 return self::agentUnavailable();
             }
             VmGuestAccounts::savePassword($db, $vm, $guest, $name, $password, $hash);

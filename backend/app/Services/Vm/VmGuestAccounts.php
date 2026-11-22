@@ -119,9 +119,21 @@ final class VmGuestAccounts
         return $passwords;
     }
 
-    public static function forgetPassword(\PDO $db, array $vm, string $username): void
+    public static function managesLxcRootPassword(array $vm): bool
     {
-        $db->prepare('DELETE FROM featherpanel_vm_guest_passwords WHERE instance_id = ? AND username = ?')->execute([$vm['id'], $username]);
+        if (($vm['vm_type'] ?? null) !== 'lxc') {
+            return false;
+        }
+        $params = [$vm['id'], $vm['user_uuid'], $vm['vmid']];
+        $stmt = Database::getPdoConnection()->prepare(
+            "SELECT 1 FROM featherpanel_vm_guest_passwords WHERE instance_id = ? AND owner_uuid = ? AND vmid = ? AND username = 'root'
+             UNION ALL
+             SELECT 1 FROM featherpanel_vm_guest_setup WHERE instance_id = ? AND owner_uuid = ? AND vmid = ?
+             LIMIT 1"
+        );
+        $stmt->execute([...$params, ...$params]);
+
+        return (bool) $stmt->fetchColumn();
     }
 
     public static function savePassword(\PDO $db, array $vm, array $guest, string $username, string $password, string $hash): void
