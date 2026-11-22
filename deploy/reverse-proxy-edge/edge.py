@@ -112,7 +112,7 @@ def render(row, tls, root, cert_dir):
 """
     if not tls:
         return (prefix + http).encode()
-    variable = "$serverpanel_connection_" + certificate_name(domain).split("-")[-1]
+    variable = "$sp_connection_" + str(row["id"])
     return (prefix + http + f"""map $http_upgrade {variable} {{
     default upgrade;
     '' close;
@@ -221,6 +221,8 @@ class Edge:
             address = ipaddress.ip_address(ip) if isinstance(ip, str) and "%" not in ip else None
         except ValueError as error:
             raise Rejected(422) from error
+        if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped:
+            raise Rejected(422)
         if (not address or address.is_loopback or address.is_unspecified or address.is_link_local or address.is_multicast
                 or not any(address in network for network in self.networks)
                 or not any(lo <= port <= hi for lo, hi in self.ports)
