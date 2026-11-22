@@ -3,12 +3,14 @@ name: Fork Release
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
   ci:
+    if: github.ref_type == 'tag'
     uses: ./.github/workflows/fork-ci.yml
 
   images:
