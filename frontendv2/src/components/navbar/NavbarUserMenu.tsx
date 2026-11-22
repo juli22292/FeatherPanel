@@ -37,7 +37,7 @@ import { HIDDEN_IP_PLACEHOLDER } from '@/lib/ip-mask';
 import type { AppRouterInstance } from 'next/dist/shared/lib/app-router-context.shared-runtime';
 import Image from 'next/image';
 import { RoleBadge } from '@/components/RoleBadge';
-import { cn, copyToClipboard } from '@/lib/utils';
+import { cn, copyToClipboard, isEnabledUnlessExplicitlyFalse } from '@/lib/utils';
 import { PoweredByFeatherPanel } from '@/components/branding/PoweredByFeatherPanel';
 import type { UserInfo } from '@/contexts/SessionContext';
 import type { AppSettings } from '@/types/settings';
@@ -166,7 +166,8 @@ export function NavbarUserMenu({
     const isModern = variant === 'modern';
     const roleColor = user?.role?.color?.trim() || null;
     const privacy = usePrivacyModeToggle();
-    const gameEnabled = isModuleEnabled(settings, 'game');
+    const showOs =
+        isModuleEnabled(settings, 'game') && isEnabledUnlessExplicitlyFalse(settings?.module_featheros_enabled);
     const osTitle = `${settings?.app_name || 'Panel'} OS`;
 
     if (userLoading) {
@@ -309,7 +310,7 @@ export function NavbarUserMenu({
                                 )}
                             </Menu.Item>
                         ) : null}
-                        {gameEnabled ? (
+                        {showOs ? (
                             <Menu.Item as='div'>
                                 {({ active }) => (
                                     <a

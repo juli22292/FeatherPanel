@@ -44,6 +44,13 @@ function sessionEnvironment(pathname = '/server/test/console') {
             if (!before || deps.some((dep, i) => !Object.is(dep, before.deps[i]))) slots[index] = { deps, fn };
             return slots[index].fn;
         },
+        useMemo(factory, deps) {
+            const index = cursor++, before = slots[index];
+            if (!before || deps.some((dep, i) => !Object.is(dep, before.deps[i]))) {
+                slots[index] = { deps, value: factory() };
+            }
+            return slots[index].value;
+        },
         useEffect: hookEffect, useLayoutEffect: hookEffect,
     };
     const api = { get(url) { return new Promise((resolve, reject) => requests.push({ url, resolve, reject })); }, delete: async () => {} };

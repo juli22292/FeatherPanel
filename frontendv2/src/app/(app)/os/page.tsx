@@ -13,11 +13,16 @@ by the Free Software Foundation, either version 3 of the License, or
 See the LICENSE file or <https://www.gnu.org/licenses/>.
 */
 
-'use client';
-
+import { redirect } from 'next/navigation';
 import FeatherOS from '@/components/featheros/FeatherOS';
+import { settingsApi } from '@/lib/settings-api';
+import { isEnabledUnlessExplicitlyFalse } from '@/lib/utils';
 
 /** FeatherOS: desktop-like multi server workspace, opened in its own tab from the panel. */
-export default function FeatherOsPage() {
+export default async function FeatherOsPage() {
+    const data = await settingsApi.getPublicSettings({ fresh: true });
+    if (!isEnabledUnlessExplicitlyFalse(data?.settings?.module_featheros_enabled)) {
+        redirect('/dashboard');
+    }
     return <FeatherOS />;
 }

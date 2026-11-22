@@ -22,6 +22,7 @@ import { toast } from 'sonner';
 import { useTranslation } from '@/contexts/TranslationContext';
 import { cn } from '@/lib/utils';
 import { maskEndpoint } from '@/lib/ip-mask';
+import { getAllocationDisplayHost } from '@/lib/server-utils';
 import type { AllocationItem } from '@/types/server';
 import { useFeatherOs } from '../FeatherOsContext';
 import type { OsAppProps } from './index';
@@ -71,7 +72,7 @@ export default function NetworkApp({ win }: OsAppProps) {
         }
     };
 
-    const address = (a: AllocationItem) => maskEndpoint(a.public_ip || a.ip_alias || a.ip, a.port, false);
+    const address = (a: AllocationItem) => maskEndpoint(getAllocationDisplayHost(a), a.port, false);
 
     return (
         <div className='flex h-full flex-col'>

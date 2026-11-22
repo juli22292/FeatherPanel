@@ -22,9 +22,9 @@ use App\Config\ConfigInterface;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Admin-toggleable panel modules (game servers, web hosting, VDS).
+ * Admin-toggleable panel modules (game servers, web hosting, VDS, FeatherOS).
  *
- * A disabled module keeps its data but its user and admin API answers 403 MODULE_DISABLED.
+ * A disabled module keeps its data and its API returns HTTP 403.
  * Daemon callbacks (Wings, FeatherQuilld, Proxmox tasks) are never gated so running
  * infrastructure keeps reporting while a module is hidden.
  */
@@ -33,12 +33,14 @@ class ModuleGate
     public const GAME = 'game';
     public const WEB = 'web';
     public const VDS = 'vds';
+    public const FEATHEROS = 'featheros';
 
     /** @var array<string, string> */
     private const SETTING_KEYS = [
         self::GAME => ConfigInterface::MODULE_GAME_ENABLED,
         self::WEB => ConfigInterface::MODULE_WEB_ENABLED,
         self::VDS => ConfigInterface::MODULE_VDS_ENABLED,
+        self::FEATHEROS => ConfigInterface::MODULE_FEATHEROS_ENABLED,
     ];
 
     /**
@@ -76,6 +78,7 @@ class ModuleGate
         '/api/admin/vm-nodes' => self::VDS,
         '/api/admin/vm-templates' => self::VDS,
         '/api/admin/analytics/vds' => self::VDS,
+        '/api/user/featheros' => self::FEATHEROS,
     ];
 
     public static function moduleForPath(string $path): ?string
@@ -107,6 +110,10 @@ class ModuleGate
         $module = self::moduleForPath($path);
         if ($module === null || self::isEnabled($module)) {
             return null;
+        }
+
+        if ($module === self::FEATHEROS) {
+            return ApiResponse::error('FeatherOS is disabled by the administrator', 'FEATHEROS_DISABLED', 403);
         }
 
         return ApiResponse::error(

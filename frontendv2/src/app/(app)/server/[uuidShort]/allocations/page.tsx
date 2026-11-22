@@ -70,6 +70,7 @@ import { copyToClipboard, cn, isEnabled } from '@/lib/utils';
 import { getApiErrorMessage, getApiErrorMessageFromPayload } from '@/lib/api-errors';
 import { Sensitive } from '@/components/common/Sensitive';
 import { maskEndpoint } from '@/lib/ip-mask';
+import { getAllocationDisplayHost } from '@/lib/server-utils';
 
 export default function ServerAllocationsPage() {
     const { t } = useTranslation();
@@ -439,10 +440,7 @@ export default function ServerAllocationsPage() {
                                         : 'bg-card/40 border-border/60',
                                 )}
                                 iconClassName={cn(allocation.is_primary ? 'text-primary' : 'text-muted-foreground')}
-                                title={ipMask.endpoint(
-                                    allocation.public_ip || allocation.ip_alias || allocation.ip,
-                                    allocation.port,
-                                )}
+                                title={ipMask.endpoint(getAllocationDisplayHost(allocation), allocation.port)}
                                 badges={
                                     allocation.is_primary && (
                                         <Badge
@@ -508,7 +506,7 @@ export default function ServerAllocationsPage() {
                                             onClick={() =>
                                                 handleCopy(
                                                     maskEndpoint(
-                                                        allocation.public_ip || allocation.ip,
+                                                        getAllocationDisplayHost(allocation),
                                                         allocation.port,
                                                         false,
                                                     ),
@@ -737,7 +735,13 @@ export default function ServerAllocationsPage() {
                                                 </div>
                                                 <div className='flex flex-col'>
                                                     <span className='font-mono text-sm font-bold tracking-tight'>
-                                                        <Sensitive>{maskEndpoint(item.ip, item.port, false)}</Sensitive>
+                                                        <Sensitive>
+                                                            {maskEndpoint(
+                                                                getAllocationDisplayHost(item),
+                                                                item.port,
+                                                                false,
+                                                            )}
+                                                        </Sensitive>
                                                     </span>
                                                     <span className='text-muted-foreground text-xs font-medium tracking-wider uppercase'>
                                                         {item.ip_alias

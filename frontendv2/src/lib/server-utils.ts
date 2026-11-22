@@ -15,8 +15,22 @@ by the Free Software Foundation, either version 3 of the License, or
 See the LICENSE file or <https://www.gnu.org/licenses/>.
 */
 
-import { Server } from '@/types/server';
+import type { Server, ServerAllocation } from '@/types/server';
 import { formatMib, formatCpu as formatCpuGlobal } from '@/lib/utils';
+
+export function getAllocationDisplayHost(
+    allocation: Pick<ServerAllocation, 'ip_alias' | 'alias' | 'public_ip' | 'ip'> | null | undefined,
+): string {
+    return allocation?.ip_alias || allocation?.alias || allocation?.public_ip || allocation?.ip || '';
+}
+
+export function getServerConnectionHost(
+    server: Pick<Server, 'subdomain' | 'subdomain_requirement' | 'allocation'>,
+): string {
+    const { domain, subdomain } = server.subdomain ?? {};
+    if (domain && subdomain) return `${subdomain}.${domain}`;
+    return server.subdomain_requirement?.enforced ? '' : getAllocationDisplayHost(server.allocation);
+}
 
 /**
  * Format bytes to human-readable memory size

@@ -28,7 +28,7 @@ export const getBaseUrl = () => {
 };
 
 export const settingsApi = {
-    getPublicSettings: async (): Promise<{
+    getPublicSettings: async ({ fresh = false }: { fresh?: boolean } = {}): Promise<{
         settings: AppSettings;
         core: CoreInfo;
     } | null> => {
@@ -37,7 +37,7 @@ export const settingsApi = {
             // If we are server side, we might need to use fetch directly or configure axios instance
             // Using fetch is safer for Next.js caching rules
             const res = await fetch(`${baseUrl}/api/system/settings`, {
-                ...(process.env.NODE_ENV === 'development'
+                ...(fresh || process.env.NODE_ENV === 'development'
                     ? { cache: 'no-store' as const }
                     : { next: { revalidate: 60, tags: ['settings'] } }),
                 headers: {

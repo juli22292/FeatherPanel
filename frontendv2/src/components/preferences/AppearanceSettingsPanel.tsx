@@ -56,7 +56,7 @@ import { ACCENT_PRESET_IDS, resolveAccentSwatchCss } from '@/lib/accent-colors';
 import { formatCustomAccent, getCustomAccentHex, isCustomAccent } from '@/lib/accent-color-utils';
 import { isRtlLocale } from '@/lib/locale-flags';
 import LocaleFlag from '@/components/preferences/LocaleFlag';
-import { cn } from '@/lib/utils';
+import { cn, isEnabledUnlessExplicitlyFalse } from '@/lib/utils';
 import { safeCssUrl } from '@/lib/safe-css-url';
 
 const PREFERENCES_PATH = '/dashboard/preferences';
@@ -380,7 +380,8 @@ export default function AppearanceSettingsPanel() {
     const { packs: uiPacks, uiPackId, setUiPackId } = usePluginUi();
     const { t, availableLanguages, setLocale, locale, isLocaleLocked } = useTranslation();
     const { settings } = useSettings();
-    const gameModuleEnabled = isModuleEnabled(settings, 'game');
+    const showOsPreference =
+        isModuleEnabled(settings, 'game') && isEnabledUnlessExplicitlyFalse(settings?.module_featheros_enabled);
 
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -1215,7 +1216,7 @@ export default function AppearanceSettingsPanel() {
                                     {t('appearance.sidebar.iconLibraryPhosphor')}
                                 </SegmentButton>
                             </SegmentGroup>
-                            {gameModuleEnabled && (
+                            {showOsPreference && (
                                 <SegmentGroup
                                     label={t('appearance.sidebar.osShortcutTitle')}
                                     hint={t('appearance.sidebar.osShortcutHint')}

@@ -93,13 +93,13 @@ class Subdomain
     }
 
     /**
-     * Server IDs in the given set that already have at least one panel subdomain.
+     * Most recently assigned connection subdomain per server.
      *
      * @param list<int> $serverIds
      *
-     * @return list<int>
+     * @return array<int, array{domain: ?string, subdomain: string}>
      */
-    public static function getServerIdsHavingSubdomains(array $serverIds): array
+    public static function getLatestForServers(array $serverIds): array
     {
         $serverIds = array_values(array_unique(array_filter(
             array_map(static fn ($id) => (int) $id, $serverIds),
@@ -112,12 +112,22 @@ class Subdomain
 
         $placeholders = implode(',', array_fill(0, count($serverIds), '?'));
         $pdo = Database::getPdoConnection();
-        $stmt = $pdo->prepare(
-            'SELECT DISTINCT server_id FROM ' . self::$table . ' WHERE server_id IN (' . $placeholders . ')'
-        );
+        $stmt = $pdo->prepare('SELECT latest.server_id, latest.subdomain, domains.domain
+            FROM (
+                SELECT server_id, subdomain, domain_id,
+                    ROW_NUMBER() OVER (PARTITION BY server_id ORDER BY created_at DESC, id DESC) AS row_rank
+                FROM ' . self::$table . ' WHERE server_id IN (' . $placeholders . ')
+            ) latest
+            LEFT JOIN featherpanel_subdomain_manager_domains domains ON domains.id = latest.domain_id
+            WHERE latest.row_rank = 1');
         $stmt->execute($serverIds);
 
-        return array_map(static fn ($row) => (int) $row['server_id'], $stmt->fetchAll(\PDO::FETCH_ASSOC));
+        $subdomains = [];
+        foreach ($stmt->fetchAll(\PDO::FETCH_ASSOC) as $row) {
+            $subdomains[(int) $row['server_id']] = ['domain' => $row['domain'], 'subdomain' => $row['subdomain']];
+        }
+
+        return $subdomains;
     }
 
     /**

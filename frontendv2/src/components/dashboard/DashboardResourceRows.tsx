@@ -44,6 +44,7 @@ import {
     formatCpu,
     formatDisk,
     formatMemory,
+    getServerConnectionHost,
     getServerCpu,
     getServerCpuLimit,
     getServerDisk,
@@ -489,17 +490,11 @@ export function DashboardServerGaugeCard({
 }) {
     const { t, status, accessible, href, powerButtons, usage } = useServerPresentation(server, live);
     const banner = server.spell?.banner;
-    const address = server.subdomain_requirement?.enforced
-        ? t('serverSubdomains.requirementAddressPending')
-        : server.allocation
-          ? maskEndpoint(
-                server.allocation.public_ip ||
-                    server.allocation.ip_alias ||
-                    server.allocation.alias ||
-                    server.allocation.ip,
-                server.allocation.port,
-                false,
-            )
+    const host = getServerConnectionHost(server);
+    const address = host
+        ? maskEndpoint(host, server.allocation?.port, false)
+        : server.subdomain_requirement?.enforced
+          ? t('serverSubdomains.requirementAddressPending')
           : null;
     const pct = (used: number, limit: number) => (limit > 0 ? getUsagePercentage(used, limit) : null);
     const ofLimit = (limit: number, format: (n: number) => string) =>

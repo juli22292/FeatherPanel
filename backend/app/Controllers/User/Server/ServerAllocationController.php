@@ -675,6 +675,11 @@ class ServerAllocationController
             offset: $offset,
             notUsed: true
         );
+        $reverseProxyRules = ReverseProxyAddresses::configuredRules();
+        foreach ($availableAllocations as &$allocation) {
+            $allocation['public_ip'] = ReverseProxyAddresses::publicIp($allocation['ip'] ?? null, (int) $server['spell_id'], $reverseProxyRules);
+        }
+        unset($allocation);
 
         // Get total count for pagination
         $total = Allocation::getCount(

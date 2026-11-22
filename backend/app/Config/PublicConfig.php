@@ -231,6 +231,7 @@ class PublicConfig extends ConfigFactory
             ConfigInterface::MODULE_GAME_ENABLED => 'true',
             ConfigInterface::MODULE_WEB_ENABLED => 'true',
             ConfigInterface::MODULE_VDS_ENABLED => 'true',
+            ConfigInterface::MODULE_FEATHEROS_ENABLED => 'true',
             ConfigInterface::SETUP_COMPLETED => 'false',
             ConfigInterface::PTERODACTYL_IMPORTER_VISIBILITY => 'auto',
             ConfigInterface::KNOWLEDGEBASE_PUBLIC_ENABLED => 'true',

@@ -45,6 +45,7 @@ import { toast } from 'sonner';
 import { copyToClipboard } from '@/lib/utils';
 import { getApiErrorMessageFromPayload } from '@/lib/api-errors';
 import { resolveServerSpellBannerStyle } from '@/lib/server-spell-banner';
+import { getServerConnectionHost } from '@/lib/server-utils';
 import { useServerResourceHistory } from '@/lib/resource-history';
 import { ResourceTrendStrip } from '@/components/dashboard/ResourceTrends';
 import { ServerResourceGraphs } from '@/components/server/ServerResourceGraphs';
@@ -733,12 +734,7 @@ export default function ServerConsolePage() {
     }
 
     const connectionInfo = getConnectionStatusInfo();
-    const serverHost =
-        server.subdomain && server.subdomain.domain && server.subdomain.subdomain
-            ? `${server.subdomain.subdomain}.${server.subdomain.domain}`
-            : server.subdomain_requirement?.enforced
-              ? ''
-              : server.allocation?.public_ip || server.allocation?.ip_alias || server.allocation?.ip || '';
+    const serverHost = getServerConnectionHost(server);
 
     if (isPopout) {
         return (

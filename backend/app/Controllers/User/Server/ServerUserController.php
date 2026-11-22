@@ -35,7 +35,6 @@ use App\Chat\ServerActivity;
 use App\Chat\ServerDatabase;
 use App\Chat\ServerVariable;
 use App\Helpers\ApiResponse;
-use App\Chat\SubdomainDomain;
 use App\Helpers\AppUrlHelper;
 use App\Services\Wings\Wings;
 use OpenApi\Attributes as OA;
@@ -424,11 +423,7 @@ class ServerUserController
 
         $subdomainRequired = ServerSubdomainRequirementHelper::isRequired();
         $subdomainBypass = $subdomainRequired && ServerSubdomainRequirementHelper::userBypasses($user);
-        $compliantServerIds = [];
-        if ($subdomainRequired) {
-            $pageServerIds = array_map(static fn ($s) => (int) ($s['id'] ?? 0), $servers);
-            $compliantServerIds = array_flip(Subdomain::getServerIdsHavingSubdomains($pageServerIds));
-        }
+        $subdomainsByServerId = Subdomain::getLatestForServers(array_column($servers, 'id'));
 
         $reverseProxyRules = ReverseProxyAddresses::configuredRules();
 
@@ -511,7 +506,8 @@ class ServerUserController
             ];
 
             $serverId = (int) $server['id'];
-            $compliant = isset($compliantServerIds[$serverId]);
+            $server['subdomain'] = $subdomainsByServerId[$serverId] ?? null;
+            $compliant = $subdomainRequired && $server['subdomain'] !== null;
             $enforced = $subdomainRequired && !$subdomainBypass && !$compliant;
             $server['subdomain_requirement'] = [
                 'required' => $subdomainRequired,
@@ -958,29 +954,11 @@ class ServerUserController
             }
         }
         // End flatten
-        $domain = Subdomain::existsByServerId($server['id']);
-        if ($domain) {
-            $subdomains = Subdomain::getByServerId($server['id'], 1);
-            if (!empty($subdomains) && isset($subdomains[0]['domain_id'])) {
-                $subdomain = $subdomains[0];
-                $domain = SubdomainDomain::getDomainById((int) $subdomain['domain_id']);
-
-                $server['subdomain'] = [
-                    'domain' => $domain['domain'] ?? null,
-                    'subdomain' => $subdomain['subdomain'] ?? null,
-                ];
-            } else {
-                $server['subdomain'] = [
-                    'domain' => null,
-                    'subdomain' => null,
-                ];
-            }
-        } else {
-            $server['subdomain'] = [
-                'domain' => null,
-                'subdomain' => null,
-            ];
-        }
+        $serverId = (int) $server['id'];
+        $server['subdomain'] = Subdomain::getLatestForServers([$serverId])[$serverId] ?? [
+            'domain' => null,
+            'subdomain' => null,
+        ];
 
         $server['subdomain_requirement'] = ServerSubdomainRequirementHelper::requirementMeta($user, (int) $server['id']);
         if ($server['subdomain_requirement']['enforced']) {

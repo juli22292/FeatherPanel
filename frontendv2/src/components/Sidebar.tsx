@@ -26,7 +26,7 @@ import { PanelIcon } from '@/components/icons/PanelIcon';
 import { useSettings } from '@/contexts/SettingsContext';
 import { useSession } from '@/contexts/SessionContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { cn, isEnabled } from '@/lib/utils';
+import { cn, isEnabled, isEnabledUnlessExplicitlyFalse } from '@/lib/utils';
 import { isModuleEnabled } from '@/lib/modules';
 import { ModuleBadge } from '@/components/ui/module-badge';
 import { useNavigation } from '@/hooks/useNavigation';
@@ -256,7 +256,11 @@ function SidebarContent({
     const gameEnabled = isModuleEnabled(settings, 'game');
     const { showOsInSidebar } = useFeatherOsSidebarShortcut();
     const isDashboardArea = pathname === '/dashboard' || pathname.startsWith('/dashboard/');
-    const showOsShortcut = gameEnabled && showOsInSidebar && isDashboardArea;
+    const showOsShortcut =
+        gameEnabled &&
+        showOsInSidebar &&
+        isDashboardArea &&
+        isEnabledUnlessExplicitlyFalse(settings?.module_featheros_enabled);
     const osTitle = `${settings?.app_name || 'Panel'} OS`;
 
     if (isBottomDock) {
@@ -273,7 +277,7 @@ function SidebarContent({
                 isActive={isActive}
                 unreadTicketCount={unreadTicketCount}
                 adminOpenTicketCount={adminOpenTicketCount}
-                gameEnabled={showOsShortcut}
+                showOsShortcut={showOsShortcut}
             />
         );
     }

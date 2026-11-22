@@ -60,6 +60,7 @@ import { useSession } from '@/contexts/SessionContext';
 import { useSettings } from '@/contexts/SettingsContext';
 import { usePterodactylImporterVisible, withoutPterodactylImporter } from '@/hooks/usePterodactylImporterVisibility';
 import { getModuleStates, isModuleEnabled } from '@/lib/modules';
+import { isEnabledUnlessExplicitlyFalse } from '@/lib/utils';
 import { useTranslation } from '@/contexts/TranslationContext';
 import { useDeveloperMode } from '@/hooks/useDeveloperMode';
 import { usePluginRoutes } from '@/hooks/usePluginRoutes';
@@ -376,7 +377,7 @@ export function useGlobalSearchItems(open: boolean, query: string) {
 
         items.push(...navigationToSearchResults(mainItems, 'pages', t('globalSearch.categories.pages')));
 
-        if (isModuleEnabled(settings, 'game')) {
+        if (isModuleEnabled(settings, 'game') && isEnabledUnlessExplicitlyFalse(settings?.module_featheros_enabled)) {
             const osTitle = `${settings?.app_name || 'Panel'} OS`;
             items.push({
                 id: 'featheros',

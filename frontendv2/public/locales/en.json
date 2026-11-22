@@ -1623,6 +1623,7 @@
             "INVALID_TRANSFER": "Pick at least one file and valid folders",
             "TARGET_NOT_FOUND": "Target server not found",
             "TRANSFER_CREATE_FAILED": "Failed to queue the transfer",
+            "FEATHEROS_DISABLED": "FeatherOS is disabled by the administrator",
             "FEATHEROS_STATE_SAVE_FAILED": "Failed to save the desktop state",
             "FEATHEROS_STATE_TOO_LARGE": "Desktop state is too large",
             "FEATHEROS_INVALID_STATE": "Invalid desktop state",
@@ -12767,6 +12768,10 @@
                 "module_vds_enabled": {
                     "label": "VDS (Proxmox)",
                     "description": "Virtual servers on Proxmox nodes. When off, it is hidden everywhere and its API refuses requests."
+                },
+                "module_featheros_enabled": {
+                    "label": "FeatherOS",
+                    "description": "Allow users to open the desktop workspace. Turning this off hides its shortcuts and blocks access to the desktop."
                 },
                 "pterodactyl_importer_visibility": {
                     "label": "Pterodactyl importer",

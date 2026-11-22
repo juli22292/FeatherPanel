@@ -235,9 +235,9 @@ export interface Server {
     stats?: ServerStats;
     allocation?: ServerAllocation;
     subdomain?: {
-        domain: string;
-        subdomain: string;
-    };
+        domain: string | null;
+        subdomain: string | null;
+    } | null;
     /** Present when the panel may require a subdomain before start/restart. */
     subdomain_requirement?: {
         required: boolean;
@@ -431,6 +431,7 @@ export interface AllocationItem {
     ip: string;
     port: number;
     ip_alias?: string;
+    alias?: string;
     public_ip?: string | null;
     /** Note set by an administrator (read-only for server users). */
     notes?: string;

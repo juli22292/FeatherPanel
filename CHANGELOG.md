@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.5.6.3 (ServerPanel)
+
+- Prefer assigned subdomains and allocation aliases in connection addresses and when copying allocation endpoints.
+- Add an administrator setting to enable or disable FeatherOS for the entire panel.
+
 ## v1.5.6.2 (ServerPanel)
 
 - Use the public IP from the matching reverse proxy rule in DNS instructions and verification, including IPv6.

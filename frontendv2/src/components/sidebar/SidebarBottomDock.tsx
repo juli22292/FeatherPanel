@@ -47,7 +47,7 @@ type SidebarBottomDockProps = {
     unreadTicketCount: number;
     adminOpenTicketCount: number;
     showCollapseToggle?: boolean;
-    gameEnabled?: boolean;
+    showOsShortcut?: boolean;
 };
 
 export function SidebarBottomDock({
@@ -63,7 +63,7 @@ export function SidebarBottomDock({
     unreadTicketCount,
     adminOpenTicketCount,
     showCollapseToggle = true,
-    gameEnabled = false,
+    showOsShortcut = false,
 }: SidebarBottomDockProps) {
     const [openSubmenuId, setOpenSubmenuId] = useState<string | null>(null);
 
@@ -258,7 +258,7 @@ export function SidebarBottomDock({
                 })}
             </MacDockTrack>
 
-            {gameEnabled && (
+            {showOsShortcut && (
                 <>
                     <div
                         className='from-primary/25 mx-0.5 h-6 w-px shrink-0 self-center bg-gradient-to-b to-transparent'
