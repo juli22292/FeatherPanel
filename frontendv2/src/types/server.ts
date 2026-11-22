@@ -463,6 +463,7 @@ export interface AllocationsResponse {
             primary_allocation_id?: number;
         };
         allocations: AllocationItem[];
+        node?: { public_ip_v4?: string | null };
     };
     message?: string;
 }
@@ -526,6 +527,7 @@ export interface Proxy {
 export interface ProxyCreateRequest {
     domain: string;
     port: string;
+    allocation_id?: number;
     ssl: boolean;
     use_lets_encrypt: boolean;
     client_email?: string;

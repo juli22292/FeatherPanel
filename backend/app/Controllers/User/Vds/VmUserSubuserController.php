@@ -18,6 +18,7 @@
 namespace App\Controllers\User\Vds;
 
 use App\Chat\VmSubuser;
+use App\Helpers\VmGateway;
 use App\Helpers\ApiResponse;
 use OpenApi\Attributes as OA;
 use App\Chat\VmInstanceActivity;
@@ -35,13 +36,13 @@ class VmUserSubuserController
     #[OA\Get(
         path: '/api/user/vm-instances/{id}/subusers',
         summary: 'List subusers',
-        description: 'List subusers for this VM instance. Only the VM owner can manage subusers.',
+        description: 'List subusers for this VM instance. Available to the owner and staff with VM instance access.',
         tags: ['User - VM Instance Subusers'],
         parameters: [new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'integer'))],
         responses: [
             new OA\Response(response: 200, description: 'Subusers listed', content: new OA\JsonContent(properties: [new OA\Property(property: 'subusers', type: 'array', items: new OA\Items(type: 'object'))])),
             new OA\Response(response: 401, description: 'Unauthorized'),
-            new OA\Response(response: 403, description: 'Only the VM owner can manage subusers'),
+            new OA\Response(response: 403, description: 'Subuser list access denied'),
             new OA\Response(response: 404, description: 'VM instance not found'),
         ]
     )]
@@ -53,8 +54,8 @@ class VmUserSubuserController
         if (!$vmInstance) {
             return ApiResponse::error('VM instance not found', 'VM_INSTANCE_NOT_FOUND', 404);
         }
-        if (!isset($vmInstance['user_uuid']) || $vmInstance['user_uuid'] !== $user['uuid']) {
-            return ApiResponse::error('Only the VM owner can manage subusers', 'PERMISSION_DENIED', 403);
+        if (($vmInstance['user_uuid'] ?? null) !== $user['uuid'] && !VmGateway::hasAdminAccess($user['uuid'])) {
+            return ApiResponse::error('You cannot view subusers for this virtual server', 'PERMISSION_DENIED', 403);
         }
 
         $subusers = VmSubuser::getSubusersByVmInstance($id);

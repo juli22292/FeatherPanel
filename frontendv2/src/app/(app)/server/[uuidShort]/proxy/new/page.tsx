@@ -69,7 +69,8 @@ export default function CreateProxyPage() {
     const [verifyingDns, setVerifyingDns] = React.useState(false);
     const [dnsVerified, setDnsVerified] = React.useState(false);
     const [dnsError, setDnsError] = React.useState<string | null>(null);
-    const [targetIp, setTargetIp] = React.useState<string | null>(null);
+    const [verifiedTargetIp, setVerifiedTargetIp] = React.useState<string | null>(null);
+    const [nodePublicIp, setNodePublicIp] = React.useState<string | null>(null);
 
     const { getWidgets, fetchWidgets } = usePluginWidgets('server-proxy-new');
 
@@ -83,6 +84,21 @@ export default function CreateProxyPage() {
         ssl_key: '',
     });
 
+    const selectedAllocation = allocations.find((allocation) => Number(allocation.id) === formData.allocation_id);
+    const allocationIp = selectedAllocation?.ip;
+    const targetIp =
+        verifiedTargetIp ??
+        selectedAllocation?.public_ip ??
+        (allocationIp && ['127.0.0.1', '0.0.0.0', 'localhost', '::1'].includes(allocationIp)
+            ? nodePublicIp
+            : allocationIp);
+
+    function resetDnsVerification() {
+        setDnsVerified(false);
+        setDnsError(null);
+        setVerifiedTargetIp(null);
+    }
+
     const fetchData = React.useCallback(async () => {
         if (!uuidShort || !proxyEnabled) return;
         setLoading(true);
@@ -91,8 +107,14 @@ export default function CreateProxyPage() {
             if (data.success) {
                 const allocs = data.data.allocations || [];
                 setAllocations(allocs);
-                if (allocs.length > 0 && !formData.port) {
-                    setFormData((prev) => ({ ...prev, port: String(allocs[0].port) }));
+                setNodePublicIp(data.data.node?.public_ip_v4 ?? null);
+                const primary = allocs.find((allocation) => allocation.is_primary) ?? allocs[0];
+                if (primary) {
+                    setFormData((prev) =>
+                        allocs.some((allocation) => Number(allocation.id) === prev.allocation_id)
+                            ? prev
+                            : { ...prev, allocation_id: Number(primary.id), port: String(primary.port) },
+                    );
                 }
             }
         } catch (error) {
@@ -101,8 +123,7 @@ export default function CreateProxyPage() {
         } finally {
             setLoading(false);
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [uuidShort, proxyEnabled, formData.port]);
+    }, [uuidShort, proxyEnabled, t]);
 
     React.useEffect(() => {
         if (proxyEnabled && canManage) {
@@ -121,11 +142,12 @@ export default function CreateProxyPage() {
             const { data } = await axios.post<DnsVerifyResponse>(`/api/user/servers/${uuidShort}/proxy/verify-dns`, {
                 domain: formData.domain,
                 port: formData.port,
+                allocation_id: formData.allocation_id,
             });
 
             if (data.success && data.data) {
                 setDnsVerified(data.data.verified);
-                setTargetIp(data.data.expected_ip || null);
+                setVerifiedTargetIp(data.data.expected_ip || null);
 
                 if (data.data.verified) {
                     toast.success(data.data.message || t('serverProxy.dnsVerifiedSuccess'));
@@ -268,10 +290,10 @@ export default function CreateProxyPage() {
                                     value={formData.domain}
                                     onChange={(e) => {
                                         setFormData({ ...formData, domain: e.target.value });
-                                        setDnsVerified(false);
+                                        resetDnsVerification();
                                     }}
                                     placeholder='play.example.com'
-                                    disabled={saving}
+                                    disabled={saving || verifyingDns}
                                     className='bg-secondary/50 border-border/10 focus:border-primary/50 h-12 rounded-xl text-sm font-extrabold transition-all'
                                 />
                                 <p className='text-muted-foreground ml-1 text-xs'>
@@ -284,17 +306,23 @@ export default function CreateProxyPage() {
                                     {t('serverProxy.targetPort')} <span className='text-primary'>*</span>
                                 </label>
                                 <HeadlessSelect
-                                    value={formData.port}
+                                    value={String(formData.allocation_id ?? '')}
                                     onChange={(val) => {
-                                        setFormData({ ...formData, port: String(val) });
-                                        setDnsVerified(false);
+                                        const allocation = allocations.find((item) => String(item.id) === String(val));
+                                        if (!allocation) return;
+                                        setFormData({
+                                            ...formData,
+                                            allocation_id: Number(allocation.id),
+                                            port: String(allocation.port),
+                                        });
+                                        resetDnsVerification();
                                     }}
                                     options={allocations.map((a) => ({
-                                        id: String(a.port),
+                                        id: String(a.id),
                                         name: `${maskEndpointKeepPort(a.ip, a.port, hideIps)} ${a.is_primary ? t('serverProxy.primary') : ''}`,
                                     }))}
                                     placeholder={t('serverProxy.selectPort')}
-                                    disabled={saving}
+                                    disabled={saving || verifyingDns}
                                     buttonClassName='h-12 bg-secondary/50 border-border/10 focus:border-primary/50 rounded-xl text-sm font-extrabold transition-all'
                                 />
                             </div>
@@ -317,7 +345,13 @@ export default function CreateProxyPage() {
                                 {targetIp && (
                                     <div className='bg-background/50 border-primary/30 mx-1 flex items-center gap-2 rounded-xl border border-dashed p-3 text-xs'>
                                         <Server className='text-primary h-3 w-3 opacity-50' />
-                                        <span className='text-primary/80 font-bold'>{t('serverProxy.aRecord')}</span>
+                                        <span className='text-primary/80 font-bold'>
+                                            {t(
+                                                targetIp.includes(':')
+                                                    ? 'serverProxy.aaaaRecord'
+                                                    : 'serverProxy.aRecord',
+                                            )}
+                                        </span>
                                         <span className='text-foreground bg-secondary/50 rounded px-2 py-0.5 font-mono font-bold'>
                                             {targetIp}
                                         </span>

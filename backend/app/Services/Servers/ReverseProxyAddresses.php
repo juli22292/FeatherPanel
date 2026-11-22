@@ -55,6 +55,14 @@ final class ReverseProxyAddresses
         return self::normalizeRules(json_decode($value ?? '[]', true)) ?? [];
     }
 
+    public static function dnsIp(string $allocationIp, int $spellId, array $rules, ?string $nodePublicIp): ?string
+    {
+        return self::publicIp($allocationIp, $spellId, $rules)
+            ?? (in_array($allocationIp, ['127.0.0.1', '0.0.0.0', 'localhost', '::1'], true)
+                ? self::normalizeIp($nodePublicIp)
+                : self::normalizeIp($allocationIp));
+    }
+
     public static function normalizeRules(mixed $rules): ?array
     {
         if (!is_array($rules) || !array_is_list($rules) || count($rules) > self::MAX_RULES) {

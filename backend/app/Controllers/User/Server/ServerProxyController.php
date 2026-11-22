@@ -20,6 +20,7 @@ namespace App\Controllers\User\Server;
 use App\App;
 use App\Chat\Node;
 use App\Chat\Server;
+use App\Chat\Allocation;
 use App\SubuserPermissions;
 use App\Chat\ServerActivity;
 use App\Helpers\ApiResponse;
@@ -31,14 +32,15 @@ use App\Helpers\DaemonCapabilities;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use App\Plugins\Events\Events\ServerProxyEvent;
+use App\Services\Servers\ReverseProxyAddresses;
 
 #[OA\Schema(
     schema: 'ProxyCreateRequest',
     type: 'object',
-    required: ['domain', 'ip', 'port', 'ssl'],
+    required: ['domain', 'port', 'ssl'],
     properties: [
         new OA\Property(property: 'domain', type: 'string', description: 'The domain name for the proxy'),
-        new OA\Property(property: 'ip', type: 'string', description: 'The target IP address to proxy to'),
+        new OA\Property(property: 'allocation_id', type: 'integer', description: 'The selected allocation, when multiple allocations share a port'),
         new OA\Property(property: 'port', type: 'string', description: 'The target port to proxy to'),
         new OA\Property(property: 'ssl', type: 'boolean', description: 'Whether to enable SSL/TLS'),
         new OA\Property(property: 'use_lets_encrypt', type: 'boolean', description: 'Whether to use Let\'s Encrypt for SSL'),
@@ -201,9 +203,15 @@ class ServerProxyController
             return ApiResponse::error('Invalid JSON body', 'INVALID_REQUEST_BODY', 400);
         }
 
-        $validationError = $this->validateCreatePayload($payload, $server);
+        $validationError = $this->validateCreatePayload($payload);
         if ($validationError !== null) {
             return $validationError;
+        }
+
+        $port = (int) $payload['port'];
+        $allocation = self::getProxyAllocation($serverId, $port, $payload['allocation_id'] ?? null);
+        if (!$allocation) {
+            return ApiResponse::error('Port does not belong to this server\'s allocations', 'INVALID_PORT', 400);
         }
 
         $node = Node::getNodeById($server['node_id']);
@@ -213,14 +221,6 @@ class ServerProxyController
 
         if (!DaemonCapabilities::fromNode($node)->supports(DaemonCapabilities::FEATURE_PROXY)) {
             return DaemonCapabilities::unsupportedResponse($node, DaemonCapabilities::FEATURE_PROXY);
-        }
-
-        // Determine IP from port/allocation
-        $port = (int) $payload['port'];
-        $allocation = \App\Chat\Allocation::getByServerIdAndPort((int) $server['id'], $port);
-
-        if (!$allocation) {
-            return ApiResponse::error('Port not found in server allocations', 'INVALID_PORT', 400);
         }
 
         // Get IP from allocation
@@ -480,7 +480,8 @@ class ServerProxyController
             content: new OA\JsonContent(
                 properties: [
                     new OA\Property(property: 'domain', type: 'string', description: 'Domain name to verify'),
-                    new OA\Property(property: 'port', type: 'string', description: 'Port number to determine target IP'),
+                    new OA\Property(property: 'port', type: 'string', description: 'Port number of the selected allocation'),
+                    new OA\Property(property: 'allocation_id', type: 'integer', description: 'The selected allocation, when multiple allocations share a port'),
                 ],
                 required: ['domain', 'port']
             )
@@ -534,7 +535,7 @@ class ServerProxyController
         }
 
         // Get allocation to determine target IP
-        $allocation = \App\Chat\Allocation::getByServerIdAndPort($serverId, $port);
+        $allocation = self::getProxyAllocation($serverId, $port, $payload['allocation_id'] ?? null);
         if (!$allocation) {
             return ApiResponse::error('Port does not belong to this server\'s allocations', 'INVALID_PORT', 400);
         }
@@ -544,32 +545,35 @@ class ServerProxyController
             return ApiResponse::error('Node not found', 'NODE_NOT_FOUND', 404);
         }
 
-        // Determine target IP (same logic as createProxy)
-        $targetIp = $allocation['ip'];
-        if (in_array($targetIp, ['127.0.0.1', '0.0.0.0', 'localhost', '::1'], true)) {
-            if (!empty($node['public_ip_v4'])) {
-                $targetIp = $node['public_ip_v4'];
-            } else {
-                return ApiResponse::error(
-                    'Allocation uses internal IP but node does not have a public IPv4 address configured',
-                    'NO_PUBLIC_IP',
-                    400
-                );
-            }
+        // DNS names point to the public listener. Wings still receives the allocation as its upstream.
+        $targetIp = ReverseProxyAddresses::dnsIp(
+            $allocation['ip'],
+            (int) $server['spell_id'],
+            ReverseProxyAddresses::configuredRules(),
+            $node['public_ip_v4'] ?? null,
+        );
+        if ($targetIp === null) {
+            return ApiResponse::error('No public IP is configured for this allocation', 'NO_PUBLIC_IP', 400);
         }
 
-        // Verify DNS A record
+        $recordType = filter_var($targetIp, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) ? 'AAAA' : 'A';
+        $addressField = $recordType === 'AAAA' ? 'ipv6' : 'ip';
         try {
-            $dnsRecords = dns_get_record($domain, DNS_A);
+            $dnsRecords = @dns_get_record($domain, $recordType === 'AAAA' ? DNS_AAAA : DNS_A);
+            if ($dnsRecords === false) {
+                throw new \RuntimeException('DNS lookup failed');
+            }
             $resolvedIps = [];
+            $isValid = false;
+            $expected = inet_pton($targetIp);
 
             foreach ($dnsRecords as $record) {
-                if (isset($record['ip'])) {
-                    $resolvedIps[] = $record['ip'];
+                if (isset($record[$addressField])) {
+                    $address = $record[$addressField];
+                    $resolvedIps[] = $address;
+                    $isValid = $isValid || inet_pton($address) === $expected;
                 }
             }
-
-            $isValid = in_array($targetIp, $resolvedIps, true);
 
             return ApiResponse::success([
                 'verified' => $isValid,
@@ -577,8 +581,8 @@ class ServerProxyController
                 'expected_ip' => $targetIp,
                 'resolved_ips' => $resolvedIps,
                 'message' => $isValid
-                    ? 'DNS A record is correctly configured'
-                    : 'DNS A record does not point to the expected IP address. Please update your DNS records.',
+                    ? "DNS {$recordType} record is correctly configured"
+                    : "DNS {$recordType} record does not point to the expected IP address. Please update your DNS records.",
             ]);
         } catch (\Exception $e) {
             App::getInstance(true)->getLogger()->error('DNS verification failed: ' . $e->getMessage());
@@ -610,7 +614,23 @@ class ServerProxyController
      * @param array<string,mixed> $payload
      * @param array<string,mixed> $server
      */
-    private function validateCreatePayload(array $payload, array $server): ?Response
+    private static function getProxyAllocation(int $serverId, int $port, mixed $id): ?array
+    {
+        if ($id === null) {
+            return Allocation::getByServerIdAndPort($serverId, $port);
+        }
+        if (!is_int($id) || $id < 1) {
+            return null;
+        }
+
+        $allocation = Allocation::getById($id);
+
+        return $allocation !== null && (int) $allocation['server_id'] === $serverId && (int) $allocation['port'] === $port
+            ? $allocation
+            : null;
+    }
+
+    private function validateCreatePayload(array $payload): ?Response
     {
         // Check required fields exist (no longer require IP - it's determined from port)
         $requiredFields = ['domain', 'port', 'ssl'];
@@ -674,12 +694,6 @@ class ServerProxyController
         $port = (int) $portStr;
         if ($port < 1 || $port > 65535) {
             return ApiResponse::error('Invalid port: must be between 1 and 65535', 'INVALID_PORT', 400);
-        }
-
-        // Verify port belongs to this server's allocations
-        $allocation = \App\Chat\Allocation::getByServerIdAndPort((int) $server['id'], $port);
-        if (!$allocation) {
-            return ApiResponse::error('Port does not belong to this server\'s allocations', 'INVALID_PORT', 400);
         }
 
         // Validate SSL - must be boolean

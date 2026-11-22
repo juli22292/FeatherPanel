@@ -21,7 +21,6 @@ use App\App;
 use App\Chat\VmIp;
 use App\Chat\VmNode;
 use App\Chat\VmTask;
-use App\Permissions;
 use App\Chat\Database;
 use App\Chat\VmSubuser;
 use App\Chat\VmInstance;
@@ -31,7 +30,6 @@ use App\Helpers\VmGateway;
 use App\Helpers\ApiResponse;
 use OpenApi\Attributes as OA;
 use App\Chat\VmInstanceActivity;
-use App\Helpers\PermissionHelper;
 use App\Services\Vm\VmInstanceUtil;
 use App\CloudFlare\CloudFlareRealIP;
 use App\Plugins\Events\Events\VdsEvent;
@@ -189,9 +187,8 @@ class VmUserInstanceController
         $vmInstance['is_subuser'] = $subuser !== null;
 
         $fullPerms = ['power', 'console', 'backup', 'activity.read', 'reinstall', 'settings', 'snapshot', 'iso.upload', 'firewall', 'schedules'];
-        $isPanelVmAdmin = PermissionHelper::hasPermission($user['uuid'], Permissions::ADMIN_VM_INSTANCES_VIEW)
-            || PermissionHelper::hasPermission($user['uuid'], Permissions::ADMIN_VM_INSTANCES_EDIT)
-            || PermissionHelper::hasPermission($user['uuid'], Permissions::ADMIN_VM_INSTANCES_DELETE);
+        $isPanelVmAdmin = VmGateway::hasAdminAccess($user['uuid']);
+        $vmInstance['can_view_subusers'] = $vmInstance['is_owner'] || $isPanelVmAdmin;
 
         if ($vmInstance['is_owner']) {
             $vmInstance['permissions'] = $fullPerms;

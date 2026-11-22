@@ -61,6 +61,8 @@ export default function VdsSubusersPage() {
     const router = useRouter();
     const { t } = useTranslation();
     const { instance, loading: instanceLoading } = useVmInstance();
+    const canManage = instance?.is_owner === true;
+    const canView = canManage || instance?.can_view_subusers === true;
     const { fetchWidgets, getWidgets } = usePluginWidgets('vds-users');
 
     const [subusers, setSubusers] = React.useState<VmSubuser[]>([]);
@@ -92,7 +94,7 @@ export default function VdsSubusersPage() {
             }
         } catch (error) {
             if (isAxiosError(error) && error.response?.status === 403) {
-                toast.error(getApiErrorMessage(error, t, 'vds.subusers.owner_only'));
+                toast.error(getApiErrorMessage(error, t, 'vds.subusers.view_denied'));
                 router.push(`/vds/${id}`);
                 return;
             }
@@ -103,16 +105,8 @@ export default function VdsSubusersPage() {
     }, [id, router, t]);
 
     React.useEffect(() => {
-        if (!instanceLoading) {
-            if (!instance?.is_owner) {
-                toast.error(t('vds.subusers.owner_only'));
-                router.push(`/vds/${id}`);
-                return;
-            }
-            fetchSubusers();
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [instanceLoading]);
+        if (!instanceLoading && canView) void fetchSubusers();
+    }, [canView, fetchSubusers, instanceLoading]);
 
     React.useEffect(() => {
         fetchWidgets();
@@ -206,7 +200,7 @@ export default function VdsSubusersPage() {
         }
     };
 
-    if (instanceLoading || loading) {
+    if (instanceLoading || (canView && loading)) {
         return <VdsPageLoading label={t('ui.vds.users.loadingSubusers')} />;
     }
 
@@ -219,7 +213,7 @@ export default function VdsSubusersPage() {
         );
     }
 
-    if (!instance.is_owner) {
+    if (!canView) {
         return (
             <div className='flex flex-col items-center justify-center space-y-6 py-24 text-center'>
                 <div className='flex h-20 w-20 items-center justify-center rounded-xl bg-red-500/10'>
@@ -227,7 +221,7 @@ export default function VdsSubusersPage() {
                 </div>
                 <div>
                     <h2 className='text-2xl font-semibold'>{t('common.accessDenied')}</h2>
-                    <p className='text-muted-foreground mt-2'>{t('vds.subusers.owner_only')}</p>
+                    <p className='text-muted-foreground mt-2'>{t('vds.subusers.view_denied')}</p>
                 </div>
                 <Button variant='outline' onClick={() => router.push(`/vds/${id}`)}>
                     {t('common.goBack')}
@@ -252,7 +246,7 @@ export default function VdsSubusersPage() {
                 }
                 actions={
                     <div className='flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-3'>
-                        {subusers.length > 0 && (
+                        {canManage && subusers.length > 0 && (
                             <Button
                                 size='default'
                                 onClick={() => setIsAddOpen(true)}
@@ -280,13 +274,15 @@ export default function VdsSubusersPage() {
             {subusers.length === 0 ? (
                 <EmptyState
                     title={t('vds.subusers.no_subusers')}
-                    description={t('ui.vds.users.addASubuserToGrantThem')}
+                    description={canManage ? t('ui.vds.users.addASubuserToGrantThem') : undefined}
                     icon={Users}
                     action={
-                        <Button size='default' onClick={() => setIsAddOpen(true)} className='h-14 px-10 text-lg'>
-                            <Plus className='mr-2 h-6 w-6' />
-                            {t('ui.vds.users.addSubuser')}
-                        </Button>
+                        canManage && (
+                            <Button size='default' onClick={() => setIsAddOpen(true)} className='h-14 px-10 text-lg'>
+                                <Plus className='mr-2 h-6 w-6' />
+                                {t('ui.vds.users.addSubuser')}
+                            </Button>
+                        )
                     }
                 />
             ) : (
@@ -310,28 +306,30 @@ export default function VdsSubusersPage() {
                                 </div>
                             }
                             actions={
-                                <div className='flex items-center gap-3'>
-                                    <Button
-                                        variant='ghost'
-                                        size='sm'
-                                        onClick={() => openPermissions(sub)}
-                                        className='hover:bg-muted/70 h-8 rounded-lg px-3 text-xs'
-                                    >
-                                        <Shield className='mr-1.5 h-3.5 w-3.5' />
-                                        {t('ui.vds.users.permissions')}
-                                    </Button>
-                                    <Button
-                                        variant='destructive'
-                                        size='sm'
-                                        onClick={() => {
-                                            setSelectedSubuser(sub);
-                                            setIsDeleteOpen(true);
-                                        }}
-                                        className='h-8 w-8 p-0'
-                                    >
-                                        <Trash2 className='h-3.5 w-3.5' />
-                                    </Button>
-                                </div>
+                                canManage && (
+                                    <div className='flex items-center gap-3'>
+                                        <Button
+                                            variant='ghost'
+                                            size='sm'
+                                            onClick={() => openPermissions(sub)}
+                                            className='hover:bg-muted/70 h-8 rounded-lg px-3 text-xs'
+                                        >
+                                            <Shield className='mr-1.5 h-3.5 w-3.5' />
+                                            {t('ui.vds.users.permissions')}
+                                        </Button>
+                                        <Button
+                                            variant='destructive'
+                                            size='sm'
+                                            onClick={() => {
+                                                setSelectedSubuser(sub);
+                                                setIsDeleteOpen(true);
+                                            }}
+                                            className='h-8 w-8 p-0'
+                                        >
+                                            <Trash2 className='h-3.5 w-3.5' />
+                                        </Button>
+                                    </div>
+                                )
                             }
                         />
                     ))}

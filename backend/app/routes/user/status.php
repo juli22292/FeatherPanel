@@ -19,6 +19,7 @@ use App\App;
 use RateLimit\Rate;
 use Symfony\Component\HttpFoundation\Request;
 use App\Controllers\User\NodeStatusController;
+use App\Controllers\User\VmStatusController;
 use Symfony\Component\Routing\RouteCollection;
 
 return function (RouteCollection $routes): void {
@@ -33,5 +34,15 @@ return function (RouteCollection $routes): void {
         ['GET'],
         Rate::perMinute(60), // Default: Admin can override in ratelimit.json
         'user-status'
+    );
+
+    App::getInstance(true)->registerAuthRoute(
+        $routes,
+        'user-vds-status',
+        '/api/user/status/vds',
+        fn () => (new VmStatusController())->getStatus(),
+        ['GET'],
+        Rate::perMinute(60),
+        'user-vds-status'
     );
 };

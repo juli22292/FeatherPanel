@@ -17,6 +17,7 @@ See the LICENSE file or <https://www.gnu.org/licenses/>.
 
 import { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
     RefreshCw,
@@ -39,8 +40,12 @@ import { usePluginWidgets } from '@/hooks/usePluginWidgets';
 import { WidgetRenderer } from '@/components/server/WidgetRenderer';
 import { PoweredByFeatherPanel } from '@/components/branding/PoweredByFeatherPanel';
 import { useTranslation } from '@/contexts/TranslationContext';
+import { useSettings } from '@/contexts/SettingsContext';
+import { useSession } from '@/contexts/SessionContext';
 import { getApiErrorCode, getApiErrorMessage, getApiErrorMessageFromPayload } from '@/lib/api-errors';
 import { formatMemory, formatDisk } from '@/lib/server-utils';
+import { isModuleEnabled } from '@/lib/modules';
+import Permissions from '@/lib/permissions';
 import { cn } from '@/lib/utils';
 
 import { Button } from '@/components/featherui/Button';
@@ -219,12 +224,33 @@ function NodeExpandedDetail({
 }
 
 export default function StatusPage() {
-    const { t } = useTranslation();
     const pathname = usePathname();
+    return <StatusOverview key={pathname} pathname={pathname} />;
+}
+
+function StatusOverview({ pathname }: { pathname: string }) {
+    const { t } = useTranslation();
+    const { settings } = useSettings();
+    const { hasPermission } = useSession();
     const router = useRouter();
     const isPublicStatusPage = pathname.startsWith('/status');
+    const isVds = pathname === '/dashboard/status/vds';
     const isAdminContext = !isPublicStatusPage;
-    const statusApiPath = pathname.startsWith('/status') ? '/api/status' : '/api/user/status';
+    const statusApiPath = isPublicStatusPage ? '/api/status' : isVds ? '/api/user/status/vds' : '/api/user/status';
+    const sectionNav = !isPublicStatusPage && (isVds || isModuleEnabled(settings, 'vds')) && (
+        <nav aria-label={t('dashboard.status.title')} className='flex flex-wrap gap-2'>
+            <Button asChild variant={isVds ? 'outline' : 'default'} size='sm'>
+                <Link href='/dashboard/status' aria-current={isVds ? undefined : 'page'}>
+                    {t('dashboard.status.gameServers')}
+                </Link>
+            </Button>
+            <Button asChild variant={isVds ? 'default' : 'outline'} size='sm'>
+                <Link href='/dashboard/status/vds' aria-current={isVds ? 'page' : undefined}>
+                    {t('dashboard.status.vds')}
+                </Link>
+            </Button>
+        </nav>
+    );
 
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -308,7 +334,8 @@ export default function StatusPage() {
     //  Disabled
     if (disabled || (statusData && !statusData.enabled)) {
         return (
-            <div className='mx-auto max-w-4xl p-4 md:p-8'>
+            <div className='mx-auto max-w-4xl space-y-4 p-4 md:p-8'>
+                {sectionNav}
                 <Alert>
                     <AlertTriangle className='h-4 w-4' />
                     <AlertTitle>{t('dashboard.status.statusPageDisabled')}</AlertTitle>
@@ -322,6 +349,7 @@ export default function StatusPage() {
     if (error && !statusData) {
         return (
             <div className='mx-auto max-w-4xl space-y-4 p-4 md:p-8'>
+                {sectionNav}
                 <Alert variant='destructive'>
                     <AlertTriangle className='h-4 w-4' />
                     <AlertTitle>{t('dashboard.status.failedToLoadStatus')}</AlertTitle>
@@ -333,6 +361,7 @@ export default function StatusPage() {
     }
 
     const global = statusData?.data?.global;
+    const total = statusData?.data?.total_servers;
 
     return (
         <div
@@ -362,8 +391,12 @@ export default function StatusPage() {
                             {t('public_portal.badges.live')}
                         </Badge>
                     </div>
-                    <h1 className='text-2xl font-bold tracking-tight md:text-3xl'>{t('dashboard.status.title')}</h1>
-                    <p className='text-muted-foreground mt-1 text-sm'>{t('dashboard.status.description')}</p>
+                    <h1 className='text-2xl font-bold tracking-tight md:text-3xl'>
+                        {t(isVds ? 'dashboard.status.vds' : 'dashboard.status.title')}
+                    </h1>
+                    <p className='text-muted-foreground mt-1 text-sm'>
+                        {t(isVds ? 'dashboard.status.vdsDescription' : 'dashboard.status.description')}
+                    </p>
                 </div>
                 <Button
                     onClick={manualRefresh}
@@ -374,6 +407,8 @@ export default function StatusPage() {
                     {refreshing ? t('dashboard.status.refreshing') : t('dashboard.status.refresh')}
                 </Button>
             </div>
+
+            {sectionNav}
 
             <WidgetRenderer widgets={getWidgets('dashboard-status', 'after-header')} />
 
@@ -388,61 +423,72 @@ export default function StatusPage() {
             )}
 
             {/*  Global stat cards  */}
-            {global && (
+            {(global || total !== undefined) && (
                 <div className='grid grid-cols-2 gap-3 md:grid-cols-4'>
-                    {/* Total nodes */}
-                    <div className='fp-surface flex items-center justify-between rounded-xl border p-4'>
-                        <div className='space-y-0.5'>
-                            <p className='text-muted-foreground text-[10px] font-black tracking-widest uppercase'>
-                                {t('dashboard.status.totalNodes')}
-                            </p>
-                            <p className='text-2xl font-bold md:text-3xl'>{global.total_nodes}</p>
-                        </div>
-                        <div className='bg-primary/5 border-primary/10 rounded-xl border p-2.5'>
-                            <LayoutGrid className='text-primary h-5 w-5 opacity-60' />
-                        </div>
-                    </div>
+                    {global && (
+                        <>
+                            <div className='fp-surface flex items-center justify-between rounded-xl border p-4'>
+                                <div className='space-y-0.5'>
+                                    <p className='text-muted-foreground text-[10px] font-black tracking-widest uppercase'>
+                                        {t('dashboard.status.totalNodes')}
+                                    </p>
+                                    <p className='text-2xl font-bold md:text-3xl'>{global.total_nodes}</p>
+                                </div>
+                                <div className='bg-primary/5 border-primary/10 rounded-xl border p-2.5'>
+                                    <LayoutGrid className='text-primary h-5 w-5 opacity-60' />
+                                </div>
+                            </div>
 
-                    {/* Healthy nodes */}
-                    <div className='fp-surface flex items-center justify-between rounded-xl border p-4'>
-                        <div className='space-y-0.5'>
-                            <p className='text-muted-foreground text-[10px] font-black tracking-widest uppercase'>
-                                {t('dashboard.status.healthyNodes')}
-                            </p>
-                            <p className='text-2xl font-bold text-green-500 md:text-3xl'>{global.healthy_nodes}</p>
-                        </div>
-                        <div className='rounded-xl border border-green-500/10 bg-green-500/5 p-2.5'>
-                            <Check className='h-5 w-5 text-green-500 opacity-60' />
-                        </div>
-                    </div>
+                            {/* Healthy nodes */}
+                            <div className='fp-surface flex items-center justify-between rounded-xl border p-4'>
+                                <div className='space-y-0.5'>
+                                    <p className='text-muted-foreground text-[10px] font-black tracking-widest uppercase'>
+                                        {t('dashboard.status.healthyNodes')}
+                                    </p>
+                                    <p className='text-2xl font-bold text-green-500 md:text-3xl'>
+                                        {global.healthy_nodes}
+                                    </p>
+                                </div>
+                                <div className='rounded-xl border border-green-500/10 bg-green-500/5 p-2.5'>
+                                    <Check className='h-5 w-5 text-green-500 opacity-60' />
+                                </div>
+                            </div>
+                        </>
+                    )}
 
                     {/* Total servers */}
-                    <div className='fp-surface flex items-center justify-between rounded-xl border p-4'>
-                        <div className='space-y-0.5'>
-                            <p className='text-muted-foreground text-[10px] font-black tracking-widest uppercase'>
-                                {t('dashboard.status.totalServers')}
-                            </p>
-                            <p className='text-primary text-2xl font-bold md:text-3xl'>
-                                {statusData?.data?.total_servers}
-                            </p>
+                    {total !== undefined && (
+                        <div className='fp-surface flex items-center justify-between rounded-xl border p-4'>
+                            <div className='space-y-0.5'>
+                                <p className='text-muted-foreground text-[10px] font-black tracking-widest uppercase'>
+                                    {t(
+                                        isVds
+                                            ? 'dashboard.status.totalVirtualServers'
+                                            : 'dashboard.status.totalServers',
+                                    )}
+                                </p>
+                                <p className='text-primary text-2xl font-bold md:text-3xl'>{total}</p>
+                            </div>
+                            <div className='bg-primary/5 border-primary/10 rounded-xl border p-2.5'>
+                                <ServerIcon className='text-primary h-5 w-5 opacity-60' />
+                            </div>
                         </div>
-                        <div className='bg-primary/5 border-primary/10 rounded-xl border p-2.5'>
-                            <ServerIcon className='text-primary h-5 w-5 opacity-60' />
-                        </div>
-                    </div>
+                    )}
 
                     {/* Avg CPU */}
-                    <div className='fp-surface flex items-center justify-between rounded-xl border p-4'>
-                        <div className='space-y-0.5'>
-                            <p className='text-muted-foreground text-[10px] font-black tracking-widest uppercase'>
-                                {t('dashboard.status.avgCpuUsage')}
-                            </p>
-                            <p className='text-2xl font-bold md:text-3xl'>{Math.round(global.avg_cpu_percent || 0)}%</p>
+                    {global?.avg_cpu_percent !== undefined && (
+                        <div className='fp-surface flex items-center justify-between rounded-xl border p-4'>
+                            <div className='space-y-0.5'>
+                                <p className='text-muted-foreground text-[10px] font-black tracking-widest uppercase'>
+                                    {t('dashboard.status.avgCpuUsage')}
+                                </p>
+                                <p className='text-2xl font-bold md:text-3xl'>{Math.round(global.avg_cpu_percent)}%</p>
+                            </div>
+                            <div className='rounded-xl border border-blue-500/10 bg-blue-500/5 p-2.5'>
+                                <Cpu className='h-5 w-5 text-blue-500 opacity-60' />
+                            </div>
                         </div>
-                        <div className='rounded-xl border border-blue-500/10 bg-blue-500/5 p-2.5'>
-                            <Cpu className='h-5 w-5 text-blue-500 opacity-60' />
-                        </div>
-                    </div>
+                    )}
                 </div>
             )}
 
@@ -533,27 +579,29 @@ export default function StatusPage() {
                                                                         : t('dashboard.status.offline')}
                                                                 </Badge>
                                                             </div>
-                                                            <div className='text-muted-foreground mt-0.5 flex flex-wrap items-center gap-2 text-xs'>
-                                                                <span className='max-w-50 truncate font-mono opacity-60'>
-                                                                    {node.fqdn || t('public_portal.not_available')}
-                                                                </span>
-                                                                <span className='bg-muted-foreground/30 h-1 w-1 shrink-0 rounded-full' />
-                                                                <span className='shrink-0'>
-                                                                    {t('public_portal.servers_count', {
-                                                                        count: String(node.server_count ?? 0),
-                                                                    })}
-                                                                </span>
-                                                                {statusData?.show_player_count &&
-                                                                    node.total_players !== undefined && (
-                                                                        <>
-                                                                            <span className='bg-muted-foreground/30 h-1 w-1 shrink-0 rounded-full' />
-                                                                            <span className='flex shrink-0 items-center gap-1'>
-                                                                                <Users className='h-3 w-3' />
-                                                                                {node.total_players}
-                                                                            </span>
-                                                                        </>
-                                                                    )}
-                                                            </div>
+                                                            {!isVds && (
+                                                                <div className='text-muted-foreground mt-0.5 flex flex-wrap items-center gap-2 text-xs'>
+                                                                    <span className='max-w-50 truncate font-mono opacity-60'>
+                                                                        {node.fqdn || t('public_portal.not_available')}
+                                                                    </span>
+                                                                    <span className='bg-muted-foreground/30 h-1 w-1 shrink-0 rounded-full' />
+                                                                    <span className='shrink-0'>
+                                                                        {t('public_portal.servers_count', {
+                                                                            count: String(node.server_count ?? 0),
+                                                                        })}
+                                                                    </span>
+                                                                    {statusData?.show_player_count &&
+                                                                        node.total_players !== undefined && (
+                                                                            <>
+                                                                                <span className='bg-muted-foreground/30 h-1 w-1 shrink-0 rounded-full' />
+                                                                                <span className='flex shrink-0 items-center gap-1'>
+                                                                                    <Users className='h-3 w-3' />
+                                                                                    {node.total_players}
+                                                                                </span>
+                                                                            </>
+                                                                        )}
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </div>
 
@@ -615,12 +663,12 @@ export default function StatusPage() {
                                                                 )}
                                                             />
                                                         </div>
-                                                    ) : (
+                                                    ) : node.status !== 'healthy' ? (
                                                         <div className='flex items-center gap-2 text-xs font-black tracking-widest text-red-500 uppercase'>
                                                             <AlertTriangle className='h-4 w-4' />
                                                             {t('dashboard.status.offline')}
                                                         </div>
-                                                    )}
+                                                    ) : null}
                                                 </div>
                                             </button>
 
@@ -630,8 +678,16 @@ export default function StatusPage() {
                                                     node={node}
                                                     showRawValues={statusData?.show_raw_values}
                                                     showPlayerCount={statusData?.show_player_count}
-                                                    isAdmin={isAdminContext}
-                                                    onAdminClick={() => router.push(`/admin/nodes/${node.id}/edit`)}
+                                                    isAdmin={
+                                                        isVds
+                                                            ? hasPermission(Permissions.ADMIN_VM_NODES_VIEW)
+                                                            : isAdminContext
+                                                    }
+                                                    onAdminClick={() =>
+                                                        router.push(
+                                                            `/admin/${isVds ? 'vds-nodes' : 'nodes'}/${node.id}/edit`,
+                                                        )
+                                                    }
                                                 />
                                             )}
                                             {isExpanded && node.status !== 'healthy' && node.servers !== undefined && (
@@ -661,7 +717,7 @@ export default function StatusPage() {
             ) : null}
 
             {/*  Global memory / disk bars  */}
-            {global && (
+            {global?.total_memory !== undefined && (
                 <div className='grid grid-cols-1 gap-4 lg:grid-cols-2'>
                     <div className='fp-surface rounded-xl border p-5'>
                         <div className='mb-3 flex items-center justify-between'>

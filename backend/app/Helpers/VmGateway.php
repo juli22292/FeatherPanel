@@ -28,17 +28,20 @@ use App\Chat\VmInstance;
  */
 class VmGateway
 {
+    public static function hasAdminAccess(string $userUuid): bool
+    {
+        return PermissionHelper::hasPermission($userUuid, Permissions::ADMIN_VM_INSTANCES_VIEW)
+            || PermissionHelper::hasPermission($userUuid, Permissions::ADMIN_VM_INSTANCES_EDIT)
+            || PermissionHelper::hasPermission($userUuid, Permissions::ADMIN_VM_INSTANCES_DELETE);
+    }
+
     /**
      * Check if a user can access a VM instance (owner, subuser, or admin).
      */
     public static function canUserAccessVmInstance(string $userUuid, int $vmInstanceId): bool
     {
         // Admin-level permissions short-circuit
-        if (
-            PermissionHelper::hasPermission($userUuid, Permissions::ADMIN_VM_INSTANCES_VIEW)
-            || PermissionHelper::hasPermission($userUuid, Permissions::ADMIN_VM_INSTANCES_EDIT)
-            || PermissionHelper::hasPermission($userUuid, Permissions::ADMIN_VM_INSTANCES_DELETE)
-        ) {
+        if (self::hasAdminAccess($userUuid)) {
             return true;
         }
 
@@ -70,11 +73,7 @@ class VmGateway
     public static function hasVmPermission(string $userUuid, int $vmInstanceId, string $permission): bool
     {
         // Admin always has all permissions
-        if (
-            PermissionHelper::hasPermission($userUuid, Permissions::ADMIN_VM_INSTANCES_VIEW)
-            || PermissionHelper::hasPermission($userUuid, Permissions::ADMIN_VM_INSTANCES_EDIT)
-            || PermissionHelper::hasPermission($userUuid, Permissions::ADMIN_VM_INSTANCES_DELETE)
-        ) {
+        if (self::hasAdminAccess($userUuid)) {
             return true;
         }
 

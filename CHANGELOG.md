@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.5.6.2 (ServerPanel)
+
+- Use the public IP from the matching reverse proxy rule in DNS instructions and verification, including IPv6.
+- Let staff with VM instance access view VDS subusers.
+- Add a Proxmox / VDS view to the authenticated infrastructure status dashboard.
+
 ## v1.5.6.1 (ServerPanel)
 
 - Renamed this fork to ServerPanel. Custom installation names are retained.
