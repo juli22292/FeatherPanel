@@ -30,6 +30,7 @@ export interface ServerAllocation {
     port: number;
     alias?: string;
     ip_alias?: string;
+    public_ip?: string | null;
 }
 
 export interface ServerNode {
@@ -430,6 +431,7 @@ export interface AllocationItem {
     ip: string;
     port: number;
     ip_alias?: string;
+    public_ip?: string | null;
     /** Note set by an administrator (read-only for server users). */
     notes?: string;
     /** Note kept by the server's users; cleared when the allocation leaves the server. */

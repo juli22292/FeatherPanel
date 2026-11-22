@@ -15,6 +15,8 @@ See the LICENSE file or <https://www.gnu.org/licenses/>.
 
 'use client';
 
+import { maskEndpoint } from '@/lib/ip-mask';
+
 import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import axios from 'axios';
@@ -490,7 +492,14 @@ export function DashboardServerGaugeCard({
     const address = server.subdomain_requirement?.enforced
         ? t('serverSubdomains.requirementAddressPending')
         : server.allocation
-          ? `${server.allocation.ip_alias || server.allocation.alias || server.allocation.ip}:${server.allocation.port}`
+          ? maskEndpoint(
+                server.allocation.public_ip ||
+                    server.allocation.ip_alias ||
+                    server.allocation.alias ||
+                    server.allocation.ip,
+                server.allocation.port,
+                false,
+            )
           : null;
     const pct = (used: number, limit: number) => (limit > 0 ? getUsagePercentage(used, limit) : null);
     const ofLimit = (limit: number, format: (n: number) => string) =>

@@ -20,6 +20,7 @@ import { useTranslation } from '@/contexts/TranslationContext';
 import { IpVisibilityButton } from '@/components/common/IpVisibilityButton';
 import { cn, copyToClipboard } from '@/lib/utils';
 import { Sensitive } from '@/components/common/Sensitive';
+import { maskEndpoint } from '@/lib/ip-mask';
 
 interface ServerAddressChipProps {
     host: string;
@@ -34,7 +35,7 @@ export default function ServerAddressChip({ host, port, showVisibilityToggle, cl
     const { t } = useTranslation();
     if (!host) return null;
 
-    const raw = port ? `${host}:${port}` : host;
+    const raw = maskEndpoint(host, port, false);
 
     return (
         <span

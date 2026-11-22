@@ -21,6 +21,7 @@ import { Network, Star, Trash2, Copy, Plus, RefreshCw, Loader2 } from 'lucide-re
 import { toast } from 'sonner';
 import { useTranslation } from '@/contexts/TranslationContext';
 import { cn } from '@/lib/utils';
+import { maskEndpoint } from '@/lib/ip-mask';
 import type { AllocationItem } from '@/types/server';
 import { useFeatherOs } from '../FeatherOsContext';
 import type { OsAppProps } from './index';
@@ -70,7 +71,7 @@ export default function NetworkApp({ win }: OsAppProps) {
         }
     };
 
-    const address = (a: AllocationItem) => `${a.ip_alias || a.ip}:${a.port}`;
+    const address = (a: AllocationItem) => maskEndpoint(a.public_ip || a.ip_alias || a.ip, a.port, false);
 
     return (
         <div className='flex h-full flex-col'>

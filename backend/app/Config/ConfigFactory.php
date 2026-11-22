@@ -77,7 +77,7 @@ class ConfigFactory
     {
         // Check if the setting is in the cache
         if (isset($this->cache[$name])) {
-            return $this->cache[$name];
+            return self::displayValue($name, $this->cache[$name]);
         }
 
         if (self::$requestCacheLoaded && microtime(true) - self::$requestCacheLoadedAt > self::REQUEST_CACHE_MAX_AGE) {
@@ -88,7 +88,7 @@ class ConfigFactory
         }
         if (!array_key_exists($name, self::$requestCache)) {
             // The setting does not exist.
-            return $fallback ?? null;
+            return self::displayValue($name, $fallback);
         }
         if (!array_key_exists($name, self::$requestCacheDecrypted)) {
             // Decrypt on first use only: most requests read a handful of settings.
@@ -97,11 +97,11 @@ class ConfigFactory
         }
         $value = self::$requestCacheDecrypted[$name];
         if ($value === null) {
-            return $fallback ?? null;
+            return self::displayValue($name, $fallback);
         }
         $this->cache[$name] = $value;
 
-        return $value;
+        return self::displayValue($name, $value);
     }
 
     public function getSettings(array $columns = []): array
@@ -123,11 +123,21 @@ class ConfigFactory
         $settings = [];
         foreach ($results as $result) {
             $decrypted = App::getInstance(true)->decryptValue($result['value']);
-            $settings[$result['name']] = $decrypted;
+            $settings[$result['name']] = self::displayValue($result['name'], $decrypted);
             $this->cache[$result['name']] = $decrypted;
         }
 
         return $settings;
+    }
+
+    private static function displayValue(string $name, ?string $value): ?string
+    {
+        if (in_array($name, [ConfigInterface::APP_NAME, ConfigInterface::APP_SEO_TITLE], true)
+            && in_array(strtolower(trim($value ?? '')), ['featherpanel', 'carrotpanel'], true)) {
+            return ConfigInterface::PANEL_BRAND;
+        }
+
+        return $value;
     }
 
     /**

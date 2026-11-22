@@ -220,7 +220,9 @@ export default function FeatherPanelPremiumPage() {
     return (
         <div className='space-y-6 md:space-y-8'>
             <PageHeader
-                title={t('admin.featherpanel_premium.title')}
+                title={t(
+                    localCustomization ? 'admin.featherpanel_premium.local_title' : 'admin.featherpanel_premium.title',
+                )}
                 description={t(
                     localCustomization
                         ? 'admin.featherpanel_premium.local_subtitle'
@@ -228,15 +230,17 @@ export default function FeatherPanelPremiumPage() {
                 )}
                 icon={Crown}
                 actions={
-                    !localCustomization ? <Button
-                        variant='outline'
-                        size='sm'
-                        disabled={loading || refreshing}
-                        onClick={() => void load(true)}
-                    >
-                        <RefreshCw className={cn('mr-2 h-4 w-4', refreshing && 'animate-spin')} />
-                        {t('admin.featherpanel_premium.refresh')}
-                    </Button> : null
+                    !localCustomization ? (
+                        <Button
+                            variant='outline'
+                            size='sm'
+                            disabled={loading || refreshing}
+                            onClick={() => void load(true)}
+                        >
+                            <RefreshCw className={cn('mr-2 h-4 w-4', refreshing && 'animate-spin')} />
+                            {t('admin.featherpanel_premium.refresh')}
+                        </Button>
+                    ) : null
                 }
             />
 

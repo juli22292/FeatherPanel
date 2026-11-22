@@ -47,7 +47,7 @@ class PublicConfig extends ConfigFactory
         // Define settings configuration with defaults
         return [
             // App settings
-            ConfigInterface::APP_NAME => 'FeatherPanel',
+            ConfigInterface::APP_NAME => ConfigInterface::PANEL_BRAND,
             ConfigInterface::APP_URL => 'https://featherpanel.mythical.systems',
             ConfigInterface::APP_DEVELOPER_MODE => 'false',
             ConfigInterface::APP_TIMEZONE => 'UTC',
@@ -97,7 +97,7 @@ class PublicConfig extends ConfigFactory
             ConfigInterface::APP_SUPPORT_URL => 'https://discord.mythical.systems',
 
             // SEO Settings
-            ConfigInterface::APP_SEO_TITLE => 'FeatherPanel',
+            ConfigInterface::APP_SEO_TITLE => ConfigInterface::PANEL_BRAND,
             ConfigInterface::APP_SEO_DESCRIPTION => 'A powerful game server management panel.',
             ConfigInterface::APP_SEO_KEYWORDS => 'game, server, management, panel, hosting',
             // By default, do NOT allow search engine indexing.

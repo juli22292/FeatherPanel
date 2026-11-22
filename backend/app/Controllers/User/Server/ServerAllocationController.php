@@ -17,6 +17,8 @@
 
 namespace App\Controllers\User\Server;
 
+use App\Services\Servers\ReverseProxyAddresses;
+
 use App\App;
 use App\Chat\Node;
 use App\Chat\Server;
@@ -153,9 +155,11 @@ class ServerAllocationController
         $node = Node::getNodeById($server['node_id']);
         $nodePublicIpv4 = $node['public_ip_v4'] ?? null;
 
+        $reverseProxyRules = ReverseProxyAddresses::configuredRules();
         // Mark which allocation is primary
         foreach ($allocations as &$allocation) {
             $allocation['is_primary'] = ((int) $allocation['id'] === (int) $server['allocation_id']);
+            $allocation['public_ip'] = ReverseProxyAddresses::publicIp($allocation['ip'] ?? null, (int) $server['spell_id'], $reverseProxyRules);
         }
         unset($allocation);
 

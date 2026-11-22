@@ -229,7 +229,12 @@ class FeatherPanelPremium
      */
     public static function localCustomizationEnabled(): bool
     {
-        return filter_var(getenv('FEATHERPANEL_LOCAL_CUSTOMIZATION') ?: 'false', FILTER_VALIDATE_BOOLEAN);
+        $setting = getenv('FEATHERPANEL_LOCAL_CUSTOMIZATION');
+        if ($setting !== false && trim($setting) !== '') {
+            return filter_var($setting, FILTER_VALIDATE_BOOLEAN);
+        }
+
+        return trim((string) getenv('UPDATE_REPOSITORY')) === 'juli22292/FeatherPanel';
     }
 
     public static function manageUrl(): string

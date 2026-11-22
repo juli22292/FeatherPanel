@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.5.6.1 (ServerPanel)
+
+- Renamed this fork to ServerPanel. Custom installation names are retained.
+- Restored the default local customization controls on installations already configured to use this fork's update source.
+- Added admin rules for displaying public game connection IPs by allocation and by spell or egg.
+
 ## v1.5.6 STABLE (juli22292 fork)
 
 ### Updated

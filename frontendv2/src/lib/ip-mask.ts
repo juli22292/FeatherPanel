@@ -114,7 +114,8 @@ export function maskEndpoint(
     if (hidden) return HIDDEN_IP_PLACEHOLDER;
     const host = ip ?? '';
     if (!host) return hasPort ? String(port) : '';
-    return hasPort ? `${host}:${port}` : host;
+    const address = host.includes(':') && !host.startsWith('[') ? `[${host}]` : host;
+    return hasPort ? `${address}:${port}` : host;
 }
 
 /**

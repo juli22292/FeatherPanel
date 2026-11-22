@@ -110,6 +110,7 @@ class ServerSubdomainRequirementHelper
         }
 
         $allocation['ip'] = null;
+        unset($allocation['public_ip']);
 
         $alias = $allocation['ip_alias'] ?? null;
         if (is_string($alias) && $alias !== '' && filter_var($alias, FILTER_VALIDATE_IP)) {

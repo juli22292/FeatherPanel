@@ -283,6 +283,7 @@ export default function ServerAllocationsPage() {
             alloc.ip.toLowerCase().includes(searchLower) ||
             alloc.port.toString().includes(searchLower) ||
             alloc.ip_alias?.toLowerCase().includes(searchLower) ||
+            alloc.public_ip?.toLowerCase().includes(searchLower) ||
             alloc.notes?.toLowerCase().includes(searchLower) ||
             alloc.server_notes?.toLowerCase().includes(searchLower)
         );
@@ -438,7 +439,10 @@ export default function ServerAllocationsPage() {
                                         : 'bg-card/40 border-border/60',
                                 )}
                                 iconClassName={cn(allocation.is_primary ? 'text-primary' : 'text-muted-foreground')}
-                                title={ipMask.endpoint(allocation.ip_alias || allocation.ip, allocation.port)}
+                                title={ipMask.endpoint(
+                                    allocation.public_ip || allocation.ip_alias || allocation.ip,
+                                    allocation.port,
+                                )}
                                 badges={
                                     allocation.is_primary && (
                                         <Badge
@@ -456,7 +460,7 @@ export default function ServerAllocationsPage() {
                                                 {t('ui.server.allocations.iP')}
                                             </span>
                                             <span className='text-foreground/80 font-mono text-sm font-bold'>
-                                                <Sensitive>{allocation.ip}</Sensitive>
+                                                <Sensitive>{allocation.public_ip || allocation.ip}</Sensitive>
                                             </span>
                                             <IpVisibilityButton className='-mr-1' />
                                         </div>
@@ -501,7 +505,15 @@ export default function ServerAllocationsPage() {
                                         <Button
                                             size='default'
                                             variant='glass'
-                                            onClick={() => handleCopy(`${allocation.ip}:${allocation.port}`)}
+                                            onClick={() =>
+                                                handleCopy(
+                                                    maskEndpoint(
+                                                        allocation.public_ip || allocation.ip,
+                                                        allocation.port,
+                                                        false,
+                                                    ),
+                                                )
+                                            }
                                             className='px-6 font-bold'
                                         >
                                             <Copy className='mr-2 h-4 w-4' />

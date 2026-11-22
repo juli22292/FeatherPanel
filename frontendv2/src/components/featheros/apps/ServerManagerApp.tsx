@@ -38,6 +38,7 @@ import { toast } from 'sonner';
 import { useTranslation } from '@/contexts/TranslationContext';
 import { runBulkServerAction, BULK_MAX_SERVERS, type BulkServerAction } from '@/lib/server-bulk';
 import { cn } from '@/lib/utils';
+import { maskEndpoint } from '@/lib/ip-mask';
 import type { Server } from '@/types/server';
 import { useFeatherOs } from '../FeatherOsContext';
 import { formatBytes, serverState, stateColor } from '../utils';
@@ -332,7 +333,11 @@ export default function ServerManagerApp({ win }: OsAppProps) {
                             const addr = s.subdomain_requirement?.enforced
                                 ? t('serverSubdomains.requirementAddressPending')
                                 : s.allocation
-                                  ? `${s.allocation.ip_alias || s.allocation.ip}:${s.allocation.port}`
+                                  ? maskEndpoint(
+                                        s.allocation.public_ip || s.allocation.ip_alias || s.allocation.ip,
+                                        s.allocation.port,
+                                        false,
+                                    )
                                   : '-';
                             return (
                                 <tr

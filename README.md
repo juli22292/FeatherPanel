@@ -1,4 +1,4 @@
-# FeatherPanel – Fork von juli22292
+# ServerPanel – Fork von juli22292
 
 Dies ist die angepasste Version von [FeatherPanel](https://github.com/MythicalLTD/FeatherPanel) für `juli22292`. Der Originalcode und die Hinweise der ursprünglichen Autoren bleiben erhalten. Die maßgebliche Lizenz ist [GNU AGPL 3.0 oder neuer](LICENSE); einzelne Dateien enthalten zusätzliche Copyright- und Lizenzhinweise.
 

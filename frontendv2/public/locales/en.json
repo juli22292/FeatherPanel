@@ -1640,6 +1640,9 @@
             "FEATHEROS_WALLPAPER_SAVE_FAILED": "Failed to save wallpaper",
             "FEATHEROS_TRASH_UNAVAILABLE": "Trash is unavailable. Run database migrations, then try again.",
             "FORK_UPDATER_UNAVAILABLE": "The local updater for this FeatherPanel fork is unavailable or not configured.",
+            "INVALID_REVERSE_PROXY_RULES": "Use valid IP addresses and avoid overlapping spell selections for the same internal IP.",
+            "UNKNOWN_REVERSE_PROXY_SPELL": "Select only spells that still exist.",
+            "REVERSE_PROXY_SAVE_FAILED": "Could not save reverse proxy rules.",
             "UNSUPPORTED_UPDATE_REPOSITORY": "This GitHub update source is not supported.",
             "ALT_RESET_FAILED": "Failed to reset alt detection",
             "INVALID_DISCORD_WEBHOOK": "Enter a valid Discord webhook URL",
@@ -4057,6 +4060,7 @@
             "abuseipdb": "AbuseIPDB",
             "databaseManagement": "Database Management",
             "storageSense": "Storage Sense",
+            "reverseProxy": "Reverse Proxy",
             "pterodactylImporter": "Pterodactyl Importer",
             "apiKeys": "API Keys",
             "plugins": "Plugins",
@@ -4279,6 +4283,27 @@
                 "body": "Test destinations before enabling a schedule, prefer off-peak hours for full node archives, and use mirrors for critical fleets."
             }
         }
+    },
+    "reverse_proxy": {
+        "description": "Choose the public connection address players see for game server allocations.",
+        "rules": "Public address rules",
+        "network_note": "Set up forwarding on the root server first. These rules affect the address shown to players and keep the assigned game port.",
+        "empty": "No rules yet. Servers display their existing connection addresses.",
+        "allocation_ip": "Internal allocation IP",
+        "public_ip": "Public root server IP",
+        "spells": "Spells / Eggs",
+        "filter_spells": "Filter spells by name",
+        "all_spells": "Apply to all spells",
+        "deleted_spell": "Deleted spell #{id}",
+        "no_matching_spells": "No matching spells",
+        "add_rule": "Add rule",
+        "remove_rule": "Remove rule",
+        "save": "Save rules",
+        "saved": "Reverse proxy rules saved.",
+        "load_failed": "Could not load reverse proxy rules.",
+        "save_failed": "Could not save reverse proxy rules.",
+        "pick_spells": "Select at least one spell for each rule or enable Apply to all spells.",
+        "retry": "Retry"
     },
     "admin_updates": {
         "title": "System Updates",
@@ -11533,6 +11558,7 @@
         },
         "featherpanel_premium": {
             "title": "FeatherPanel Premium",
+            "local_title": "ServerPanel Customization",
             "subtitle": "Premium is an optional monthly donation that helps keep FeatherPanel going. As a thank you, you can rename the AI assistant, customize the sidebar and hide the FeatherPanel credit and version. You do not get less of the panel without it.",
             "refresh": "Refresh entitlement",
             "load_failed": "Failed to load FeatherPanel Premium status",

@@ -21,10 +21,12 @@ use PHPUnit\Framework\TestCase;
 final class LocalCustomizationTest extends TestCase
 {
     private string|false $original;
+    private string|false $originalRepository;
 
     protected function setUp(): void
     {
         $this->original = getenv('FEATHERPANEL_LOCAL_CUSTOMIZATION');
+        $this->originalRepository = getenv('UPDATE_REPOSITORY');
     }
 
     protected function tearDown(): void
@@ -34,6 +36,18 @@ final class LocalCustomizationTest extends TestCase
         } else {
             putenv('FEATHERPANEL_LOCAL_CUSTOMIZATION=' . $this->original);
         }
+        putenv($this->originalRepository === false ? 'UPDATE_REPOSITORY' : 'UPDATE_REPOSITORY=' . $this->originalRepository);
+    }
+
+    public function testExistingForkInstallsDefaultToLocalCustomization(): void
+    {
+        putenv('FEATHERPANEL_LOCAL_CUSTOMIZATION');
+        putenv('UPDATE_REPOSITORY');
+        self::assertFalse(FeatherPanelPremium::localCustomizationEnabled());
+
+        putenv('UPDATE_REPOSITORY=juli22292/FeatherPanel');
+        self::assertTrue(FeatherPanelPremium::canCustomizeUi());
+        self::assertTrue(FeatherPanelPremium::canCustomSidebar());
     }
 
     public function testLocalCustomizationCanEnableSelfHostedControls(): void
@@ -47,6 +61,7 @@ final class LocalCustomizationTest extends TestCase
 
     public function testLocalCustomizationIsOptInOutsideForkCompose(): void
     {
+        putenv('UPDATE_REPOSITORY=juli22292/FeatherPanel');
         putenv('FEATHERPANEL_LOCAL_CUSTOMIZATION=false');
 
         self::assertFalse(FeatherPanelPremium::localCustomizationEnabled());

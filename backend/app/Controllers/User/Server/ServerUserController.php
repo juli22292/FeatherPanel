@@ -17,6 +17,8 @@
 
 namespace App\Controllers\User\Server;
 
+use App\Services\Servers\ReverseProxyAddresses;
+
 use App\App;
 use App\Chat\Node;
 use App\Chat\Spell;
@@ -428,6 +430,8 @@ class ServerUserController
             $compliantServerIds = array_flip(Subdomain::getServerIdsHavingSubdomains($pageServerIds));
         }
 
+        $reverseProxyRules = ReverseProxyAddresses::configuredRules();
+
         // Add related data to each server.
         foreach ($servers as &$server) {
             // Check if user is a subuser of this server (only when not viewing all)
@@ -503,6 +507,7 @@ class ServerUserController
                 'ip' => $allocation['ip'] ?? null,
                 'port' => $allocation['port'] ?? null,
                 'ip_alias' => $allocation['ip_alias'] ?? null,
+                'public_ip' => ReverseProxyAddresses::publicIp($allocation['ip'] ?? null, (int) $server['spell_id'], $reverseProxyRules),
             ];
 
             $serverId = (int) $server['id'];
@@ -607,6 +612,7 @@ class ServerUserController
         $realms = \App\Chat\Realm::getByIds(array_column($servers, 'realms_id'));
         $spells = Spell::getSpellsByIds(array_column($servers, 'spell_id'));
         $allocations = Allocation::getAllocationsByIds(array_column($servers, 'allocation_id'));
+        $reverseProxyRules = ReverseProxyAddresses::configuredRules();
         foreach ($servers as &$server) {
             $server['is_subuser'] = false;
             $server['subuser_permissions'] = [];
@@ -661,6 +667,7 @@ class ServerUserController
                 'ip' => $server['allocation']['ip'] ?? null,
                 'port' => $server['allocation']['port'] ?? null,
                 'ip_alias' => $server['allocation']['ip_alias'] ?? null,
+                'public_ip' => ReverseProxyAddresses::publicIp($server['allocation']['ip'] ?? null, (int) $server['spell_id'], $reverseProxyRules),
             ];
 
             unset(
@@ -867,6 +874,13 @@ class ServerUserController
         ] : null;
 
         $server['allocation'] = Allocation::getAllocationById($server['allocation_id']);
+        if (is_array($server['allocation'])) {
+            $server['allocation']['public_ip'] = ReverseProxyAddresses::publicIp(
+                $server['allocation']['ip'] ?? null,
+                (int) $server['spell_id'],
+                ReverseProxyAddresses::configuredRules(),
+            );
+        }
         $sftpHost = Node::getSftpHostname($server['node']);
         $sftp = [
             'host' => $sftpHost,

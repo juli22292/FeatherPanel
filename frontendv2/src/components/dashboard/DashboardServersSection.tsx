@@ -283,6 +283,7 @@ export function DashboardServersSection({
                     s.spell?.name,
                     s.allocation ? `${s.allocation.ip}:${s.allocation.port}` : '',
                     s.allocation?.ip_alias,
+                    s.allocation?.public_ip,
                 ]
                     .filter(Boolean)
                     .join(' ')

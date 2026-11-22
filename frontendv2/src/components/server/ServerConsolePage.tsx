@@ -738,7 +738,7 @@ export default function ServerConsolePage() {
             ? `${server.subdomain.subdomain}.${server.subdomain.domain}`
             : server.subdomain_requirement?.enforced
               ? ''
-              : server.allocation?.ip_alias || server.allocation?.ip || '';
+              : server.allocation?.public_ip || server.allocation?.ip_alias || server.allocation?.ip || '';
 
     if (isPopout) {
         return (
