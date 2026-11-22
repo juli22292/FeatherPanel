@@ -36,6 +36,7 @@ use App\Chat\VmInstanceActivity;
 use App\Helpers\FeatherTailClient;
 use App\Mail\templates\VmSuspended;
 use App\Services\Vm\VmInstanceUtil;
+use App\Services\Vm\KvmGuestAccess;
 use App\CloudFlare\CloudFlareRealIP;
 use App\Mail\templates\VmUnsuspended;
 use App\Helpers\ModerationReasonHelper;
@@ -383,6 +384,16 @@ class VmInstancesController
         $notesRaw = isset($data['notes']) && is_string($data['notes']) ? trim($data['notes']) : null;
         $ciUserInput = isset($data['ci_user']) && is_string($data['ci_user']) ? trim($data['ci_user']) : null;
         $ciPasswordInput = isset($data['ci_password']) && is_string($data['ci_password']) ? trim($data['ci_password']) : null;
+        $manageGuestAccess = $vmType === 'qemu' && ($data['managed_guest_access'] ?? false) === true;
+        if ($manageGuestAccess) {
+            $owner = $userUuid ? \App\Chat\User::getUserByUuid($userUuid) : null;
+            if (!$owner) {
+                return ApiResponse::error('A VM owner is required for managed guest accounts', 'VALIDATION_FAILED', 400);
+            }
+            $ciUserInput = KvmGuestAccess::defaultUsername((string) $owner['username']);
+            // Cloud-init creates the account. The guest agent sets the panel password after first boot.
+            $ciPasswordInput = password_hash(bin2hex(random_bytes(32)), PASSWORD_BCRYPT);
+        }
         if ($vmType === 'qemu') {
             if ($ciUserInput === null || $ciUserInput === '') {
                 return ApiResponse::error('Cloud-init user (ci_user) is required for KVM/QEMU templates', 'VALIDATION_FAILED', 400);
@@ -531,6 +542,7 @@ class VmInstancesController
             'backup_retention_mode' => $backupRetentionForMeta,
             'ci_user' => $ciUserInput,
             'ci_password' => $ciPasswordInput,
+            'managed_guest_access' => $manageGuestAccess,
             'current_step' => 'initial',
         ];
 

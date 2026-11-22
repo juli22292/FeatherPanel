@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.5.6.5 (ServerPanel)
+
+- Added KVM Serverinfo for Linux VM owners. Existing guest accounts are listed without modifying them. Owners can generate or reset passwords and add up to five additional guest accounts.
+- Added automatic root and standard account setup for new Linux KVMs on compatible Cloud-init templates with the QEMU Guest Agent.
+
 ## v1.5.6.4 (ServerPanel)
 
 - Added a configurable public NGINX connector for user-created HTTP/HTTPS proxies, with domain ownership checks and automatic TLS.

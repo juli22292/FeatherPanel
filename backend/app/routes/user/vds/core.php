@@ -21,9 +21,22 @@ use App\Helpers\ApiResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\RouteCollection;
 use App\Controllers\User\Vds\VmUserBackupController;
+use App\Controllers\User\Vds\VmUserGuestAccessController;
 use App\Controllers\User\Vds\VmUserInstanceController;
 
 return function (RouteCollection $routes): void {
+    App::getInstance(true)->registerVmInstanceRoute(
+        $routes,
+        'user-vm-instance-guest-access',
+        '/api/user/vm-instances/{id}/guest-access',
+        function (Request $request) {
+            return (new VmUserGuestAccessController())->handle($request);
+        },
+        'id',
+        ['GET', 'POST'],
+        Rate::perMinute(16)
+    );
+
 
     App::getInstance(true)->registerAuthRoute(
         $routes,

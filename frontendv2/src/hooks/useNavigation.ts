@@ -334,7 +334,10 @@ export function useNavigation() {
         }
 
         if (isVds && vdsId) {
-            let items = getVdsNavigationItems(t, vdsId, { vmType: vdsInstance?.vm_type });
+            let items = getVdsNavigationItems(t, vdsId, {
+                vmType: vdsInstance?.vm_type,
+                showGuestAccess: vdsInstance?.vm_type === 'qemu' && vdsInstance?.is_owner === true,
+            });
             items = items.map((item) => ({
                 ...item,
                 isActive: checkActive(item.url, item.url === `/vds/${vdsId}`),
@@ -426,6 +429,7 @@ export function useNavigation() {
         isVds,
         vdsId,
         vdsInstance?.vm_type,
+        vdsInstance?.is_owner,
         hasVdsPermission,
         isWebspace,
         webspaceUuid,

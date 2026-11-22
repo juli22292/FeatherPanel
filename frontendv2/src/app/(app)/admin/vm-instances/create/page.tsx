@@ -182,6 +182,7 @@ export default function VmInstancesCreatePage() {
 
     const [ciUser, setCiUser] = useState('root');
     const [ciPassword, setCiPassword] = useState('');
+    const [managedGuestAccess, setManagedGuestAccess] = useState(true);
     const [backupLimit, setBackupLimit] = useState(5);
     const [backupRetentionMode, setBackupRetentionMode] = useState<'inherit' | 'hard_limit' | 'fifo_rolling'>(
         'inherit',
@@ -441,7 +442,7 @@ export default function VmInstancesCreatePage() {
                 toast.error(t('admin.vmInstances.errors.owner_required'));
                 return;
             }
-            if (!isLxcTemplate) {
+            if (!isLxcTemplate && !managedGuestAccess) {
                 if (!ciUser.trim()) {
                     toast.error(t('admin.vmInstances.errors.ci_user_required'));
                     return;
@@ -548,7 +549,8 @@ export default function VmInstancesCreatePage() {
     const noFreeIpsAvailable = nodeId > 0 && !loadingMeta && freeIps.length === 0;
     const hostnameValid = hostname.trim().length > 0;
     const ownerSelected = selectedOwner != null;
-    const ciFieldsValid = isLxcTemplate || (ciUser.trim().length > 0 && ciPassword.trim().length > 0);
+    const ciFieldsValid =
+        isLxcTemplate || managedGuestAccess || (ciUser.trim().length > 0 && ciPassword.trim().length > 0);
     const canCreate =
         currentStep === totalSteps &&
         canProceedStep1 &&
@@ -612,7 +614,9 @@ export default function VmInstancesCreatePage() {
             items: [
                 { label: t('admin.vmInstances.hostname'), value: hostname.trim() },
                 { label: t('admin.vmInstances.owner'), value: selectedOwner?.username },
-                ...(!isLxcTemplate ? [{ label: t('admin.vmInstances.ci_user_label'), value: ciUser.trim() }] : []),
+                ...(!isLxcTemplate && !managedGuestAccess
+                    ? [{ label: t('admin.vmInstances.ci_user_label'), value: ciUser.trim() }]
+                    : []),
             ],
         },
     ];
@@ -654,7 +658,7 @@ export default function VmInstancesCreatePage() {
             toast.error(t('admin.vmInstances.errors.hostname_required'));
             return;
         }
-        if (!isLxcTemplate) {
+        if (!isLxcTemplate && !managedGuestAccess) {
             if (!ciUser.trim()) {
                 toast.error(t('admin.vmInstances.errors.ci_user_required'));
                 return;
@@ -692,8 +696,11 @@ export default function VmInstancesCreatePage() {
                     .map((row) => ({ key: row.key, vm_ip_id: row.vm_ip_id })),
             };
             if (!isLxcTemplate) {
-                payload.ci_user = ciUser.trim();
-                payload.ci_password = ciPassword;
+                payload.managed_guest_access = managedGuestAccess;
+                if (!managedGuestAccess) {
+                    payload.ci_user = ciUser.trim();
+                    payload.ci_password = ciPassword;
+                }
             }
             if (selectedOwner?.uuid) payload.user_uuid = selectedOwner.uuid;
 
@@ -1311,6 +1318,23 @@ export default function VmInstancesCreatePage() {
                                 </div>
 
                                 {!isLxcTemplate && (
+                                    <label className='bg-muted/30 flex items-start gap-3 rounded-lg border p-3'>
+                                        <input
+                                            type='checkbox'
+                                            checked={managedGuestAccess}
+                                            onChange={(event) => setManagedGuestAccess(event.target.checked)}
+                                        />
+                                        <span>
+                                            <span className='block font-medium'>
+                                                {t('vds.guestAccess.manage_on_create')}
+                                            </span>
+                                            <span className='text-muted-foreground block text-xs'>
+                                                {t('vds.guestAccess.manage_on_create_help')}
+                                            </span>
+                                        </span>
+                                    </label>
+                                )}
+                                {!isLxcTemplate && !managedGuestAccess && (
                                     <div className='grid grid-cols-1 gap-6 sm:grid-cols-2'>
                                         <div className='space-y-3'>
                                             <Label className='flex items-center gap-1.5'>

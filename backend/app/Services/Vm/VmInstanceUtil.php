@@ -1275,7 +1275,7 @@ final class VmInstanceUtil
                 'cipassword' => $meta['ci_password'] ?? bin2hex(random_bytes(6)),
                 'tags' => 'FeatherPanel-Managed',
                 'description' => "FeatherPanel Managed VM | IP: {$primaryIpAddress} | Hostname: $hostname | User: {$task['user_uuid']} | Created: " . date('Y-m-d H:i:s'),
-            ] + $networkConfig['config']);
+            ] + (!empty($meta['managed_guest_access']) ? ['agent' => 'enabled=1'] : []) + $networkConfig['config']);
         } else {
             $networkConfig = self::buildNetworkConfig('lxc', $networkAssignments, []);
             $client->setVmConfig($node, $vmid, 'lxc', [
@@ -1324,6 +1324,10 @@ final class VmInstanceUtil
 
         if ($instance) {
             VmInstanceIp::syncForInstance((int) $instance['id'], $networkAssignments, $pdo);
+            if ($vmType === 'qemu' && !empty($meta['managed_guest_access'])) {
+                $pdo->prepare('INSERT INTO featherpanel_vm_guest_setup (instance_id, owner_uuid, vmid, username) VALUES (?, ?, ?, ?)')
+                    ->execute([$instance['id'], $task['user_uuid'], $vmid, $meta['ci_user']]);
+            }
         }
 
         if ($onBoot && $instance && !$skipStart) {

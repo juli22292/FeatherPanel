@@ -620,6 +620,45 @@ class Proxmox
     }
 
     /**
+     * Guest account requests operate on the same authenticated Proxmox client.
+     * Use repeated fields for the command array and keep guest input out of logs.
+     */
+    public function guestAgent(string $node, int $vmid, string $operation, array $fields = []): ?array
+    {
+        $method = match ($operation) {
+            'exec', 'set-user-password' => 'POST',
+            'exec-status' => 'GET',
+            default => throw new \InvalidArgumentException('Unsupported guest agent operation'),
+        };
+        $path = '/api2/json/nodes/' . rawurlencode($node) . '/qemu/' . $vmid . '/agent/' . $operation;
+        $options = ['http_errors' => false, 'timeout' => 5, 'query' => $this->defaultExtraQuery];
+        if ($method === 'POST') {
+            $pairs = [];
+            foreach ($fields as $key => $values) {
+                foreach ((array) $values as $value) {
+                    $pairs[] = rawurlencode($key) . '=' . rawurlencode((string) $value);
+                }
+            }
+            $options['body'] = implode('&', $pairs);
+            $options['headers'] = ['Content-Type' => 'application/x-www-form-urlencoded'];
+        } else {
+            $options['query'] = array_replace($options['query'], $fields);
+        }
+
+        try {
+            $response = $this->client->request($method, $path, $options);
+            if ($response->getStatusCode() !== 200) {
+                return null;
+            }
+            $data = json_decode((string) $response->getBody(), true)['data'] ?? null;
+
+            return is_array($data) ? $data : null;
+        } catch (GuzzleException) {
+            return null;
+        }
+    }
+
+    /**
      * Get next available VMID from cluster (optionally >= minVmid).
      * Does not pass vmid to the API (some PVE versions return 400 if that ID exists).
      * Falls back to computing next free from cluster resources if nextid fails.

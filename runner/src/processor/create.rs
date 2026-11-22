@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use redis::AsyncCommands;
 use sqlx::{MySqlPool, Row};
 use serde_json::{json, Value};
@@ -403,7 +403,7 @@ async fn apply_create_config(
     let on_boot = meta["on_boot"].as_bool().unwrap_or(false);
     let bridge = meta["bridge"].as_str().unwrap_or("vmbr0");
     
-    let config = if vm_type.as_str() == "qemu" {
+    let mut config = if vm_type.as_str() == "qemu" {
         let ci_user = meta["ci_user"].as_str().unwrap_or("debian");
         let ci_password = meta["ci_password"].as_str().unwrap_or("changeme");
         let ipconfig = if use_dhcp {
@@ -442,6 +442,9 @@ async fn apply_create_config(
         })
     };
     
+    if vm_type.as_str() == "qemu" && meta["managed_guest_access"].as_bool() == Some(true) {
+        config["agent"] = json!("enabled=1");
+    }
     client.set_vm_config(node, vmid, vm_type, &config).await?;
     
     // Create database record + multi-NIC junction rows
@@ -562,6 +565,7 @@ async fn create_vm_instance_record(
     let backup_limit = meta["backup_limit"].as_i64().unwrap_or(5);
     let on_boot = meta["on_boot"].as_bool().unwrap_or(false);
     let notes = meta["notes"].as_str();
+    let mut transaction = pool.begin().await?;
     
     let result = sqlx::query(
         "INSERT INTO featherpanel_vm_instances 
@@ -587,7 +591,7 @@ async fn create_vm_instance_record(
     .bind(cores)
     .bind(disk_gb)
     .bind(if on_boot { 1 } else { 0 })
-    .execute(pool)
+    .execute(&mut *transaction)
     .await?;
     
     let instance_id = result.last_insert_id() as i64;
@@ -597,12 +601,23 @@ async fn create_vm_instance_record(
     let task_id: String = task.try_get("task_id")?;
     let mut meta_mut = meta.clone();
     meta_mut["instance_id"] = json!(instance_id);
+    if vm_type == "qemu" && meta["managed_guest_access"].as_bool() == Some(true) {
+        let username = meta["ci_user"].as_str().context("Missing managed KVM username")?;
+        sqlx::query("INSERT INTO featherpanel_vm_guest_setup (instance_id, owner_uuid, vmid, username) VALUES (?, ?, ?, ?)")
+            .bind(instance_id)
+            .bind(&user_uuid)
+            .bind(vmid)
+            .bind(username)
+            .execute(&mut *transaction)
+            .await?;
+    }
     
     sqlx::query("UPDATE featherpanel_vm_tasks SET data = ? WHERE task_id = ?")
         .bind(serde_json::to_string(&meta_mut)?)
         .bind(&task_id)
-        .execute(pool)
+        .execute(&mut *transaction)
         .await?;
+    transaction.commit().await?;
     
     Ok(instance_id)
 }
@@ -1387,6 +1402,9 @@ async fn resolve_vm_access_password(
     instance: &sqlx::mysql::MySqlRow,
     meta: &Value,
 ) -> Result<String> {
+    if meta["managed_guest_access"].as_bool() == Some(true) {
+        return Ok(String::new());
+    }
     if let Some(password) = meta["ci_password"].as_str().filter(|value| !value.trim().is_empty()) {
         return Ok(password.to_string());
     }
