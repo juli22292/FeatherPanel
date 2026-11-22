@@ -23,6 +23,7 @@ use GuzzleHttp\Middleware;
 use PHPUnit\Framework\TestCase;
 use GuzzleHttp\Handler\MockHandler;
 use App\Services\Vm\KvmGuestAccess;
+use App\Services\Vm\VmGuestAccounts;
 use App\Services\Proxmox\Proxmox;
 use Symfony\Component\HttpFoundation\Request;
 use App\Controllers\User\Vds\VmUserGuestAccessController;
@@ -57,22 +58,22 @@ final class KvmGuestAccessTest extends TestCase
 
     public function testPasswordMaterialUsesSeparateRandomLinuxPasswordsAndHashes(): void
     {
-        $password = KvmGuestAccess::password();
+        $password = VmGuestAccounts::password();
         self::assertMatchesRegularExpression('/^[a-z0-9]{32}$/D', $password);
-        self::assertNotSame($password, KvmGuestAccess::password());
-        $hash = KvmGuestAccess::passwordHash($password);
+        self::assertNotSame($password, VmGuestAccounts::password());
+        $hash = VmGuestAccounts::passwordHash($password);
         self::assertStringStartsWith('$6$', $hash);
         self::assertSame($hash, crypt($password, $hash));
-        self::assertSame('juliaexample', KvmGuestAccess::defaultUsername('Julia.Example'));
-        self::assertNotSame('root', KvmGuestAccess::defaultUsername('ROOT'));
+        self::assertSame('juliaexample', VmGuestAccounts::defaultUsername('Julia.Example'));
+        self::assertNotSame('root', VmGuestAccounts::defaultUsername('ROOT'));
     }
 
     public function testAccountPasswordsAreSentAsHashesThroughTheGuestAgent(): void
     {
         $history = [];
         $guest = $this->guest([new HttpResponse(200, [], '{"data":{"result":{}}}')], $history);
-        $password = KvmGuestAccess::password();
-        $hash = KvmGuestAccess::passwordHash($password);
+        $password = VmGuestAccounts::password();
+        $hash = VmGuestAccounts::passwordHash($password);
         self::assertTrue($guest->setPassword('existing.user', $hash));
         self::assertCount(1, $history);
         self::assertSame('/api2/json/nodes/node/qemu/104/agent/set-user-password', $history[0]['request']->getUri()->getPath());
@@ -84,11 +85,13 @@ final class KvmGuestAccessTest extends TestCase
 
     public function testSubusersCannotListAccountsOrResetPasswords(): void
     {
-        foreach (['GET', 'POST'] as $method) {
-            $request = Request::create('/api/user/vm-instances/104/guest-access', $method);
-            $request->attributes->set('user', ['uuid' => 'subuser']);
-            $request->attributes->set('vmInstance', ['id' => 104, 'user_uuid' => 'owner', 'vm_type' => 'qemu']);
-            self::assertSame(403, (new VmUserGuestAccessController())->handle($request)->getStatusCode());
+        foreach (['qemu', 'lxc'] as $type) {
+            foreach (['GET', 'POST'] as $method) {
+                $request = Request::create('/api/user/vm-instances/104/guest-access', $method);
+                $request->attributes->set('user', ['uuid' => 'subuser']);
+                $request->attributes->set('vmInstance', ['id' => 104, 'user_uuid' => 'owner', 'vm_type' => $type]);
+                self::assertSame(403, (new VmUserGuestAccessController())->handle($request)->getStatusCode());
+            }
         }
     }
 

@@ -1015,7 +1015,7 @@
             "KVM_GUEST_ACCOUNT_EXISTS": "This Linux account already exists",
             "KVM_GUEST_ACCOUNT_LIMIT": "This VM has reached its additional Linux account limit",
             "KVM_GUEST_ACCOUNT_NOT_FOUND": "The Linux account was not found",
-            "KVM_GUEST_AGENT_UNAVAILABLE": "Refresh the accounts and check the QEMU Guest Agent before trying again",
+            "KVM_GUEST_AGENT_UNAVAILABLE": "Refresh the accounts and check the guest connection before trying again",
             "KVM_GUEST_PASSWORD_UNAVAILABLE": "A panel-generated password is unavailable for this account",
             "L4R_DISABLED": "Links4Rewards is currently disabled",
             "LAST_NAME_CHANGE_NOT_ALLOWED": "You are not allowed to change your last name!",
@@ -18007,8 +18007,8 @@
     },
     "vds": {
         "guestAccess": {
-            "title": "KVM Serverinfo",
-            "denied": "Only the owner of a Linux KVM server can manage its Linux accounts.",
+            "title": "Serverinfo",
+            "denied": "Linux accounts and passwords are available to the server owner.",
             "connection": "Connection",
             "ip": "Server IP",
             "ssh_ports": "SSH and SFTP ports",
@@ -18019,7 +18019,9 @@
             "additional": "Additional account",
             "refresh": "Refresh",
             "agent_unavailable": "Start the VM and enable the QEMU Guest Agent in the Linux guest to list its accounts.",
+            "connector_unavailable": "Start the container and ask your administrator to check the LXC connector on its Proxmox host.",
             "pending": "Automatic account setup is waiting for Cloud-init to finish and the QEMU Guest Agent to respond.",
+            "pending_lxc": "Automatic account setup is waiting for the container and its LXC connector.",
             "unknown_password": "Existing password unavailable",
             "existing_accounts": "Existing Linux accounts appear automatically. You can set a panel-generated password by choosing Reset password.",
             "show": "Show password",
@@ -18031,10 +18033,11 @@
             "add": "Add account",
             "limit": "{count} additional accounts. The limit for adding accounts in the panel is {limit}.",
             "saved": "Linux account updated",
-            "load_failed": "Could not load KVM Serverinfo",
+            "load_failed": "Could not load Serverinfo",
             "action_failed": "Could not confirm the account action",
             "manage_on_create": "Set up Linux accounts automatically",
-            "manage_on_create_help": "Creates a standard account from the owner's panel username and sets separate passwords for it and root after first boot. Use a Linux Cloud-init template with the QEMU Guest Agent installed."
+            "manage_on_create_help": "Creates a standard account from the owner's panel username and sets separate passwords for it and root after first boot. Use a Linux Cloud-init template with the QEMU Guest Agent installed.",
+            "manage_on_create_lxc": "Sets up the owner's Linux account and the root password after first boot when the selected Proxmox host has an LXC connector configured."
         },
         "boot": {
             "title": "Boot",

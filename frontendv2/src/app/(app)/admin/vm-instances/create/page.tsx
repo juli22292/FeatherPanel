@@ -695,8 +695,8 @@ export default function VmInstancesCreatePage() {
                     .filter((row) => row.vm_ip_id != null)
                     .map((row) => ({ key: row.key, vm_ip_id: row.vm_ip_id })),
             };
+            payload.managed_guest_access = managedGuestAccess;
             if (!isLxcTemplate) {
-                payload.managed_guest_access = managedGuestAccess;
                 if (!managedGuestAccess) {
                     payload.ci_user = ciUser.trim();
                     payload.ci_password = ciPassword;
@@ -1317,23 +1317,23 @@ export default function VmInstancesCreatePage() {
                                     </p>
                                 </div>
 
-                                {!isLxcTemplate && (
-                                    <label className='bg-muted/30 flex items-start gap-3 rounded-lg border p-3'>
-                                        <input
-                                            type='checkbox'
-                                            checked={managedGuestAccess}
-                                            onChange={(event) => setManagedGuestAccess(event.target.checked)}
-                                        />
-                                        <span>
-                                            <span className='block font-medium'>
-                                                {t('vds.guestAccess.manage_on_create')}
-                                            </span>
-                                            <span className='text-muted-foreground block text-xs'>
-                                                {t('vds.guestAccess.manage_on_create_help')}
-                                            </span>
+                                <label className='bg-muted/30 flex items-start gap-3 rounded-lg border p-3'>
+                                    <input
+                                        type='checkbox'
+                                        checked={managedGuestAccess}
+                                        onChange={(event) => setManagedGuestAccess(event.target.checked)}
+                                    />
+                                    <span>
+                                        <span className='block font-medium'>
+                                            {t('vds.guestAccess.manage_on_create')}
                                         </span>
-                                    </label>
-                                )}
+                                        <span className='text-muted-foreground block text-xs'>
+                                            {isLxcTemplate
+                                                ? t('vds.guestAccess.manage_on_create_lxc')
+                                                : t('vds.guestAccess.manage_on_create_help')}
+                                        </span>
+                                    </span>
+                                </label>
                                 {!isLxcTemplate && !managedGuestAccess && (
                                     <div className='grid grid-cols-1 gap-6 sm:grid-cols-2'>
                                         <div className='space-y-3'>

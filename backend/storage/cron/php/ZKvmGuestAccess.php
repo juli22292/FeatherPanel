@@ -19,7 +19,7 @@ namespace App\Cron;
 
 use App\App;
 use App\Config\ConfigInterface;
-use App\Services\Vm\KvmGuestAccess;
+use App\Services\Vm\VmGuestAccounts;
 
 class ZKvmGuestAccess implements TimeTask
 {
@@ -29,6 +29,6 @@ class ZKvmGuestAccess implements TimeTask
             return;
         }
 
-        (new Cron('kvm-guest-access', '1M'))->runIfDue(KvmGuestAccess::provisionPending(...), getenv('FP_CRON_FORCE') === '1');
+        (new Cron('kvm-guest-access', '1M'))->runIfDue(VmGuestAccounts::provisionPending(...), getenv('FP_CRON_FORCE') === '1');
     }
 }

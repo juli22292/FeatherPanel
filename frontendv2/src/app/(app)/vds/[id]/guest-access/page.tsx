@@ -42,21 +42,31 @@ type GuestInfo = {
     additional_limit: number;
 };
 
-export default function KvmServerInfoPage() {
+export default function ServerInfoPage() {
     const { id } = useParams<{ id: string }>();
     const { instance, loading } = useVmInstance();
     const { t } = useTranslation();
     if (loading) return <VdsPageLoading label={t('common.loading')} />;
-    if (!instance?.is_owner || instance.vm_type !== 'qemu') {
+    if (!instance?.is_owner) {
         return (
-            <VdsPageHeader title={t('vds.guestAccess.title')} icon={Key} description={t('vds.guestAccess.denied')} />
+            <div className='space-y-5'>
+                <VdsPageHeader title={t('vds.guestAccess.title')} icon={Key} description={instance?.hostname} />
+                <section className='bg-card space-y-3 rounded-xl border p-5'>
+                    <h2 className='font-semibold'>{t('vds.guestAccess.connection')}</h2>
+                    <dl>
+                        <dt className='text-muted-foreground text-sm'>{t('vds.guestAccess.ip')}</dt>
+                        <dd className='font-mono'>{instance?.ip_address || '—'}</dd>
+                    </dl>
+                    <p className='text-muted-foreground text-sm'>{t('vds.guestAccess.denied')}</p>
+                </section>
+            </div>
         );
     }
 
-    return <KvmServerInfo key={id} id={id} />;
+    return <OwnerServerInfo key={id} id={id} guestType={instance.vm_type} />;
 }
 
-function KvmServerInfo({ id }: { id: string }) {
+function OwnerServerInfo({ id, guestType }: { id: string; guestType: 'qemu' | 'lxc' }) {
     const { t } = useTranslation();
     const withReauth = useVdsReauth();
     const endpoint = '/api/user/vm-instances/' + id + '/guest-access';
@@ -169,12 +179,14 @@ function KvmServerInfo({ id }: { id: string }) {
                         </dl>
                         {info.setup_pending && (
                             <p role='status' className='text-muted-foreground mt-4 text-sm'>
-                                {t('vds.guestAccess.pending')}
+                                {guestType === 'lxc' ? t('vds.guestAccess.pending_lxc') : t('vds.guestAccess.pending')}
                             </p>
                         )}
                         {!info.agent_available && (
                             <p role='status' className='text-muted-foreground mt-4 text-sm'>
-                                {t('vds.guestAccess.agent_unavailable')}
+                                {guestType === 'lxc'
+                                    ? t('vds.guestAccess.connector_unavailable')
+                                    : t('vds.guestAccess.agent_unavailable')}
                             </p>
                         )}
                     </section>

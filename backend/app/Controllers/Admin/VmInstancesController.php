@@ -36,7 +36,8 @@ use App\Chat\VmInstanceActivity;
 use App\Helpers\FeatherTailClient;
 use App\Mail\templates\VmSuspended;
 use App\Services\Vm\VmInstanceUtil;
-use App\Services\Vm\KvmGuestAccess;
+use App\Services\Vm\LxcGuestAccess;
+use App\Services\Vm\VmGuestAccounts;
 use App\CloudFlare\CloudFlareRealIP;
 use App\Mail\templates\VmUnsuspended;
 use App\Helpers\ModerationReasonHelper;
@@ -385,12 +386,14 @@ class VmInstancesController
         $ciUserInput = isset($data['ci_user']) && is_string($data['ci_user']) ? trim($data['ci_user']) : null;
         $ciPasswordInput = isset($data['ci_password']) && is_string($data['ci_password']) ? trim($data['ci_password']) : null;
         $manageGuestAccess = $vmType === 'qemu' && ($data['managed_guest_access'] ?? false) === true;
+        $managedGuestUsername = null;
         if ($manageGuestAccess) {
             $owner = $userUuid ? \App\Chat\User::getUserByUuid($userUuid) : null;
             if (!$owner) {
                 return ApiResponse::error('A VM owner is required for managed guest accounts', 'VALIDATION_FAILED', 400);
             }
-            $ciUserInput = KvmGuestAccess::defaultUsername((string) $owner['username']);
+            $ciUserInput = VmGuestAccounts::defaultUsername((string) $owner['username']);
+            $managedGuestUsername = $ciUserInput;
             // Cloud-init creates the account. The guest agent sets the panel password after first boot.
             $ciPasswordInput = password_hash(bin2hex(random_bytes(32)), PASSWORD_BCRYPT);
         }
@@ -443,6 +446,16 @@ class VmInstancesController
             $targetNode = $requestedPveNode;
         } else {
             $targetNode = (string) $nodesResult['nodes'][0]['node'];
+        }
+
+        if ($vmType === 'lxc' && ($data['managed_guest_access'] ?? false) === true
+            && LxcGuestAccess::isConfigured($vmNodeId, $targetNode)) {
+            $owner = $userUuid ? \App\Chat\User::getUserByUuid($userUuid) : null;
+            if (!$owner) {
+                return ApiResponse::error('A VM owner is required for managed guest accounts', 'VALIDATION_FAILED', 400);
+            }
+            $manageGuestAccess = true;
+            $managedGuestUsername = VmGuestAccounts::defaultUsername((string) $owner['username']);
         }
 
         $usesDhcp = false;
@@ -543,6 +556,7 @@ class VmInstancesController
             'ci_user' => $ciUserInput,
             'ci_password' => $ciPasswordInput,
             'managed_guest_access' => $manageGuestAccess,
+            'managed_guest_username' => $managedGuestUsername,
             'current_step' => 'initial',
         ];
 

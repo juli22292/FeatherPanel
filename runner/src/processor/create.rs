@@ -601,8 +601,11 @@ async fn create_vm_instance_record(
     let task_id: String = task.try_get("task_id")?;
     let mut meta_mut = meta.clone();
     meta_mut["instance_id"] = json!(instance_id);
-    if vm_type == "qemu" && meta["managed_guest_access"].as_bool() == Some(true) {
-        let username = meta["ci_user"].as_str().context("Missing managed KVM username")?;
+    if meta["managed_guest_access"].as_bool() == Some(true) {
+        let username = meta["managed_guest_username"]
+            .as_str()
+            .or_else(|| meta["ci_user"].as_str())
+            .context("Missing managed guest username")?;
         sqlx::query("INSERT INTO featherpanel_vm_guest_setup (instance_id, owner_uuid, vmid, username) VALUES (?, ?, ?, ?)")
             .bind(instance_id)
             .bind(&user_uuid)
@@ -644,7 +647,10 @@ async fn finalize_create(
     }
 
     // Optional LXC root password via FeatherTail (container must be running).
-    if vm_type == "lxc" && meta["feathertail_enabled"].as_bool().unwrap_or(false) {
+    if vm_type == "lxc"
+        && meta["managed_guest_access"].as_bool() != Some(true)
+        && meta["feathertail_enabled"].as_bool().unwrap_or(false)
+    {
         let password = meta["ci_password"]
             .as_str()
             .or_else(|| meta["lxc_root_password"].as_str())

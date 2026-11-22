@@ -1324,9 +1324,9 @@ final class VmInstanceUtil
 
         if ($instance) {
             VmInstanceIp::syncForInstance((int) $instance['id'], $networkAssignments, $pdo);
-            if ($vmType === 'qemu' && !empty($meta['managed_guest_access'])) {
+            if (!empty($meta['managed_guest_access'])) {
                 $pdo->prepare('INSERT INTO featherpanel_vm_guest_setup (instance_id, owner_uuid, vmid, username) VALUES (?, ?, ?, ?)')
-                    ->execute([$instance['id'], $task['user_uuid'], $vmid, $meta['ci_user']]);
+                    ->execute([$instance['id'], $task['user_uuid'], $vmid, $meta['managed_guest_username'] ?? $meta['ci_user']]);
             }
         }
 

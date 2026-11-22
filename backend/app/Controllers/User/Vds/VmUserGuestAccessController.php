@@ -23,7 +23,8 @@ use App\App;
 use App\Chat\Database;
 use App\Helpers\ApiResponse;
 use App\Services\Vm\VdsReauth;
-use App\Services\Vm\KvmGuestAccess;
+use App\Services\Vm\GuestAccountClient;
+use App\Services\Vm\VmGuestAccounts;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -33,15 +34,16 @@ final class VmUserGuestAccessController
     {
         $user = $request->attributes->get('user');
         $instance = $request->attributes->get('vmInstance');
-        if (!is_array($instance) || ($instance['user_uuid'] ?? null) !== ($user['uuid'] ?? '') || ($instance['vm_type'] ?? null) !== 'qemu') {
-            return ApiResponse::error('Only the owner of a KVM instance can manage its guest accounts', 'PERMISSION_DENIED', 403);
+        if (!is_array($instance) || ($instance['user_uuid'] ?? null) !== ($user['uuid'] ?? '')
+            || !in_array($instance['vm_type'] ?? null, ['qemu', 'lxc'], true)) {
+            return ApiResponse::error('Only the owner can manage guest accounts for this instance', 'PERMISSION_DENIED', 403);
         }
 
         $db = Database::getPdoConnection();
         if ($request->isMethod('GET')) {
-            $guest = KvmGuestAccess::connect($instance)?->inspect();
+            $guest = VmGuestAccounts::connect($instance)?->inspect();
             [$preferred, $pending] = self::preferredAccount($db, $instance, $user, $guest);
-            $passwords = $guest === null ? [] : KvmGuestAccess::passwords($db, $instance, $guest);
+            $passwords = $guest === null ? [] : VmGuestAccounts::passwords($db, $instance, $guest);
             $accounts = [];
             foreach ($guest['accounts'] ?? [] as $name => $uid) {
                 $name = (string) $name;
@@ -60,7 +62,7 @@ final class VmUserGuestAccessController
                 'agent_available' => $guest !== null,
                 'preferred_username' => $preferred,
                 'setup_pending' => $pending,
-                'additional_limit' => KvmGuestAccess::ADDITIONAL_LIMIT,
+                'additional_limit' => VmGuestAccounts::ADDITIONAL_LIMIT,
             ]);
         }
 
@@ -77,11 +79,11 @@ final class VmUserGuestAccessController
 
         $db->beginTransaction();
         try {
-            $vm = KvmGuestAccess::lockInstance($db, (int) $instance['id'], $user['uuid']);
+            $vm = VmGuestAccounts::lockInstance($db, (int) $instance['id'], $user['uuid']);
             if (!$vm) {
-                return ApiResponse::error('The KVM instance is currently unavailable', 'PERMISSION_DENIED', 403);
+                return ApiResponse::error('The instance is currently unavailable', 'PERMISSION_DENIED', 403);
             }
-            $client = KvmGuestAccess::connect($vm);
+            $client = VmGuestAccounts::connect($vm);
             $guest = $client?->inspect();
             if (!$guest) {
                 return self::agentUnavailable();
@@ -93,7 +95,7 @@ final class VmUserGuestAccessController
                 return ApiResponse::error('The Linux account was not found in the guest', 'KVM_GUEST_ACCOUNT_NOT_FOUND', 404);
             }
             if ($action === 'reveal') {
-                $encrypted = KvmGuestAccess::passwords($db, $vm, $guest)[$name] ?? null;
+                $encrypted = VmGuestAccounts::passwords($db, $vm, $guest)[$name] ?? null;
                 if ($encrypted === null) {
                     return ApiResponse::error('No panel-generated password is available for this account', 'KVM_GUEST_PASSWORD_UNAVAILABLE', 404);
                 }
@@ -101,15 +103,15 @@ final class VmUserGuestAccessController
                 return self::privateResponse(['password' => App::getInstance(true)->decryptValue($encrypted)]);
             }
 
-            $password = KvmGuestAccess::password();
-            $hash = KvmGuestAccess::passwordHash($password);
-            KvmGuestAccess::forgetPassword($db, $vm, $name);
+            $password = VmGuestAccounts::password();
+            $hash = VmGuestAccounts::passwordHash($password);
+            VmGuestAccounts::forgetPassword($db, $vm, $name);
             if (!$client->setPassword($name, $hash)) {
                 $db->commit();
 
                 return self::agentUnavailable();
             }
-            KvmGuestAccess::savePassword($db, $vm, $guest, $name, $password, $hash);
+            VmGuestAccounts::savePassword($db, $vm, $guest, $name, $password, $hash);
             $db->commit();
 
             return self::privateResponse([]);
@@ -120,7 +122,7 @@ final class VmUserGuestAccessController
         }
     }
 
-    private static function add(\PDO $db, array $vm, array $user, KvmGuestAccess $client, array $guest, string $name): Response
+    private static function add(\PDO $db, array $vm, array $user, GuestAccountClient $client, array $guest, string $name): Response
     {
         if (!preg_match('/^[a-z][a-z0-9]{0,31}$/D', $name) || $name === 'root') {
             return ApiResponse::error('Use 1–32 lowercase letters or digits, starting with a letter', 'VALIDATION_FAILED', 422);
@@ -130,12 +132,12 @@ final class VmUserGuestAccessController
         }
         [$preferred] = self::preferredAccount($db, $vm, $user, $guest);
         $additional = count(array_diff(array_keys($guest['accounts']), ['root', $preferred]));
-        if ($name !== $preferred && $additional >= KvmGuestAccess::ADDITIONAL_LIMIT) {
+        if ($name !== $preferred && $additional >= VmGuestAccounts::ADDITIONAL_LIMIT) {
             return ApiResponse::error('This VM has reached the limit for additional Linux accounts', 'KVM_GUEST_ACCOUNT_LIMIT', 409);
         }
 
-        $password = KvmGuestAccess::password();
-        $hash = KvmGuestAccess::passwordHash($password);
+        $password = VmGuestAccounts::password();
+        $hash = VmGuestAccounts::passwordHash($password);
         if (!$client->createAccount($name, $hash)) {
             return self::agentUnavailable();
         }
@@ -143,7 +145,7 @@ final class VmUserGuestAccessController
         if ($updated === null || $updated['guest_id'] !== $guest['guest_id'] || !isset($updated['accounts'][$name])) {
             return self::agentUnavailable();
         }
-        KvmGuestAccess::savePassword($db, $vm, $updated, $name, $password, $hash);
+        VmGuestAccounts::savePassword($db, $vm, $updated, $name, $password, $hash);
         $db->commit();
 
         return self::privateResponse([], 201);
@@ -157,7 +159,7 @@ final class VmUserGuestAccessController
             return [$setup['username'], $setup['retry_at'] !== null];
         }
 
-        $preferred = KvmGuestAccess::defaultUsername((string) $user['username']);
+        $preferred = VmGuestAccounts::defaultUsername((string) $user['username']);
         $notes = json_decode((string) ($vm['notes'] ?? ''), true);
         $previous = $notes['ci_user'] ?? null;
         if (!isset($guest['accounts'][$preferred]) && is_string($previous) && $previous !== 'root' && isset($guest['accounts'][$previous])) {
@@ -169,7 +171,7 @@ final class VmUserGuestAccessController
 
     private static function agentUnavailable(): Response
     {
-        return ApiResponse::error('The guest account action could not be confirmed. Refresh the account list and check the QEMU Guest Agent.', 'KVM_GUEST_AGENT_UNAVAILABLE', 503);
+        return ApiResponse::error('The guest account action could not be confirmed. Refresh the account list and check the guest connection.', 'KVM_GUEST_AGENT_UNAVAILABLE', 503);
     }
 
     private static function privateResponse(array $data, int $status = 200): Response

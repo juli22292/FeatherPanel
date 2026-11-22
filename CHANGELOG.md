@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.5.6.6 (ServerPanel)
+
+- Show Serverinfo for both QEMU/KVM and LXC. VM owners can manage local Linux accounts through the shared interface.
+- Added a restricted Proxmox SSH connector for inventory, account creation and password resets inside LXC containers.
+- Show basic connection details to other users with server access. Existing Linux accounts are only read until the owner makes an explicit change.
+
 ## v1.5.6.5 (ServerPanel)
 
 - Added KVM Serverinfo for Linux VM owners. Existing guest accounts are listed without modifying them. Owners can generate or reset passwords and add up to five additional guest accounts.

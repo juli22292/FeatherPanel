@@ -1246,7 +1246,7 @@ const buildMainNavigationItems = (
 export const getVdsNavigationItems = (
     t: TFunction,
     instanceId: string,
-    options?: { vmType?: string | null; showGuestAccess?: boolean },
+    options?: { vmType?: string | null },
 ): NavigationItem[] => {
     const isQemu = (options?.vmType ?? 'qemu') !== 'lxc';
     const items: NavigationItem[] = [
@@ -1351,20 +1351,16 @@ export const getVdsNavigationItems = (
                   },
               ]
             : []),
-        ...(isQemu && options?.showGuestAccess
-            ? [
-                  {
-                      id: 'vds-guest-access',
-                      name: t('vds.guestAccess.title'),
-                      title: t('vds.guestAccess.title'),
-                      url: `/vds/${instanceId}/guest-access`,
-                      icon: Key,
-                      isActive: false,
-                      category: 'server' as const,
-                      group: 'configuration',
-                  },
-              ]
-            : []),
+        {
+            id: 'vds-guest-access',
+            name: t('vds.guestAccess.title'),
+            title: t('vds.guestAccess.title'),
+            url: `/vds/${instanceId}/guest-access`,
+            icon: Key,
+            isActive: false,
+            category: 'server',
+            group: 'configuration',
+        },
         {
             id: 'vds-settings',
             name: t('navigation.items.settings'),
