@@ -18,6 +18,7 @@
 namespace App\Controllers\User\Server;
 
 use App\Services\Servers\ReverseProxyAddresses;
+use App\Services\Servers\ReverseProxyEdge;
 
 use App\App;
 use App\Chat\Node;
@@ -174,6 +175,8 @@ class ServerAllocationController
         $allocationLimit = (int) ($server['allocation_limit'] ?? 100);
         $currentAllocations = count($allocations);
 
+        $edge = ReverseProxyEdge::settings();
+
         return ApiResponse::success([
             'server' => [
                 'id' => $server['id'],
@@ -187,6 +190,7 @@ class ServerAllocationController
             'node' => [
                 'public_ip_v4' => $nodePublicIpv4,
             ],
+            'managed_proxy' => $edge['enabled'],
             'allocations' => $allocations,
         ], 'Server allocations fetched successfully');
     }

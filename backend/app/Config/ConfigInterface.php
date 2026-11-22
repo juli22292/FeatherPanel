@@ -25,6 +25,7 @@ interface ConfigInterface
     public const APP_NAME = 'app_name';
     public const PANEL_BRAND = 'ServerPanel';
     public const SERVER_REVERSE_PROXY_RULES = 'server_reverse_proxy_rules';
+    public const SERVER_REVERSE_PROXY_EDGE = 'server_reverse_proxy_edge';
     public const APP_URL = 'app_url';
     /**
      * Optional URL Wings uses for panel callbacks (SFTP auth, remote APIs).

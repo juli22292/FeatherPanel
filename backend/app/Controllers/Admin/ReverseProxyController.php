@@ -25,6 +25,7 @@ use App\Config\ConfigInterface;
 use App\Helpers\ApiResponse;
 use App\Helpers\DemoCloudHelper;
 use App\Services\Servers\ReverseProxyAddresses;
+use App\Services\Servers\ReverseProxyEdge;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -37,7 +38,44 @@ final class ReverseProxyController
             'name' => (string) $spell['name'],
         ], Spell::getAllSpells());
 
-        return ApiResponse::success(['rules' => ReverseProxyAddresses::configuredRules(), 'spells' => $spells]);
+        $edgeAvailable = false;
+        try {
+            $edgeAvailable = (ReverseProxyEdge::request('health')['ready'] ?? false) === true;
+        } catch (\RuntimeException) {
+            // The connector is optional until the administrator installs it.
+        }
+
+        return ApiResponse::success([
+            'rules' => ReverseProxyAddresses::configuredRules(),
+            'spells' => $spells,
+            'edge' => ReverseProxyEdge::settings(),
+            'edge_available' => $edgeAvailable,
+        ]);
+    }
+
+    public function updateEdge(Request $request): Response
+    {
+        if (DemoCloudHelper::isBlocked()) {
+            return DemoCloudHelper::denyResponse();
+        }
+        $edge = ReverseProxyEdge::normalizeSettings(json_decode($request->getContent(), true));
+        if ($edge === null) {
+            return ApiResponse::error('Enter an edge IP address and a valid certificate email', 'REVERSE_PROXY_EDGE_INVALID', 422);
+        }
+        if ($edge['enabled']) {
+            try {
+                if ((ReverseProxyEdge::request('health')['ready'] ?? false) !== true) {
+                    throw new \RuntimeException('Managed proxy service is unavailable');
+                }
+            } catch (\RuntimeException) {
+                return ApiResponse::error('The public proxy connector is unavailable', 'REVERSE_PROXY_EDGE_UNAVAILABLE', 503);
+            }
+        }
+        if (!App::getInstance(true)->getConfig()->setSetting(ConfigInterface::SERVER_REVERSE_PROXY_EDGE, json_encode($edge, JSON_THROW_ON_ERROR))) {
+            return ApiResponse::error('Could not save reverse proxy settings', 'REVERSE_PROXY_SAVE_FAILED', 500);
+        }
+
+        return ApiResponse::success(['edge' => $edge]);
     }
 
     public function update(Request $request): Response

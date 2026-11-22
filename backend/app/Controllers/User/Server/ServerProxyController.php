@@ -21,6 +21,7 @@ use App\App;
 use App\Chat\Node;
 use App\Chat\Server;
 use App\Chat\Allocation;
+use App\Chat\ManagedProxy;
 use App\SubuserPermissions;
 use App\Chat\ServerActivity;
 use App\Helpers\ApiResponse;
@@ -33,6 +34,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use App\Plugins\Events\Events\ServerProxyEvent;
 use App\Services\Servers\ReverseProxyAddresses;
+use App\Services\Servers\ReverseProxyEdge;
 
 #[OA\Schema(
     schema: 'ProxyCreateRequest',
@@ -122,10 +124,36 @@ class ServerProxyController
         foreach ($proxies as &$proxy) {
             $proxy['ssl'] = (bool) $proxy['ssl'];
             $proxy['use_lets_encrypt'] = (bool) $proxy['use_lets_encrypt'];
+            unset($proxy['ssl_cert'], $proxy['ssl_key'], $proxy['client_email']);
+        }
+        unset($proxy);
+
+        $managed = ManagedProxy::getByServer($serverId);
+        $statuses = [];
+        if ($managed !== []) {
+            try {
+                $statuses = ReverseProxyEdge::request('status/' . $server['uuid'])['states'] ?? [];
+            } catch (\RuntimeException) {
+                // Existing proxies keep serving while the connector is unavailable.
+            }
+        }
+        foreach ($managed as $proxy) {
+            $state = $statuses[(string) $proxy['id']] ?? 'unknown';
+            $proxies[] = [
+                ...$proxy,
+                'id' => 'edge:' . $proxy['id'],
+                'allocation_id' => (int) $proxy['allocation_id'],
+                'port' => (int) $proxy['port'],
+                'ssl' => $state === 'active',
+                'use_lets_encrypt' => true,
+                'managed' => true,
+                'status' => $state,
+            ];
         }
 
         return ApiResponse::success([
             'proxies' => $proxies,
+            'managed_enabled' => ReverseProxyEdge::settings()['enabled'],
         ], 'Proxy configurations fetched successfully');
     }
 
@@ -183,8 +211,13 @@ class ServerProxyController
             return $permissionCheck;
         }
 
+        $edge = ReverseProxyEdge::settings();
+        if ($edge['enabled']) {
+            return $this->createManagedProxy($request, $server, $edge);
+        }
+
         // Check proxy limit
-        $currentProxies = ProxyModel::countByServer((int) $server['id']);
+        $currentProxies = ProxyModel::countByServer((int) $server['id']) + count(ManagedProxy::getByServer($serverId));
         $maxAllowed = (int) $this->app->getConfig()->getSetting(ConfigInterface::SERVER_PROXY_MAX_PER_SERVER, '5');
         if ($maxAllowed < 1) {
             $maxAllowed = 1;
@@ -206,6 +239,9 @@ class ServerProxyController
         $validationError = $this->validateCreatePayload($payload);
         if ($validationError !== null) {
             return $validationError;
+        }
+        if (ManagedProxy::hasDomain(strtolower(trim($payload['domain'])))) {
+            return ApiResponse::error('The domain is already registered', 'REVERSE_PROXY_EDGE_CONFLICT', 409);
         }
 
         $port = (int) $payload['port'];
@@ -376,6 +412,22 @@ class ServerProxyController
             return ApiResponse::error('Invalid JSON body', 'INVALID_REQUEST_BODY', 400);
         }
 
+        if (is_string($payload['id'] ?? null) && preg_match('/^edge:([1-9][0-9]{0,9})$/D', $payload['id'], $id)) {
+            try {
+                $result = ManagedProxy::withLockedProxy($serverId, (int) $id[1], static fn ($proxy) => ReverseProxyEdge::request('delete', [
+                    'id' => (int) $proxy['id'],
+                    'server' => $server['uuid'],
+                    'domain' => $proxy['domain'],
+                ]), true);
+            } catch (\RuntimeException $error) {
+                return $this->edgeError($error);
+            }
+
+            return $result === null
+                ? ApiResponse::error('Proxy not found', 'PROXY_NOT_FOUND', 404)
+                : ApiResponse::success([], 'Proxy configuration deleted successfully');
+        }
+
         // Support deletion by ID or by domain+port
         $proxy = null;
         if (isset($payload['id']) && is_numeric($payload['id'])) {
@@ -540,6 +592,29 @@ class ServerProxyController
             return ApiResponse::error('Port does not belong to this server\'s allocations', 'INVALID_PORT', 400);
         }
 
+        $edge = ReverseProxyEdge::settings();
+        if ($edge['enabled']) {
+            $domain = ReverseProxyEdge::domain($domain);
+            if ($domain === null) {
+                return ApiResponse::error('Invalid domain format', 'INVALID_DOMAIN', 400);
+            }
+            $expectedIps = ReverseProxyEdge::expectedIps($edge, $server, $allocation);
+            if ($expectedIps === null) {
+                return ApiResponse::error('The allocation points to a different public proxy', 'REVERSE_PROXY_EDGE_MAPPING', 422);
+            }
+            try {
+                $result = ReverseProxyEdge::request('verify', [
+                    'server' => $server['uuid'],
+                    'domain' => $domain,
+                    'public_ips' => $expectedIps,
+                ]);
+
+                return ApiResponse::success(['managed' => true, 'expected_ips' => $expectedIps, ...$result]);
+            } catch (\RuntimeException $error) {
+                return $this->edgeError($error);
+            }
+        }
+
         $node = Node::getNodeById($server['node_id']);
         if (!$node) {
             return ApiResponse::error('Node not found', 'NODE_NOT_FOUND', 404);
@@ -600,6 +675,63 @@ class ServerProxyController
     /**
      * Verify DNS records for a domain.
      */
+    private function createManagedProxy(Request $request, array $server, array $edge): Response
+    {
+        $payload = json_decode($request->getContent(), true);
+        $domain = ReverseProxyEdge::domain(is_array($payload) ? ($payload['domain'] ?? null) : null);
+        if ($domain === null) {
+            return ApiResponse::error('Invalid domain format', 'INVALID_DOMAIN', 400);
+        }
+        $serverId = (int) $server['id'];
+        $port = filter_var($payload['port'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 65535]]);
+        $allocation = $port === false ? null : self::getProxyAllocation($serverId, $port, $payload['allocation_id'] ?? null);
+        if ($allocation === null) {
+            return ApiResponse::error('Port does not belong to this server\'s allocations', 'INVALID_PORT', 400);
+        }
+        $expectedIps = ReverseProxyEdge::expectedIps($edge, $server, $allocation);
+        if ($expectedIps === null) {
+            return ApiResponse::error('The allocation points to a different public proxy', 'REVERSE_PROXY_EDGE_MAPPING', 422);
+        }
+        $data = ['server' => $server['uuid'], 'domain' => $domain, 'public_ips' => $expectedIps];
+        try {
+            $verification = ReverseProxyEdge::request('verify', $data);
+            if (($verification['verified'] ?? false) !== true) {
+                return ApiResponse::error('Verify the domain records before creating the proxy', 'REVERSE_PROXY_EDGE_DNS', 422);
+            }
+            $id = ManagedProxy::reserve(
+                $serverId,
+                $allocation,
+                $domain,
+                max(1, (int) $this->app->getConfig()->getSetting(ConfigInterface::SERVER_PROXY_MAX_PER_SERVER, '5')),
+            );
+            if ($id === null) {
+                return ApiResponse::error('The domain is already registered or the proxy limit was reached', 'REVERSE_PROXY_EDGE_CONFLICT', 409);
+            }
+            $result = ManagedProxy::withLockedProxy($serverId, $id, static fn ($proxy) => ReverseProxyEdge::request('create', [
+                ...$data,
+                'id' => $id,
+                'ip' => $proxy['ip'],
+                'port' => (int) $proxy['port'],
+                'email' => $edge['email'],
+            ]));
+
+            return $result === null
+                ? ApiResponse::error('Proxy not found', 'PROXY_NOT_FOUND', 404)
+                : ApiResponse::success(['managed' => true, 'proxy_id' => 'edge:' . $id, ...$result], 'Proxy request accepted', 202);
+        } catch (\RuntimeException $error) {
+            return $this->edgeError($error);
+        }
+    }
+
+    private function edgeError(\RuntimeException $error): Response
+    {
+        return match ($error->getCode()) {
+            409 => ApiResponse::error('The domain is unavailable or the proxy is busy', 'REVERSE_PROXY_EDGE_CONFLICT', 409),
+            422 => ApiResponse::error('The domain or destination failed the public proxy checks', 'REVERSE_PROXY_EDGE_DNS', 422),
+            default => ApiResponse::error('The public proxy connector is unavailable', 'REVERSE_PROXY_EDGE_UNAVAILABLE', 503),
+        };
+    }
+
     private static function emitEvent(string $eventName, array $payload): void
     {
         global $eventManager;

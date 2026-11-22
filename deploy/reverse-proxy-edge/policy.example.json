@@ -1,0 +1,6 @@
+{
+  "networks": ["20.20.20.0/24"],
+  "ports": [[25565, 25599]],
+  "reserved_names": ["carrot.gay"],
+  "socket_group": "www-data"
+}

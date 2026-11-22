@@ -71,6 +71,8 @@ export default function CreateProxyPage() {
     const [dnsError, setDnsError] = React.useState<string | null>(null);
     const [verifiedTargetIp, setVerifiedTargetIp] = React.useState<string | null>(null);
     const [nodePublicIp, setNodePublicIp] = React.useState<string | null>(null);
+    const [managed, setManaged] = React.useState(false);
+    const [managedDns, setManagedDns] = React.useState<DnsVerifyResponse['data'] | null>(null);
 
     const { getWidgets, fetchWidgets } = usePluginWidgets('server-proxy-new');
 
@@ -97,6 +99,7 @@ export default function CreateProxyPage() {
         setDnsVerified(false);
         setDnsError(null);
         setVerifiedTargetIp(null);
+        setManagedDns(null);
     }
 
     const fetchData = React.useCallback(async () => {
@@ -108,6 +111,7 @@ export default function CreateProxyPage() {
                 const allocs = data.data.allocations || [];
                 setAllocations(allocs);
                 setNodePublicIp(data.data.node?.public_ip_v4 ?? null);
+                setManaged(data.data.managed_proxy === true);
                 const primary = allocs.find((allocation) => allocation.is_primary) ?? allocs[0];
                 if (primary) {
                     setFormData((prev) =>
@@ -148,11 +152,21 @@ export default function CreateProxyPage() {
             if (data.success && data.data) {
                 setDnsVerified(data.data.verified);
                 setVerifiedTargetIp(data.data.expected_ip || null);
+                if (data.data.managed) {
+                    setManaged(true);
+                    setManagedDns(data.data);
+                }
 
                 if (data.data.verified) {
                     toast.success(data.data.message || t('serverProxy.dnsVerifiedSuccess'));
                 } else {
-                    setDnsError(getApiErrorMessageFromPayload(data.data, t, 'serverProxy.verificationFailed'));
+                    setDnsError(
+                        getApiErrorMessageFromPayload(
+                            data.data,
+                            t,
+                            data.data.managed ? 'serverProxy.managedDnsPending' : 'serverProxy.verificationFailed',
+                        ),
+                    );
                 }
             } else {
                 setDnsVerified(false);
@@ -180,7 +194,7 @@ export default function CreateProxyPage() {
         setSaving(true);
         try {
             await axios.post(`/api/user/servers/${uuidShort}/proxy/create`, formData);
-            toast.success(t('serverProxy.created'));
+            toast.success(t(managed ? 'serverProxy.managedQueued' : 'serverProxy.created'));
             router.push(`/server/${uuidShort}/proxy`);
         } catch (error) {
             const axiosError = error as AxiosError<{ message: string }>;
@@ -342,7 +356,7 @@ export default function CreateProxyPage() {
                                     </div>
                                 </div>
 
-                                {targetIp && (
+                                {!managed && targetIp && (
                                     <div className='bg-background/50 border-primary/30 mx-1 flex items-center gap-2 rounded-xl border border-dashed p-3 text-xs'>
                                         <Server className='text-primary h-3 w-3 opacity-50' />
                                         <span className='text-primary/80 font-bold'>
@@ -355,6 +369,26 @@ export default function CreateProxyPage() {
                                         <span className='text-foreground bg-secondary/50 rounded px-2 py-0.5 font-mono font-bold'>
                                             {targetIp}
                                         </span>
+                                    </div>
+                                )}
+
+                                {managed && (
+                                    <div className='space-y-2 text-sm'>
+                                        <p>{t('serverProxy.managedDnsHelp')}</p>
+                                        {managedDns?.expected_ips?.map((ip) => (
+                                            <p key={ip} className='font-mono break-all'>
+                                                {t(ip.includes(':') ? 'serverProxy.aaaaRecord' : 'serverProxy.aRecord')}{' '}
+                                                {ip}
+                                            </p>
+                                        ))}
+                                        {managedDns?.txt_name && managedDns.txt_value && (
+                                            <dl className='space-y-1 rounded-lg border p-3'>
+                                                <dt>{t('serverProxy.managedTxtName')}</dt>
+                                                <dd className='font-mono break-all'>{managedDns.txt_name}</dd>
+                                                <dt>{t('serverProxy.managedTxtValue')}</dt>
+                                                <dd className='font-mono break-all'>{managedDns.txt_value}</dd>
+                                            </dl>
+                                        )}
                                     </div>
                                 )}
 
@@ -398,115 +432,133 @@ export default function CreateProxyPage() {
                         </div>
                     </FormSection>
 
-                    <FormSection>
-                        <div className='border-border/10 flex items-center gap-4 border-b pb-6'>
-                            <div className='flex h-10 w-10 items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/10'>
-                                <ShieldCheck className='h-5 w-5 text-emerald-500' />
-                            </div>
-                            <div className='space-y-0.5'>
-                                <h2 className='text-xl font-black tracking-tight uppercase italic'>
-                                    {t('serverProxy.enableSsl')}
-                                </h2>
-                                <p className='text-muted-foreground text-[9px] font-bold tracking-widest uppercase opacity-50'>
-                                    {t('serverProxy.secureWithHttps')}
+                    {managed ? (
+                        <FormSection>
+                            <div className='space-y-2 p-5'>
+                                <h2 className='text-xl font-bold'>{t('serverProxy.managedHttps')}</h2>
+                                <p className='text-muted-foreground text-sm'>
+                                    {t('serverProxy.managedHttpsDescription')}
                                 </p>
                             </div>
-                            <div className='ml-auto'>
-                                <Button
-                                    size='sm'
-                                    variant={formData.ssl ? 'default' : 'secondary'}
-                                    onClick={() => setFormData({ ...formData, ssl: !formData.ssl })}
-                                    className={cn(
-                                        'rounded-lg font-bold',
-                                        formData.ssl && 'bg-emerald-600 text-white hover:bg-emerald-700',
-                                    )}
-                                    disabled={saving}
-                                >
-                                    {formData.ssl ? t('serverProxy.on') : t('serverProxy.off')}
-                                </Button>
-                            </div>
-                        </div>
-
-                        {formData.ssl && (
-                            <div className='animate-in fade-in slide-in-from-top-4 space-y-6 duration-500'>
-                                <div className='bg-secondary/30 border-border/20 flex items-center justify-between rounded-2xl border p-4'>
-                                    <div className='space-y-0.5'>
-                                        <h4 className='text-foreground text-sm font-bold'>
-                                            {t('serverProxy.letsEncrypt')}
-                                        </h4>
-                                        <p className='text-muted-foreground text-[10px] font-medium tracking-wide uppercase'>
-                                            {t('serverProxy.autoGenerate')}
-                                        </p>
-                                    </div>
+                        </FormSection>
+                    ) : (
+                        <FormSection>
+                            <div className='border-border/10 flex items-center gap-4 border-b pb-6'>
+                                <div className='flex h-10 w-10 items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/10'>
+                                    <ShieldCheck className='h-5 w-5 text-emerald-500' />
+                                </div>
+                                <div className='space-y-0.5'>
+                                    <h2 className='text-xl font-black tracking-tight uppercase italic'>
+                                        {t('serverProxy.enableSsl')}
+                                    </h2>
+                                    <p className='text-muted-foreground text-[9px] font-bold tracking-widest uppercase opacity-50'>
+                                        {t('serverProxy.secureWithHttps')}
+                                    </p>
+                                </div>
+                                <div className='ml-auto'>
                                     <Button
                                         size='sm'
-                                        variant={formData.use_lets_encrypt ? 'default' : 'secondary'}
-                                        onClick={() =>
-                                            setFormData({ ...formData, use_lets_encrypt: !formData.use_lets_encrypt })
-                                        }
-                                        disabled={saving}
+                                        variant={formData.ssl ? 'default' : 'secondary'}
+                                        onClick={() => setFormData({ ...formData, ssl: !formData.ssl })}
                                         className={cn(
                                             'rounded-lg font-bold',
-                                            formData.use_lets_encrypt && 'bg-blue-600 text-white hover:bg-blue-700',
+                                            formData.ssl && 'bg-emerald-600 text-white hover:bg-emerald-700',
                                         )}
+                                        disabled={saving}
                                     >
-                                        {formData.use_lets_encrypt ? t('serverProxy.on') : t('serverProxy.off')}
+                                        {formData.ssl ? t('serverProxy.on') : t('serverProxy.off')}
                                     </Button>
                                 </div>
-
-                                {formData.use_lets_encrypt ? (
-                                    <div className='space-y-2.5'>
-                                        <label className='text-muted-foreground ml-1 text-[9px] font-black tracking-[0.2em] uppercase'>
-                                            {t('serverProxy.email')} <span className='text-primary'>*</span>
-                                        </label>
-                                        <div className='group relative'>
-                                            <div className='text-muted-foreground/50 group-focus-within:text-primary absolute top-1/2 left-4 z-10 -translate-y-1/2 transition-colors'>
-                                                <Mail className='h-4 w-4' />
-                                            </div>
-                                            <Input
-                                                type='email'
-                                                value={formData.client_email || ''}
-                                                onChange={(e) =>
-                                                    setFormData({ ...formData, client_email: e.target.value })
-                                                }
-                                                placeholder='admin@example.com'
-                                                className='bg-secondary/50 border-border/10 focus:border-primary/50 h-12 rounded-xl pl-11 text-sm font-extrabold transition-all'
-                                                disabled={saving}
-                                                required
-                                            />
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className='grid grid-cols-1 gap-6 md:grid-cols-2'>
-                                        <div className='space-y-2.5'>
-                                            <label className='text-muted-foreground ml-1 text-[9px] font-black tracking-[0.2em] uppercase'>
-                                                {t('serverProxy.certificate')}
-                                            </label>
-                                            <Textarea
-                                                value={formData.ssl_cert || ''}
-                                                onChange={(e) => setFormData({ ...formData, ssl_cert: e.target.value })}
-                                                disabled={saving}
-                                                className='bg-secondary/50 border-border/10 focus:border-primary/50 min-h-[150px] rounded-xl font-mono text-xs leading-relaxed'
-                                                placeholder='-----BEGIN CERTIFICATE-----...'
-                                            />
-                                        </div>
-                                        <div className='space-y-2.5'>
-                                            <label className='text-muted-foreground ml-1 text-[9px] font-black tracking-[0.2em] uppercase'>
-                                                {t('serverProxy.privateKey')}
-                                            </label>
-                                            <Textarea
-                                                value={formData.ssl_key || ''}
-                                                onChange={(e) => setFormData({ ...formData, ssl_key: e.target.value })}
-                                                disabled={saving}
-                                                className='bg-secondary/50 border-border/10 focus:border-primary/50 min-h-[150px] rounded-xl font-mono text-xs leading-relaxed'
-                                                placeholder='-----BEGIN PRIVATE KEY-----...'
-                                            />
-                                        </div>
-                                    </div>
-                                )}
                             </div>
-                        )}
-                    </FormSection>
+
+                            {formData.ssl && (
+                                <div className='animate-in fade-in slide-in-from-top-4 space-y-6 duration-500'>
+                                    <div className='bg-secondary/30 border-border/20 flex items-center justify-between rounded-2xl border p-4'>
+                                        <div className='space-y-0.5'>
+                                            <h4 className='text-foreground text-sm font-bold'>
+                                                {t('serverProxy.letsEncrypt')}
+                                            </h4>
+                                            <p className='text-muted-foreground text-[10px] font-medium tracking-wide uppercase'>
+                                                {t('serverProxy.autoGenerate')}
+                                            </p>
+                                        </div>
+                                        <Button
+                                            size='sm'
+                                            variant={formData.use_lets_encrypt ? 'default' : 'secondary'}
+                                            onClick={() =>
+                                                setFormData({
+                                                    ...formData,
+                                                    use_lets_encrypt: !formData.use_lets_encrypt,
+                                                })
+                                            }
+                                            disabled={saving}
+                                            className={cn(
+                                                'rounded-lg font-bold',
+                                                formData.use_lets_encrypt && 'bg-blue-600 text-white hover:bg-blue-700',
+                                            )}
+                                        >
+                                            {formData.use_lets_encrypt ? t('serverProxy.on') : t('serverProxy.off')}
+                                        </Button>
+                                    </div>
+
+                                    {formData.use_lets_encrypt ? (
+                                        <div className='space-y-2.5'>
+                                            <label className='text-muted-foreground ml-1 text-[9px] font-black tracking-[0.2em] uppercase'>
+                                                {t('serverProxy.email')} <span className='text-primary'>*</span>
+                                            </label>
+                                            <div className='group relative'>
+                                                <div className='text-muted-foreground/50 group-focus-within:text-primary absolute top-1/2 left-4 z-10 -translate-y-1/2 transition-colors'>
+                                                    <Mail className='h-4 w-4' />
+                                                </div>
+                                                <Input
+                                                    type='email'
+                                                    value={formData.client_email || ''}
+                                                    onChange={(e) =>
+                                                        setFormData({ ...formData, client_email: e.target.value })
+                                                    }
+                                                    placeholder='admin@example.com'
+                                                    className='bg-secondary/50 border-border/10 focus:border-primary/50 h-12 rounded-xl pl-11 text-sm font-extrabold transition-all'
+                                                    disabled={saving}
+                                                    required
+                                                />
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className='grid grid-cols-1 gap-6 md:grid-cols-2'>
+                                            <div className='space-y-2.5'>
+                                                <label className='text-muted-foreground ml-1 text-[9px] font-black tracking-[0.2em] uppercase'>
+                                                    {t('serverProxy.certificate')}
+                                                </label>
+                                                <Textarea
+                                                    value={formData.ssl_cert || ''}
+                                                    onChange={(e) =>
+                                                        setFormData({ ...formData, ssl_cert: e.target.value })
+                                                    }
+                                                    disabled={saving}
+                                                    className='bg-secondary/50 border-border/10 focus:border-primary/50 min-h-[150px] rounded-xl font-mono text-xs leading-relaxed'
+                                                    placeholder='-----BEGIN CERTIFICATE-----...'
+                                                />
+                                            </div>
+                                            <div className='space-y-2.5'>
+                                                <label className='text-muted-foreground ml-1 text-[9px] font-black tracking-[0.2em] uppercase'>
+                                                    {t('serverProxy.privateKey')}
+                                                </label>
+                                                <Textarea
+                                                    value={formData.ssl_key || ''}
+                                                    onChange={(e) =>
+                                                        setFormData({ ...formData, ssl_key: e.target.value })
+                                                    }
+                                                    disabled={saving}
+                                                    className='bg-secondary/50 border-border/10 focus:border-primary/50 min-h-[150px] rounded-xl font-mono text-xs leading-relaxed'
+                                                    placeholder='-----BEGIN PRIVATE KEY-----...'
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </FormSection>
+                    )}
                 </div>
 
                 <div className='space-y-8 lg:col-span-4'>

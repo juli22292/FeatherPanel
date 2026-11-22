@@ -48,6 +48,8 @@ export default function ServerProxyPage() {
     const pathname = usePathname();
 
     const [proxies, setProxies] = React.useState<Proxy[]>([]);
+    const [managedEnabled, setManagedEnabled] = React.useState(false);
+    const [retrying, setRetrying] = React.useState<string | null>(null);
     const [loading, setLoading] = React.useState(true);
     const [isDeleteOpen, setIsDeleteOpen] = React.useState(false);
     const [selectedProxy, setSelectedProxy] = React.useState<Proxy | null>(null);
@@ -64,22 +66,26 @@ export default function ServerProxyPage() {
     const isMaxReached = proxies.length >= maxProxies && maxProxies > 0;
     const showHeaderCreateAction = canManage && proxies.length > 0;
 
-    const fetchData = React.useCallback(async () => {
-        if (!uuidShort || !proxyEnabled) return;
-        setLoading(true);
-        try {
-            const { data } = await axios.get<ProxiesResponse>(`/api/user/servers/${uuidShort}/proxy`);
+    const fetchData = React.useCallback(
+        async (background = false) => {
+            if (!uuidShort || !proxyEnabled) return;
+            if (!background) setLoading(true);
+            try {
+                const { data } = await axios.get<ProxiesResponse>(`/api/user/servers/${uuidShort}/proxy`);
 
-            if (data.success) {
-                setProxies(data.data.proxies);
+                if (data.success) {
+                    setProxies(data.data.proxies);
+                    setManagedEnabled(data.data.managed_enabled === true);
+                }
+            } catch (error) {
+                console.error('Failed to fetch proxy data:', error);
+                if (!background) toast.error(getApiErrorMessage(error, t, 'common.error'));
+            } finally {
+                if (!background) setLoading(false);
             }
-        } catch (error) {
-            console.error('Failed to fetch proxy data:', error);
-            toast.error(getApiErrorMessage(error, t, 'common.error'));
-        } finally {
-            setLoading(false);
-        }
-    }, [uuidShort, proxyEnabled, t]);
+        },
+        [uuidShort, proxyEnabled, t],
+    );
 
     React.useEffect(() => {
         if (proxyEnabled && canRead) {
@@ -89,6 +95,30 @@ export default function ServerProxyPage() {
             setLoading(false);
         }
     }, [fetchData, fetchWidgets, proxyEnabled, canRead]);
+
+    const pending = proxies.some((proxy) => proxy.status === 'queued' || proxy.status === 'working');
+    React.useEffect(() => {
+        if (!pending || !proxyEnabled || !canRead) return;
+        const timer = window.setInterval(() => void fetchData(true), 5000);
+        return () => window.clearInterval(timer);
+    }, [pending, proxyEnabled, canRead, fetchData]);
+
+    const retry = async (proxy: Proxy) => {
+        setRetrying(String(proxy.id));
+        try {
+            await axios.post(`/api/user/servers/${uuidShort}/proxy/create`, {
+                domain: proxy.domain,
+                port: proxy.port,
+                allocation_id: proxy.allocation_id,
+            });
+            toast.success(t('serverProxy.managedQueued'));
+            await fetchData(true);
+        } catch (error) {
+            toast.error(getApiErrorMessage(error, t, 'serverProxy.createFailed'));
+        } finally {
+            setRetrying(null);
+        }
+    };
 
     const handleDelete = async () => {
         if (!selectedProxy) return;
@@ -187,7 +217,7 @@ export default function ServerProxyPage() {
                         <Button
                             variant='glass'
                             size='default'
-                            onClick={fetchData}
+                            onClick={() => void fetchData()}
                             disabled={loading}
                             className='order-2 sm:order-1'
                             aria-label={t('serverProxy.refresh')}
@@ -271,6 +301,14 @@ export default function ServerProxyPage() {
                                     label: `:${proxy.port}`,
                                     className: 'bg-background/50 border border-border/40 opacity-80',
                                 },
+                                ...(proxy.managed && proxy.status
+                                    ? [
+                                          {
+                                              label: t(`serverProxy.managedStatus.${proxy.status}`),
+                                              className: 'bg-background/50 border border-border/40',
+                                          },
+                                      ]
+                                    : []),
                                 ...(proxy.ssl
                                     ? [
                                           {
@@ -284,6 +322,17 @@ export default function ServerProxyPage() {
                             actions={
                                 canManage && (
                                     <div className='flex items-center gap-3'>
+                                        {managedEnabled &&
+                                            proxy.managed &&
+                                            (proxy.status === 'failed' || proxy.status === 'unknown') && (
+                                                <Button
+                                                    variant='outline'
+                                                    disabled={retrying !== null}
+                                                    onClick={() => void retry(proxy)}
+                                                >
+                                                    {t('serverProxy.managedRetry')}
+                                                </Button>
+                                            )}
                                         <Button
                                             variant='destructive'
                                             onClick={() => promptDelete(proxy)}

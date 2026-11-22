@@ -2107,6 +2107,10 @@ class ServersController
             return ApiResponse::error('Server not found', 'SERVER_NOT_FOUND', 404);
         }
 
+        if (\App\Chat\ManagedProxy::getByServer($id) !== []) {
+            return ApiResponse::error('Remove managed proxies before deleting this server', 'REVERSE_PROXY_EDGE_ALLOCATION_IN_USE', 409);
+        }
+
         (new SubdomainCleanupService())->cleanupServerSubdomains((int) $server['id']);
 
         // Unclaim all allocations (primary + additional) before deleting the server
@@ -2258,6 +2262,10 @@ class ServersController
             if (in_array($server['id'], range(1, 10), true)) {
                 return ApiResponse::error('Unmanaged actions are not permitted in demo mode', 'UNMANAGED_ACTIONS_NOT_PERMITTED', 400);
             }
+        }
+
+        if (\App\Chat\ManagedProxy::getByServer($id) !== []) {
+            return ApiResponse::error('Remove managed proxies before deleting this server', 'REVERSE_PROXY_EDGE_ALLOCATION_IN_USE', 409);
         }
 
         (new SubdomainCleanupService())->cleanupServerSubdomains((int) $server['id']);

@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.5.6.4 (ServerPanel)
+
+- Added a configurable public NGINX connector for user-created HTTP/HTTPS proxies, with domain ownership checks and automatic TLS.
+
 ## v1.5.6.3 (ServerPanel)
 
 - Prefer assigned subdomains and allocation aliases in connection addresses and when copying allocation endpoints.

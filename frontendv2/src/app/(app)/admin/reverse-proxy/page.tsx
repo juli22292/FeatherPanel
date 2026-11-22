@@ -47,6 +47,9 @@ interface RuleDraft extends ProxyRule {
 const endpoint = '/api/admin/reverse-proxy';
 const maxRules = 40;
 
+type EdgeSettings = { enabled: boolean; ipv4: string; ipv6: string; email: string };
+const emptyEdge: EdgeSettings = { enabled: false, ipv4: '', ipv6: '', email: '' };
+
 export default function ReverseProxyPage() {
     const { t } = useTranslation();
     const { hasPermission } = useSession();
@@ -57,6 +60,9 @@ export default function ReverseProxyPage() {
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState(false);
     const [saving, setSaving] = useState(false);
+    const [edge, setEdge] = useState<EdgeSettings>(emptyEdge);
+    const [edgeAvailable, setEdgeAvailable] = useState(false);
+    const [edgeSaving, setEdgeSaving] = useState(false);
     const nextId = useRef(0);
 
     const toDrafts = useCallback(
@@ -68,9 +74,13 @@ export default function ReverseProxyPage() {
         setLoading(true);
         setLoadError(false);
         try {
-            const { data } = await axios.get<{ data: { rules: ProxyRule[]; spells: Spell[] } }>(endpoint);
+            const { data } = await axios.get<{
+                data: { rules: ProxyRule[]; spells: Spell[]; edge: EdgeSettings; edge_available: boolean };
+            }>(endpoint);
             setRules(toDrafts(data.data.rules));
             setSpells(data.data.spells);
+            setEdge(data.data.edge);
+            setEdgeAvailable(data.data.edge_available);
         } catch {
             setLoadError(true);
         } finally {
@@ -81,6 +91,21 @@ export default function ReverseProxyPage() {
     useEffect(() => {
         void load();
     }, [load]);
+
+    async function saveEdge(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        if (!canEdit || edgeSaving) return;
+        setEdgeSaving(true);
+        try {
+            const { data } = await axios.put<{ data: { edge: EdgeSettings } }>(endpoint + '/edge', edge);
+            setEdge(data.data.edge);
+            toast.success(t('reverse_proxy.edge_saved'));
+        } catch (error) {
+            toast.error(getApiErrorMessage(error, t, 'reverse_proxy.save_failed'));
+        } finally {
+            setEdgeSaving(false);
+        }
+    }
 
     function updateRule(id: number, change: Partial<RuleDraft>) {
         setRules((current) => current.map((rule) => (rule.rowId === id ? { ...rule, ...change } : rule)));
@@ -130,6 +155,51 @@ export default function ReverseProxyPage() {
                 description={t('reverse_proxy.description')}
                 icon={ArrowRightLeft}
             />
+            {!loading && !loadError && (
+                <PageCard title={t('reverse_proxy.edge_title')} icon={ArrowRightLeft}>
+                    <form onSubmit={saveEdge} className='space-y-4'>
+                        <p className='text-muted-foreground text-sm'>{t('reverse_proxy.edge_description')}</p>
+                        <p className={edgeAvailable ? 'text-sm text-emerald-500' : 'text-sm text-amber-500'}>
+                            {t(edgeAvailable ? 'reverse_proxy.edge_connected' : 'reverse_proxy.edge_unavailable')}
+                        </p>
+                        <label className='flex items-center gap-2 text-sm'>
+                            <input
+                                type='checkbox'
+                                checked={edge.enabled}
+                                disabled={!canEdit || edgeSaving}
+                                onChange={(event) => setEdge({ ...edge, enabled: event.target.checked })}
+                            />
+                            {t('reverse_proxy.edge_enable')}
+                        </label>
+                        <div className='grid gap-4 md:grid-cols-3'>
+                            <Input
+                                label={t('reverse_proxy.edge_ipv4')}
+                                value={edge.ipv4}
+                                disabled={!canEdit || edgeSaving}
+                                onChange={(event) => setEdge({ ...edge, ipv4: event.target.value })}
+                            />
+                            <Input
+                                label={t('reverse_proxy.edge_ipv6')}
+                                value={edge.ipv6}
+                                disabled={!canEdit || edgeSaving}
+                                onChange={(event) => setEdge({ ...edge, ipv6: event.target.value })}
+                            />
+                            <Input
+                                type='email'
+                                label={t('reverse_proxy.edge_email')}
+                                value={edge.email}
+                                disabled={!canEdit || edgeSaving}
+                                onChange={(event) => setEdge({ ...edge, email: event.target.value })}
+                            />
+                        </div>
+                        {canEdit && (
+                            <Button type='submit' disabled={edgeSaving}>
+                                {t('reverse_proxy.edge_save')}
+                            </Button>
+                        )}
+                    </form>
+                </PageCard>
+            )}
             <PageCard title={t('reverse_proxy.rules')} icon={ArrowRightLeft}>
                 {loading ? (
                     <Loader2

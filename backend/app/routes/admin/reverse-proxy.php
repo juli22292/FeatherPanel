@@ -41,4 +41,12 @@ return function (RouteCollection $routes): void {
         Permissions::ADMIN_SETTINGS_EDIT,
         ['PUT'],
     );
+    $app->registerAdminRoute(
+        $routes,
+        'admin-reverse-proxy-edge-edit',
+        '/api/admin/reverse-proxy/edge',
+        fn (Request $request) => (new ReverseProxyController())->updateEdge($request),
+        Permissions::ADMIN_SETTINGS_EDIT,
+        ['PUT'],
+    );
 };

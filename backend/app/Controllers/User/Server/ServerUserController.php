@@ -2491,6 +2491,10 @@ class ServerUserController
             return ApiResponse::error('Only server owners can delete servers', 'PERMISSION_DENIED', 403);
         }
 
+        if (\App\Chat\ManagedProxy::getByServer((int) $server['id']) !== []) {
+            return ApiResponse::error('Remove managed proxies before deleting this server', 'REVERSE_PROXY_EDGE_ALLOCATION_IN_USE', 409);
+        }
+
         // Clean up subdomains
         (new SubdomainCleanupService())->cleanupServerSubdomains((int) $server['id']);
 

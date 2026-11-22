@@ -465,6 +465,7 @@ export interface AllocationsResponse {
         };
         allocations: AllocationItem[];
         node?: { public_ip_v4?: string | null };
+        managed_proxy?: boolean;
     };
     message?: string;
 }
@@ -511,11 +512,14 @@ export interface FirewallRulesResponse {
 }
 
 export interface Proxy {
-    id: number;
+    id: number | string;
     server_id: number;
     domain: string;
     ip: string;
     port: number;
+    allocation_id?: number;
+    managed?: boolean;
+    status?: 'queued' | 'working' | 'active' | 'failed' | 'deleting' | 'unknown';
     ssl: boolean;
     use_lets_encrypt: boolean;
     client_email?: string | null;
@@ -540,6 +544,7 @@ export interface ProxiesResponse {
     success: boolean;
     data: {
         proxies: Proxy[];
+        managed_enabled?: boolean;
     };
     message?: string;
 }
@@ -549,6 +554,12 @@ export interface DnsVerifyResponse {
     data: {
         verified: boolean;
         expected_ip?: string;
+        expected_ips?: string[];
+        managed?: boolean;
+        address_verified?: boolean;
+        ownership_verified?: boolean;
+        txt_name?: string;
+        txt_value?: string;
         message?: string;
     };
     message?: string;
