@@ -79,7 +79,7 @@ final class KvmGuestAccess
     {
         $command = <<<'SH'
 test "$(uname -s)" = Linux || exit 2
-read -r guest < /etc/machine-id || exit 2
+guest=$(cat /etc/machine-id) || exit 2
 printf 'guest:%s\n' "$guest"
 if test -f /var/lib/cloud/instance/boot-finished; then printf 'cloud:ready\n'; fi
 min=$(awk '$1 == "UID_MIN" && $2 ~ /^[0-9]+$/ {print $2; exit}' /etc/login.defs 2>/dev/null)
@@ -103,7 +103,7 @@ if test -x /usr/sbin/sshd; then
     /usr/sbin/sshd -T 2>/dev/null | awk '$1 == "port" {print "port:" $2}'
 fi
 SH;
-        $output = $this->execute(['/bin/sh', '-c', $command]);
+        $output = $this->execute($command);
 
         return $output === null ? null : self::parseInventory($output);
     }
@@ -151,12 +151,12 @@ chpasswd -e
 SH;
 
         // The login name is a positional parameter. Pass the secret only on stdin.
-        return $this->execute(['/bin/sh', '-c', $command, 'serverpanel-useradd', $username], $username . ':' . $hash . "\n") !== null;
+        return $this->execute($command, [$username], $username . ':' . $hash . "\n") !== null;
     }
 
-    private function execute(array $command, ?string $input = null): ?string
+    private function execute(string $script, array $arguments = [], ?string $input = null): ?string
     {
-        $body = ['command' => $command];
+        $body = ['command' => ['/bin/sh', '-c', str_replace("\r\n", "\n", $script), 'serverpanel-guest', ...$arguments]];
         if ($input !== null) {
             $body['input-data'] = $input;
         }
