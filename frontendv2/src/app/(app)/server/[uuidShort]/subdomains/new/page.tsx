@@ -102,11 +102,16 @@ export default function CreateSubdomainPage() {
 
         setSaving(true);
         try {
-            await axios.put(`/api/user/servers/${uuidShort}/subdomains`, {
-                domain_uuid: formData.domain_uuid,
-                subdomain: formData.subdomain.trim(),
-            });
-            toast.success(t('subdomainRequests.submitted'));
+            const { data } = await axios.put<{ data: { approval_bypassed?: boolean } }>(
+                `/api/user/servers/${uuidShort}/subdomains`,
+                {
+                    domain_uuid: formData.domain_uuid,
+                    subdomain: formData.subdomain.trim(),
+                },
+            );
+            toast.success(
+                data.data?.approval_bypassed ? t('subdomainRequests.bypassed') : t('subdomainRequests.submitted'),
+            );
             router.push(`/server/${uuidShort}/subdomains`);
         } catch (error) {
             const axiosError = error as AxiosError<{ message: string }>;
@@ -159,7 +164,8 @@ export default function CreateSubdomainPage() {
 
     const availableDomains = overview?.domains || [];
     const limitReached =
-        (overview?.current_total ?? 0) + (overview?.pending_total ?? 0) >= (overview?.max_allowed ?? 0);
+        (overview?.current_total ?? 0) + (overview?.can_bypass_approval ? 0 : (overview?.pending_total ?? 0)) >=
+        (overview?.max_allowed ?? 0);
 
     if (availableDomains.length === 0 && !loading) {
         return (

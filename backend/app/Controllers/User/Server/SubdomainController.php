@@ -18,6 +18,9 @@
 namespace App\Controllers\User\Server;
 
 use App\App;
+use App\Permissions;
+use App\Chat\Database;
+use App\Helpers\PermissionHelper;
 use App\Chat\Node;
 use App\Chat\Subdomain;
 use App\Chat\Allocation;
@@ -89,8 +92,8 @@ class SubdomainController
     )]
     public function index(Request $request, array $server): Response
     {
-        $permission = $this->checkPermission($request, $server, SubuserPermissions::SUBDOMAIN_MANAGE);
-        if ($permission !== null) {
+        $canBypassApproval = $this->canBypassApproval($request);
+        if (!$canBypassApproval && ($permission = $this->checkPermission($request, $server, SubuserPermissions::SUBDOMAIN_MANAGE)) !== null) {
             return $permission;
         }
 
@@ -116,7 +119,7 @@ class SubdomainController
                 'weight' => $mapping['weight'] ?? 1,
                 'ttl' => $mapping['ttl'] ?? 120,
             ];
-        }, SubdomainRequest::allowsSpell((int) $server['spell_id']) ? SubdomainDomain::getActiveDomainsForSpell((int) $server['spell_id']) : []);
+        }, ($canBypassApproval || SubdomainRequest::allowsSpell((int) $server['spell_id'])) ? SubdomainDomain::getActiveDomainsForSpell((int) $server['spell_id']) : []);
 
         $subdomains = array_map(function (array $entry): array {
             $domain = SubdomainDomain::getDomainById((int) $entry['domain_id']);
@@ -136,6 +139,7 @@ class SubdomainController
                 'max_allowed' => $maxAllowed,
                 'current_total' => count($subdomains),
                 'pending_total' => SubdomainRequest::pendingCount((int) $server['id']),
+                'can_bypass_approval' => $canBypassApproval,
                 'domains' => $domains,
                 'subdomains' => $subdomains,
                 'requests' => SubdomainRequest::forServer((int) $server['id']),
@@ -158,6 +162,7 @@ class SubdomainController
             )
         ),
         responses: [
+            new OA\Response(response: 201, description: 'Subdomain created by a root administrator'),
             new OA\Response(response: 202, description: 'Subdomain request is pending approval'),
             new OA\Response(response: 400, description: 'Validation failed'),
             new OA\Response(response: 403, description: 'Forbidden'),
@@ -166,8 +171,8 @@ class SubdomainController
     )]
     public function create(Request $request, array $server): Response
     {
-        $permission = $this->checkPermission($request, $server, SubuserPermissions::SUBDOMAIN_MANAGE);
-        if ($permission !== null) {
+        $canBypassApproval = $this->canBypassApproval($request);
+        if (!$canBypassApproval && ($permission = $this->checkPermission($request, $server, SubuserPermissions::SUBDOMAIN_MANAGE)) !== null) {
             return $permission;
         }
 
@@ -184,7 +189,48 @@ class SubdomainController
         $domainUuid = is_string($payload['domain_uuid'] ?? null) ? trim($payload['domain_uuid']) : '';
         $label = is_string($payload['subdomain'] ?? null) ? strtolower(trim($payload['subdomain'])) : '';
 
-        return $this->processRequest($request, $server, $domainUuid, $label, false);
+        return $canBypassApproval
+            ? $this->provisionDirectly($request, $server, $domainUuid, $label)
+            : $this->processRequest($request, $server, $domainUuid, $label, false);
+    }
+
+    private function canBypassApproval(Request $request): bool
+    {
+        $user = $request->attributes->get('user');
+        $uuid = $user['uuid'] ?? '';
+
+        return $uuid !== '' && PermissionHelper::hasPermission($uuid, Permissions::ADMIN_ROOT, $user);
+    }
+
+    private function provisionDirectly(Request $request, array $server, string $domainUuid, string $label): Response
+    {
+        $db = Database::getPdoConnection();
+        $db->beginTransaction();
+        try {
+            if (!SubdomainRequest::lockServer($db, (int) $server['id'])) {
+                return ApiResponse::error('Server not found', 'SERVER_NOT_FOUND', 404);
+            }
+            $response = $this->processRequest($request, $server, $domainUuid, $label, true, true);
+            if ($response->getStatusCode() !== Response::HTTP_CREATED) {
+                return $response;
+            }
+            $db->commit();
+        } finally {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+        }
+
+        try {
+            $domain = SubdomainDomain::getDomainByUuid($domainUuid);
+            if ($domain !== null) {
+                $this->notifyApproved($request, $server, $domain, $label);
+            }
+        } catch (\Throwable $error) {
+            App::getInstance(true)->getLogger()->error('Could not notify listeners of created subdomain: ' . $error->getMessage());
+        }
+
+        return $response;
     }
 
     public function provisionApproved(Request $request, array $server, string $domainUuid, string $label): Response
@@ -192,9 +238,9 @@ class SubdomainController
         return $this->processRequest($request, $server, $domainUuid, $label, true);
     }
 
-    private function processRequest(Request $request, array $server, string $domainUuid, string $label, bool $approved): Response
+    private function processRequest(Request $request, array $server, string $domainUuid, string $label, bool $approved, bool $approvalBypassed = false): Response
     {
-        if (!$this->isSubdomainManagementEnabled() || !SubdomainRequest::allowsSpell((int) $server['spell_id'])) {
+        if (!$this->isSubdomainManagementEnabled() || (!$approvalBypassed && !SubdomainRequest::allowsSpell((int) $server['spell_id']))) {
             return ApiResponse::error('Subdomain requests are disabled for this server spell', 'DOMAIN_NOT_ALLOWED', Response::HTTP_FORBIDDEN);
         }
 
@@ -211,7 +257,18 @@ class SubdomainController
             return ApiResponse::error('Domain not found or inactive', 'DOMAIN_NOT_AVAILABLE', Response::HTTP_NOT_FOUND);
         }
 
-        $mapping = $this->getSpellMappingForDomain((int) $domain['id'], (int) $server['spell_id']);
+        $domainId = (int) $domain['id'];
+        if ($approvalBypassed) {
+            $db = Database::getPdoConnection();
+            if (!SubdomainRequest::lockDomain($db, $domainId)) {
+                return ApiResponse::error('Domain not found or inactive', 'DOMAIN_NOT_AVAILABLE', Response::HTTP_NOT_FOUND);
+            }
+            if (SubdomainRequest::hasPendingLabel($db, $domainId, $label)) {
+                return ApiResponse::error('This subdomain is already reserved', 'SUBDOMAIN_EXISTS', Response::HTTP_CONFLICT);
+            }
+        }
+
+        $mapping = $this->getSpellMappingForDomain($domainId, (int) $server['spell_id']);
         if ($mapping === null) {
             return ApiResponse::error('Domain is not available for this server spell', 'DOMAIN_NOT_ALLOWED', Response::HTTP_BAD_REQUEST);
         }
@@ -383,6 +440,7 @@ class SubdomainController
 
         return ApiResponse::success([
             'subdomain' => $formatted,
+            'approval_bypassed' => $approvalBypassed,
         ], 'Subdomain created successfully', Response::HTTP_CREATED);
     }
 
@@ -426,8 +484,8 @@ class SubdomainController
     )]
     public function delete(Request $request, array $server, string $uuid): Response
     {
-        $permission = $this->checkPermission($request, $server, SubuserPermissions::SUBDOMAIN_MANAGE);
-        if ($permission !== null) {
+        $canBypassApproval = $this->canBypassApproval($request);
+        if (!$canBypassApproval && ($permission = $this->checkPermission($request, $server, SubuserPermissions::SUBDOMAIN_MANAGE)) !== null) {
             return $permission;
         }
 

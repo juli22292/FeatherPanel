@@ -98,7 +98,7 @@ final class SubdomainRequest
              FROM featherpanel_subdomain_requests r
              JOIN featherpanel_subdomain_manager_domains d ON d.id = r.domain_id
              JOIN featherpanel_servers s ON s.id = r.server_id
-             LEFT JOIN featherpanel_users u ON u.uuid = r.requester_uuid'
+             LEFT JOIN featherpanel_users u ON u.uuid = r.requester_uuid COLLATE utf8mb4_general_ci'
             . $filter . ' ORDER BY r.id DESC LIMIT 50 OFFSET ' . $offset
         );
         $stmt->execute($params);
@@ -114,12 +114,28 @@ final class SubdomainRequest
         return $stmt->fetchColumn() !== false;
     }
 
+    public static function lockDomain(\PDO $db, int $id): bool
+    {
+        $stmt = $db->prepare('SELECT id FROM featherpanel_subdomain_manager_domains WHERE id = ? FOR UPDATE');
+        $stmt->execute([$id]);
+
+        return $stmt->fetchColumn() !== false;
+    }
+
+    public static function hasPendingLabel(\PDO $db, int $domainId, string $label): bool
+    {
+        $stmt = $db->prepare('SELECT 1 FROM featherpanel_subdomain_requests WHERE domain_id = ? AND pending_label = ? FOR UPDATE');
+        $stmt->execute([$domainId, $label]);
+
+        return $stmt->fetchColumn() !== false;
+    }
+
     public static function enqueue(int $serverId, int $domainId, string $label, string $requester, int $limit): int
     {
         $db = Database::getPdoConnection();
         $db->beginTransaction();
         try {
-            if (!self::lockServer($db, $serverId)) {
+            if (!self::lockServer($db, $serverId) || !self::lockDomain($db, $domainId)) {
                 return 0;
             }
             if (Subdomain::countByServer($serverId) + self::pendingCount($serverId) >= $limit) {

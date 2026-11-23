@@ -507,6 +507,7 @@ interface ConfigInterface
      * Knowledgebase Settings.
      */
     public const KNOWLEDGEBASE_ENABLED = 'knowledgebase_enabled';
+    public const CHANGELOGS_ENABLED = 'changelogs_enabled';
 
     /**
      * Panel modules. Each one can be switched off by an admin; missing values mean enabled.

@@ -72,13 +72,15 @@ final class SubdomainRequestsController
         $reviewer = $request->attributes->get('user');
 
         $db = Database::getPdoConnection();
-        $lookup = $db->prepare('SELECT server_id FROM featherpanel_subdomain_requests WHERE id = ?');
+        $lookup = $db->prepare('SELECT server_id, domain_id FROM featherpanel_subdomain_requests WHERE id = ?');
         $lookup->execute([$id]);
-        $serverId = (int) $lookup->fetchColumn();
+        $target = $lookup->fetch(\PDO::FETCH_ASSOC);
+        $serverId = (int) ($target['server_id'] ?? 0);
+        $domainId = (int) ($target['domain_id'] ?? 0);
 
         $db->beginTransaction();
         try {
-            if (!$serverId || !SubdomainRequest::lockServer($db, $serverId)) {
+            if (!$serverId || !SubdomainRequest::lockServer($db, $serverId) || !SubdomainRequest::lockDomain($db, $domainId)) {
                 return ApiResponse::error('Subdomain request not found', 'SUBDOMAIN_NOT_FOUND', 404);
             }
             $stmt = $db->prepare('SELECT * FROM featherpanel_subdomain_requests WHERE id = ? FOR UPDATE');

@@ -406,7 +406,9 @@ export default function VdsConsolePage() {
         ? vmStatus.maxdisk / MiB
         : (instance.plan_disk ?? instance.disk_gb ?? 0) * 1024;
     const uptime = vmStatus?.uptime ? formatUptime(vmStatus.uptime) : undefined;
-    const canViewAccessPassword = Boolean(instance.is_owner && instance.access_password);
+    const canViewAccessPassword = Boolean(
+        (instance.is_owner || instance.can_view_guest_passwords) && instance.access_password,
+    );
     const networkRxRate = networkRxData.length ? networkRxData[networkRxData.length - 1].value : 0;
     const networkTxRate = networkTxData.length ? networkTxData[networkTxData.length - 1].value : 0;
     const networkRxTotal = vmStatus?.netin ?? 0;

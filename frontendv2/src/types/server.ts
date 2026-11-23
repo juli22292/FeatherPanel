@@ -594,6 +594,7 @@ export interface SubdomainRequestEntry {
 }
 
 export interface SubdomainOverview {
+    can_bypass_approval?: boolean;
     requests?: SubdomainRequestEntry[];
     pending_total?: number;
     current_total: number;

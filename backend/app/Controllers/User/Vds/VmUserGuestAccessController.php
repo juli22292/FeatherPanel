@@ -20,6 +20,8 @@ declare(strict_types=1);
 namespace App\Controllers\User\Vds;
 
 use App\App;
+use App\Permissions;
+use App\Helpers\PermissionHelper;
 use App\Chat\User;
 use App\Chat\Database;
 use App\Helpers\VmGateway;
@@ -39,9 +41,10 @@ final class VmUserGuestAccessController
         $uuid = $user['uuid'] ?? '';
         $isOwner = $uuid !== '' && ($instance['user_uuid'] ?? null) === $uuid;
         $readOnly = $request->isMethod('GET');
+        $isRoot = $uuid !== '' && PermissionHelper::hasPermission($uuid, Permissions::ADMIN_ROOT, $user);
         if (!is_array($instance) || !in_array($instance['vm_type'] ?? null, ['qemu', 'lxc'], true)
-            || (!$isOwner && (!$readOnly || $uuid === '' || !VmGateway::hasAdminAccess($uuid)))) {
-            return ApiResponse::error('Only the owner can manage guest accounts for this instance', 'PERMISSION_DENIED', 403);
+            || (!$isOwner && !$isRoot && (!$readOnly || $uuid === '' || !VmGateway::hasAdminAccess($uuid)))) {
+            return ApiResponse::error('You do not have access to guest accounts for this instance', 'PERMISSION_DENIED', 403);
         }
 
         $db = Database::getPdoConnection();
@@ -49,7 +52,9 @@ final class VmUserGuestAccessController
             $guest = VmGuestAccounts::connect($instance)?->inspect();
             $owner = $isOwner ? $user : (empty($instance['user_uuid']) ? [] : (User::getUserByUuid($instance['user_uuid']) ?? []));
             [$preferred, $pending] = self::preferredAccount($db, $instance, $owner, $guest);
-            $passwords = !$isOwner || $guest === null ? [] : VmGuestAccounts::passwords($db, $instance, $guest);
+            $passwords = ($isOwner || $isRoot) && $guest !== null
+                ? VmGuestAccounts::passwords($db, $instance, $guest)
+                : [];
             $accounts = [];
             foreach ($guest['accounts'] ?? [] as $name => $uid) {
                 $name = (string) $name;
@@ -79,13 +84,16 @@ final class VmUserGuestAccessController
             !preg_match('/^[a-zA-Z0-9_][a-zA-Z0-9_.@-]{0,62}\$?$/D', $name)) {
             return ApiResponse::error('Invalid guest account or action', 'VALIDATION_FAILED', 422);
         }
+        if (!$isOwner && $action !== 'reveal') {
+            return ApiResponse::error('Only the owner can change guest accounts for this instance', 'PERMISSION_DENIED', 403);
+        }
         if ($reauth = VdsReauth::check($request, 'guest_access')) {
             return $reauth;
         }
 
         $db->beginTransaction();
         try {
-            $vm = VmGuestAccounts::lockInstance($db, (int) $instance['id'], $user['uuid']);
+            $vm = VmGuestAccounts::lockInstance($db, (int) $instance['id'], (string) ($instance['user_uuid'] ?? ''));
             if (!$vm) {
                 return ApiResponse::error('The instance is currently unavailable', 'PERMISSION_DENIED', 403);
             }

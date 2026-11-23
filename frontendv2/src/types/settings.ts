@@ -14,6 +14,7 @@ See the LICENSE file or <https://www.gnu.org/licenses/>.
 */
 
 export interface AppSettings {
+    changelogs_enabled?: string;
     app_developer_mode: string;
     /** When 'true', this panel is a public demo instance (wipes, limited features). */
     app_demo_yes?: string;

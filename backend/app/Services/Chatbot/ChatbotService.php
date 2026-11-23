@@ -98,7 +98,7 @@ class ChatbotService
         $conversationMemory = $pageContext['conversation_memory'] ?? '';
 
         // Combine system prompts
-        $systemPrompt = $baseSystemPrompt;
+        $systemPrompt = ChatbotRuntime::brandPrompt($baseSystemPrompt, $this->config);
         if (!empty($adminSystemPrompt)) {
             $systemPrompt .= "\n\n## Additional Instructions\n{$adminSystemPrompt}";
         }

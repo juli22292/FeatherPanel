@@ -63,10 +63,28 @@ export default function ServerInfoPage() {
         );
     }
 
-    return <GuestAccounts key={id} id={id} guestType={instance.vm_type} canManage={instance.is_owner === true} />;
+    return (
+        <GuestAccounts
+            key={id}
+            id={id}
+            guestType={instance.vm_type}
+            canManage={instance.is_owner === true}
+            canViewPasswords={Boolean(instance.is_owner || instance.can_view_guest_passwords)}
+        />
+    );
 }
 
-function GuestAccounts({ id, guestType, canManage }: { id: string; guestType: 'qemu' | 'lxc'; canManage: boolean }) {
+function GuestAccounts({
+    id,
+    guestType,
+    canManage,
+    canViewPasswords,
+}: {
+    id: string;
+    guestType: 'qemu' | 'lxc';
+    canManage: boolean;
+    canViewPasswords: boolean;
+}) {
     const { t } = useTranslation();
     const withReauth = useVdsReauth();
     const endpoint = '/api/user/vm-instances/' + id + '/guest-access';
@@ -216,7 +234,7 @@ function GuestAccounts({ id, guestType, canManage }: { id: string; guestType: 'q
                                                 <p className='font-mono break-all'>{account.username}</p>
                                                 <p className='text-muted-foreground text-xs'>{label}</p>
                                             </div>
-                                            {canManage && (
+                                            {canViewPasswords && (
                                                 <>
                                                     <span className='text-muted-foreground font-mono text-sm break-all'>
                                                         {show
@@ -246,13 +264,15 @@ function GuestAccounts({ id, guestType, canManage }: { id: string; guestType: 'q
                                                                     : t('vds.guestAccess.show')}
                                                             </Button>
                                                         )}
-                                                        <Button
-                                                            variant='outline'
-                                                            disabled={loading || busy}
-                                                            onClick={() => setReset(account.username)}
-                                                        >
-                                                            {t('vds.guestAccess.reset')}
-                                                        </Button>
+                                                        {canManage && (
+                                                            <Button
+                                                                variant='outline'
+                                                                disabled={loading || busy}
+                                                                onClick={() => setReset(account.username)}
+                                                            >
+                                                                {t('vds.guestAccess.reset')}
+                                                            </Button>
+                                                        )}
                                                     </div>
                                                 </>
                                             )}

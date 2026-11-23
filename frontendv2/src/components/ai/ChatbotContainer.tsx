@@ -1415,7 +1415,7 @@ export default function ChatbotContainer({ open, onClose, mode = 'server', vdsIn
                                                                             <div className='mb-1 flex items-center gap-2'>
                                                                                 <span className='text-foreground text-xs font-medium'>
                                                                                     {message.role === 'assistant'
-                                                                                        ? t('chatbot.assistant')
+                                                                                        ? assistantName
                                                                                         : user?.first_name ||
                                                                                           user?.username ||
                                                                                           t('chatbot.you')}

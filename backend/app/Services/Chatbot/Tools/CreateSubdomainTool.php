@@ -91,7 +91,7 @@ class CreateSubdomainTool implements ToolInterface
         $result = json_decode((string) $response->getContent(), true);
 
         return [
-            'success' => $response->getStatusCode() === 202,
+            'success' => in_array($response->getStatusCode(), [201, 202], true),
             'message' => $result['message'] ?? '',
             'error' => $result['error_message'] ?? null,
             'data' => $result['data'] ?? null,

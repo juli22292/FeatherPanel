@@ -634,6 +634,17 @@ const buildAdminNavigationItems = (
             group: 'system',
         },
         {
+            id: 'admin-changelog-settings',
+            name: t('changelogs.settings'),
+            title: t('changelogs.settings'),
+            url: '/admin/changelog-settings',
+            icon: ScrollText,
+            isActive: false,
+            category: 'admin',
+            permission: Permissions.ADMIN_SETTINGS_VIEW,
+            group: 'system',
+        },
+        {
             id: 'admin-audit-log',
             name: t('navigation.items.auditLog'),
             title: t('navigation.items.auditLog'),
@@ -861,6 +872,7 @@ const buildAdminNavigationItems = (
             'admin-feathercloud-ai-agent',
             'admin-storage-sense',
             'admin-reverse-proxy',
+            'admin-changelog-settings',
             'admin-dev-plugins',
             'admin-dev-console',
             'admin-updates',
@@ -1209,6 +1221,19 @@ const buildMainNavigationItems = (
             url: '/dashboard/knowledgebase',
             icon: BookOpen,
             lucideIcon: 'book-open',
+            isActive: false,
+            category: 'main',
+            group: 'support',
+        });
+    }
+
+    if (isEnabled(settings?.changelogs_enabled ?? 'true')) {
+        items.push({
+            id: 'changelogs',
+            name: t('changelogs.title'),
+            title: t('changelogs.title'),
+            url: '/dashboard/changelogs',
+            icon: ScrollText,
             isActive: false,
             category: 'main',
             group: 'support',

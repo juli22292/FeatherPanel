@@ -18,6 +18,8 @@
 namespace App\Controllers\User\Vds;
 
 use App\App;
+use App\Permissions;
+use App\Helpers\PermissionHelper;
 use App\Chat\VmIp;
 use App\Chat\VmNode;
 use App\Chat\VmTask;
@@ -191,8 +193,10 @@ class VmUserInstanceController
         $isPanelVmAdmin = VmGateway::hasAdminAccess($user['uuid']);
         $vmInstance['can_view_subusers'] = $vmInstance['is_owner'] || $isPanelVmAdmin;
         $vmInstance['can_view_guest_accounts'] = $vmInstance['is_owner'] || $isPanelVmAdmin;
+        $isRoot = PermissionHelper::hasPermission($user['uuid'], Permissions::ADMIN_ROOT, $user);
+        $vmInstance['can_view_guest_passwords'] = $vmInstance['is_owner'] || $isRoot;
 
-        if ($vmInstance['is_owner']) {
+        if ($vmInstance['is_owner'] || $isRoot) {
             $vmInstance['permissions'] = $fullPerms;
         } elseif ($vmInstance['is_subuser']) {
             $decoded = $subuser ? json_decode($subuser['permissions'] ?? '[]', true) : [];
@@ -204,13 +208,13 @@ class VmUserInstanceController
             $vmInstance['permissions'] = [];
         }
 
-        $vmInstance['access_password'] = $vmInstance['is_owner']
+        $vmInstance['access_password'] = $vmInstance['can_view_guest_passwords']
             ? self::resolveAccessPassword($vmInstance)
             : null;
 
         // `notes` carries the cloud-init credentials ({notes, ci_user, ci_password}).
         // Subusers must only see the free-text note, never the guest password.
-        if (empty($vmInstance['is_owner']) && isset($vmInstance['notes'])) {
+        if (!$vmInstance['can_view_guest_passwords'] && isset($vmInstance['notes'])) {
             $decodedNotes = json_decode((string) $vmInstance['notes'], true);
             $vmInstance['notes'] = is_array($decodedNotes)
                 ? (string) ($decodedNotes['notes'] ?? '')

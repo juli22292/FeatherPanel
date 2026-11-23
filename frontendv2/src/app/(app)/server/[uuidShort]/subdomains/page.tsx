@@ -153,7 +153,8 @@ export default function ServerSubdomainsPage() {
     }
 
     const limitReached =
-        (overview?.current_total ?? 0) + (overview?.pending_total ?? 0) >= (overview?.max_allowed ?? 0);
+        (overview?.current_total ?? 0) + (overview?.can_bypass_approval ? 0 : (overview?.pending_total ?? 0)) >=
+        (overview?.max_allowed ?? 0);
     const canRequest = (overview?.domains.length ?? 0) > 0;
     const showHeaderCreateAction = canRequest && !limitReached && subdomains.length > 0;
     const requestStatusLabels = {

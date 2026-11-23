@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.5.6.8 (Early Beta)
+
+- Added the fork release history under Support and an editor under System > Changelog Settings.
+- Fixed the admin subdomain request list. Root administrators can create mapped subdomains directly.
+- Root administrators can view stored VDS credentials with the existing confirmation step for guest account passwords.
+- The live AI chat uses the configured assistant name and panel branding.
+
 ## v1.5.6.7 (ServerPanel)
 
 - Show VDS connection details and guest account names to administrators with VDS access. Password actions stay available to the guest owner.

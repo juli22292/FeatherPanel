@@ -17,8 +17,21 @@
 
 namespace App\Services\Chatbot;
 
+use App\Config\ConfigFactory;
+use App\Config\ConfigInterface;
+
 class ChatbotRuntime
 {
+    public static function brandPrompt(string $prompt, ConfigFactory $config): string
+    {
+        $panel = trim((string) $config->getSetting(ConfigInterface::APP_NAME, ConfigInterface::PANEL_BRAND))
+            ?: ConfigInterface::PANEL_BRAND;
+        $assistant = trim((string) $config->getSetting(ConfigInterface::CHATBOT_DISPLAY_NAME, ''))
+            ?: $panel . ' AI';
+
+        return strtr($prompt, ['{{assistant_name}}' => $assistant, '{{panel_name}}' => $panel]);
+    }
+
     public static function emit(?callable $emit, string $type, array $payload = []): void
     {
         if ($emit === null) {
