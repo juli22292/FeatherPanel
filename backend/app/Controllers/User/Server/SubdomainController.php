@@ -134,7 +134,8 @@ class SubdomainController
         return ApiResponse::success([
             'overview' => [
                 'max_allowed' => $maxAllowed,
-+$subdomains),
+                'current_total' => count($subdomains),
+                'pending_total' => SubdomainRequest::pendingCount((int) $server['id']),
                 'domains' => $domains,
                 'subdomains' => $subdomains,
                 'requests' => SubdomainRequest::forServer((int) $server['id']),
