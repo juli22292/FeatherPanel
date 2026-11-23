@@ -22,12 +22,19 @@ use App\Config\ConfigInterface;
 
 class ChatbotRuntime
 {
+    public static function branding(?ConfigFactory $config): array
+    {
+        $panel = trim((string) $config?->getSetting(ConfigInterface::APP_NAME, ConfigInterface::PANEL_BRAND))
+            ?: ConfigInterface::PANEL_BRAND;
+        $assistant = trim((string) $config?->getSetting(ConfigInterface::CHATBOT_DISPLAY_NAME, ''))
+            ?: $panel . ' AI';
+
+        return [$panel, $assistant];
+    }
+
     public static function brandPrompt(string $prompt, ConfigFactory $config): string
     {
-        $panel = trim((string) $config->getSetting(ConfigInterface::APP_NAME, ConfigInterface::PANEL_BRAND))
-            ?: ConfigInterface::PANEL_BRAND;
-        $assistant = trim((string) $config->getSetting(ConfigInterface::CHATBOT_DISPLAY_NAME, ''))
-            ?: $panel . ' AI';
+        [$panel, $assistant] = self::branding($config);
 
         return strtr($prompt, ['{{assistant_name}}' => $assistant, '{{panel_name}}' => $panel]);
     }

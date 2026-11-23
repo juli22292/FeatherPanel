@@ -18,10 +18,20 @@
 namespace App\Services\Chatbot\Providers;
 
 use App\App;
+use App\Config\ConfigFactory;
+use App\Services\Chatbot\ChatbotRuntime;
 use App\Services\Chatbot\TokenUsage;
 
 class BasicProvider implements ProviderInterface
 {
+    private readonly string $panelName;
+    private readonly string $assistantName;
+
+    public function __construct(?ConfigFactory $config = null)
+    {
+        [$this->panelName, $this->assistantName] = ChatbotRuntime::branding($config);
+    }
+
     /**
      * Process a user message and generate a basic keyword-based response.
      *
@@ -43,8 +53,8 @@ class BasicProvider implements ProviderInterface
 
         if (strpos($lowerMessage, 'hello') !== false || strpos($lowerMessage, 'hi') !== false) {
             $hello = $isDemo
-                ? "Hello! I'm Feather Demo AI - a basic chatbot with no external API key. Explore the panel, but remember this demo wipes and some actions are limited."
-                : "Hello! I'm your AI assistant for FeatherPanel. How can I help you today?";
+                ? "Hello! I'm {$this->assistantName}, a basic chatbot with no external API key. Explore the panel, but remember this demo wipes and some actions are limited."
+                : "Hello! I'm {$this->assistantName}, your assistant for {$this->panelName}. How can I help you today?";
 
             return $this->response($message, $hello);
         }
@@ -52,12 +62,12 @@ class BasicProvider implements ProviderInterface
         if (strpos($lowerMessage, 'demo') !== false || strpos($lowerMessage, 'wipe') !== false) {
             return $this->response(
                 $message,
-                "You're on the public FeatherPanel demo. It wipes on a schedule. Cloud linking, SMTP, secrets, plugin installs, developer console, and DB snapshots are disabled. Features like trash bin, status page, tickets, and this chatbot are enabled for showcase only - not production configs."
+                "You're on the public {$this->panelName} demo. It wipes on a schedule. Cloud linking, SMTP, secrets, plugin installs, developer console, and DB snapshots are disabled. Features like trash bin, status page, tickets, and this chatbot are enabled for showcase only - not production configs."
             );
         }
 
         if (strpos($lowerMessage, 'help') !== false) {
-            return $this->response($message, "I can help you with various FeatherPanel tasks:\n\n" .
+            return $this->response($message, "I can help you with tasks in {$this->panelName}:\n\n" .
                 "• Server management\n" .
                 "• Configuration questions\n" .
                 "• General panel information\n" .
@@ -92,7 +102,7 @@ class BasicProvider implements ProviderInterface
     {
         return [
             'response' => $output,
-            'model' => 'FeatherPanel AI',
+            'model' => $this->assistantName,
             'usage' => TokenUsage::estimate($input, $output),
         ];
     }

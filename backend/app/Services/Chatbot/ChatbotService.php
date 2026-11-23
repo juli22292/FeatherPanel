@@ -791,7 +791,7 @@ class ChatbotService
 
             case 'basic':
             default:
-                return new BasicProvider();
+                return new BasicProvider($this->config);
         }
     }
 }
