@@ -109,7 +109,7 @@ class ServerProxyController
 
         // Check if user-made proxy is enabled
         $proxyEnabled = $this->app->getConfig()->getSetting(ConfigInterface::SERVER_ALLOW_USER_MADE_PROXY, 'false');
-        if ($proxyEnabled !== 'true') {
+        if ($proxyEnabled !== 'true' || !ReverseProxyAddresses::allowsProxy((int) $server['spell_id'], ReverseProxyAddresses::configuredRules())) {
             return ApiResponse::error('Proxy management is disabled', 'PROXY_DISABLED', 403);
         }
 
@@ -202,7 +202,7 @@ class ServerProxyController
 
         // Check if user-made proxy is enabled
         $proxyEnabled = $this->app->getConfig()->getSetting(ConfigInterface::SERVER_ALLOW_USER_MADE_PROXY, 'false');
-        if ($proxyEnabled !== 'true') {
+        if ($proxyEnabled !== 'true' || !ReverseProxyAddresses::allowsProxy((int) $server['spell_id'], ReverseProxyAddresses::configuredRules())) {
             return ApiResponse::error('Proxy management is disabled', 'PROXY_DISABLED', 403);
         }
 
@@ -560,7 +560,7 @@ class ServerProxyController
 
         // Check if user-made proxy is enabled
         $proxyEnabled = $this->app->getConfig()->getSetting(ConfigInterface::SERVER_ALLOW_USER_MADE_PROXY, 'false');
-        if ($proxyEnabled !== 'true') {
+        if ($proxyEnabled !== 'true' || !ReverseProxyAddresses::allowsProxy((int) $server['spell_id'], ReverseProxyAddresses::configuredRules())) {
             return ApiResponse::error('Proxy management is disabled', 'PROXY_DISABLED', 403);
         }
 

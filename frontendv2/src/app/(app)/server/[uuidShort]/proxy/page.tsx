@@ -61,6 +61,7 @@ export default function ServerProxyPage() {
     const canRead = hasPermission('proxy.read');
     const proxyEnabled =
         isEnabled(settings?.server_allow_user_made_proxy) &&
+        server?.proxy_spell_allowed === true &&
         supportsDaemonFeature(server?.node?.capabilities, 'proxy', server?.node?.daemon_type);
     const maxProxies = parseInt(settings?.server_proxy_max_per_server || '0', 10);
     const isMaxReached = proxies.length >= maxProxies && maxProxies > 0;

@@ -55,6 +55,17 @@ final class ReverseProxyAddresses
         return self::normalizeRules(json_decode($value ?? '[]', true)) ?? [];
     }
 
+    public static function allowsProxy(int $spellId, array $rules): bool
+    {
+        foreach ($rules as $rule) {
+            if (in_array($spellId, $rule['spell_ids'], true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public static function dnsIp(string $allocationIp, int $spellId, array $rules, ?string $nodePublicIp): ?string
     {
         return self::publicIp($allocationIp, $spellId, $rules)

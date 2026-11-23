@@ -20,7 +20,9 @@ declare(strict_types=1);
 namespace App\Controllers\User\Vds;
 
 use App\App;
+use App\Chat\User;
 use App\Chat\Database;
+use App\Helpers\VmGateway;
 use App\Helpers\ApiResponse;
 use App\Services\Vm\VdsReauth;
 use App\Services\Vm\GuestAccountClient;
@@ -34,16 +36,20 @@ final class VmUserGuestAccessController
     {
         $user = $request->attributes->get('user');
         $instance = $request->attributes->get('vmInstance');
-        if (!is_array($instance) || ($instance['user_uuid'] ?? null) !== ($user['uuid'] ?? '')
-            || !in_array($instance['vm_type'] ?? null, ['qemu', 'lxc'], true)) {
+        $uuid = $user['uuid'] ?? '';
+        $isOwner = $uuid !== '' && ($instance['user_uuid'] ?? null) === $uuid;
+        $readOnly = $request->isMethod('GET');
+        if (!is_array($instance) || !in_array($instance['vm_type'] ?? null, ['qemu', 'lxc'], true)
+            || (!$isOwner && (!$readOnly || $uuid === '' || !VmGateway::hasAdminAccess($uuid)))) {
             return ApiResponse::error('Only the owner can manage guest accounts for this instance', 'PERMISSION_DENIED', 403);
         }
 
         $db = Database::getPdoConnection();
-        if ($request->isMethod('GET')) {
+        if ($readOnly) {
             $guest = VmGuestAccounts::connect($instance)?->inspect();
-            [$preferred, $pending] = self::preferredAccount($db, $instance, $user, $guest);
-            $passwords = $guest === null ? [] : VmGuestAccounts::passwords($db, $instance, $guest);
+            $owner = $isOwner ? $user : (empty($instance['user_uuid']) ? [] : (User::getUserByUuid($instance['user_uuid']) ?? []));
+            [$preferred, $pending] = self::preferredAccount($db, $instance, $owner, $guest);
+            $passwords = !$isOwner || $guest === null ? [] : VmGuestAccounts::passwords($db, $instance, $guest);
             $accounts = [];
             foreach ($guest['accounts'] ?? [] as $name => $uid) {
                 $name = (string) $name;
@@ -151,19 +157,19 @@ final class VmUserGuestAccessController
     private static function preferredAccount(\PDO $db, array $vm, array $user, ?array $guest): array
     {
         $stmt = $db->prepare('SELECT username, retry_at FROM featherpanel_vm_guest_setup WHERE instance_id = ? AND owner_uuid = ? AND vmid = ?');
-        $stmt->execute([$vm['id'], $user['uuid'], $vm['vmid']]);
+        $stmt->execute([$vm['id'], $vm['user_uuid'], $vm['vmid']]);
         if ($setup = $stmt->fetch(\PDO::FETCH_ASSOC)) {
             return [$setup['username'], $setup['retry_at'] !== null];
         }
 
-        $preferred = VmGuestAccounts::defaultUsername((string) $user['username']);
+        $preferred = VmGuestAccounts::defaultUsername((string) ($user['username'] ?? ''));
         $notes = json_decode((string) ($vm['notes'] ?? ''), true);
         $previous = $notes['ci_user'] ?? null;
         if (!isset($guest['accounts'][$preferred]) && is_string($previous) && $previous !== 'root' && isset($guest['accounts'][$previous])) {
             return [$previous, false];
         }
 
-        return [$preferred, false];
+        return [VmGuestAccounts::primaryUsername($preferred, $guest['accounts'] ?? []), false];
     }
 
     private static function agentUnavailable(): Response

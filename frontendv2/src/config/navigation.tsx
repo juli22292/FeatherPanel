@@ -892,6 +892,7 @@ export const getServerNavigationItems = (
     settings: AppSettings | null,
     daemonCapabilities?: Partial<Record<string, boolean>> | null,
     daemonType?: string | null,
+    proxySpellAllowed = true,
 ): NavigationItem[] => {
     const supports = (feature: DaemonFeature) => supportsDaemonFeature(daemonCapabilities, feature, daemonType);
 
@@ -1064,7 +1065,7 @@ export const getServerNavigationItems = (
         });
     }
 
-    if (isEnabled(settings?.server_allow_user_made_proxy) && supports('proxy')) {
+    if (isEnabled(settings?.server_allow_user_made_proxy) && proxySpellAllowed && supports('proxy')) {
         items.push({
             id: 'server-proxy',
             name: t('navigation.items.proxy'),

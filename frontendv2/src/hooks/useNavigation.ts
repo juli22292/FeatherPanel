@@ -306,6 +306,7 @@ export function useNavigation() {
                 settings,
                 server?.node?.capabilities ?? null,
                 server?.node?.daemon_type,
+                server?.proxy_spell_allowed === true,
             );
 
             items = items.map((item) => ({
@@ -422,6 +423,7 @@ export function useNavigation() {
         serverSpellId,
         server?.node?.capabilities,
         server?.node?.daemon_type,
+        server?.proxy_spell_allowed,
         isDeveloperModeEnabled,
         isVds,
         vdsId,

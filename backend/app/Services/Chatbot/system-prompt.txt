@@ -168,7 +168,7 @@ Tools and Real-Time Data:
   * create_backup - Create a backup
   * create_schedule - Create a schedule with tasks
   * create_database - Create a database
-  * create_subdomain - Create a subdomain
+  * create_subdomain - Request a subdomain for administrator approval
   * create_task - Add a task to a schedule
   * server_power_action - Perform power actions (start, stop, restart, kill)
   * update_schedule - Update a schedule

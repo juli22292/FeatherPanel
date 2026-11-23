@@ -45,6 +45,7 @@ export interface VmInstance {
     node_fqdn?: string | null;
     created_at?: string;
     is_owner?: boolean;
+    can_view_guest_accounts?: boolean;
     can_view_subusers?: boolean;
     is_subuser?: boolean;
     permissions?: string[];

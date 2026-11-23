@@ -475,10 +475,15 @@ export default function AdminSubdomainsPage() {
                 description={t('admin.subdomains.description')}
                 icon={Globe}
                 actions={
-                    <Button onClick={openCreate}>
-                        <Plus className='mr-2 h-4 w-4' />
-                        {t('admin.subdomains.newDomain')}
-                    </Button>
+                    <div className='flex flex-wrap gap-2'>
+                        <Button variant='outline' onClick={() => router.push('/admin/subdomains/requests')}>
+                            {t('subdomainRequests.title')}
+                        </Button>
+                        <Button onClick={openCreate}>
+                            <Plus className='mr-2 h-4 w-4' />
+                            {t('admin.subdomains.newDomain')}
+                        </Button>
+                    </div>
                 }
             />
 

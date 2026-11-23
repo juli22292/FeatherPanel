@@ -58,10 +58,10 @@ export default function CreateProxyPage() {
     const { t } = useTranslation();
     const { settings, loading: settingsLoading } = useSettings();
     const hideIps = useHideServerIps();
-    const { hasPermission, loading: permissionsLoading } = useServerPermissions(uuidShort);
+    const { hasPermission, loading: permissionsLoading, server } = useServerPermissions(uuidShort);
 
     const canManage = hasPermission('proxy.manage');
-    const proxyEnabled = isEnabled(settings?.server_allow_user_made_proxy);
+    const proxyEnabled = isEnabled(settings?.server_allow_user_made_proxy) && server?.proxy_spell_allowed === true;
 
     const [allocations, setAllocations] = React.useState<AllocationItem[]>([]);
     const [loading, setLoading] = React.useState(true);
@@ -205,7 +205,7 @@ export default function CreateProxyPage() {
         }
     };
 
-    if (permissionsLoading || settingsLoading || loading) {
+    if (permissionsLoading || settingsLoading || (proxyEnabled && canManage && loading)) {
         return <PageLoading />;
     }
 

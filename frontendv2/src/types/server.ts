@@ -165,6 +165,7 @@ export interface ServerRuntimeInfo {
 }
 
 export interface Server {
+    proxy_spell_allowed?: boolean;
     id: number;
     uuid: string;
     uuidShort: string;
@@ -582,7 +583,19 @@ export interface SubdomainEntry {
     updated_at?: string;
 }
 
+export interface SubdomainRequestEntry {
+    id: number;
+    subdomain: string;
+    domain: string;
+    status: 'pending' | 'approved' | 'rejected';
+    reason: string | null;
+    created_at: string;
+    decided_at: string | null;
+}
+
 export interface SubdomainOverview {
+    requests?: SubdomainRequestEntry[];
+    pending_total?: number;
     current_total: number;
     max_allowed: number;
     domains: SubdomainDomain[];

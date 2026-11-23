@@ -48,7 +48,7 @@ export default function CreateSubdomainPage() {
     const { hasPermission, loading: permissionsLoading } = useServerPermissions(uuidShort);
     const { getWidgets } = usePluginWidgets('server-subdomains-new');
 
-    const canManage = hasPermission('subdomains.manage') || hasPermission('control.start');
+    const canManage = hasPermission('subdomain.manage');
 
     const [loading, setLoading] = React.useState(true);
     const [saving, setSaving] = React.useState(false);
@@ -106,7 +106,7 @@ export default function CreateSubdomainPage() {
                 domain_uuid: formData.domain_uuid,
                 subdomain: formData.subdomain.trim(),
             });
-            toast.success(t('serverSubdomains.created'));
+            toast.success(t('subdomainRequests.submitted'));
             router.push(`/server/${uuidShort}/subdomains`);
         } catch (error) {
             const axiosError = error as AxiosError<{ message: string }>;
@@ -117,7 +117,7 @@ export default function CreateSubdomainPage() {
         }
     };
 
-    if (permissionsLoading || settingsLoading || loading) {
+    if (permissionsLoading || settingsLoading || (subdomainsEnabled && canManage && loading)) {
         return <PageLoading />;
     }
 
@@ -125,7 +125,7 @@ export default function CreateSubdomainPage() {
         return (
             <div className='space-y-6'>
                 <ServerPageHeader
-                    title={t('serverSubdomains.createButton')}
+                    title={t('subdomainRequests.request')}
                     description={t('serverSubdomains.newSubdomainDescription')}
                 />
                 <EmptyState
@@ -158,7 +158,8 @@ export default function CreateSubdomainPage() {
     }
 
     const availableDomains = overview?.domains || [];
-    const limitReached = (overview?.current_total ?? 0) >= (overview?.max_allowed ?? 0);
+    const limitReached =
+        (overview?.current_total ?? 0) + (overview?.pending_total ?? 0) >= (overview?.max_allowed ?? 0);
 
     if (availableDomains.length === 0 && !loading) {
         return (
@@ -187,7 +188,7 @@ export default function CreateSubdomainPage() {
         <div className='space-y-6 pb-12'>
             <WidgetRenderer widgets={getWidgets('server-subdomains-new', 'top-of-page')} />
             <ServerPageHeader
-                title={t('serverSubdomains.createButton')}
+                title={t('subdomainRequests.request')}
                 description={t('serverSubdomains.newSubdomainDescription')}
                 actions={
                     <div className='flex w-full flex-wrap gap-2 sm:w-auto sm:flex-nowrap sm:items-center sm:gap-3'>
@@ -214,7 +215,7 @@ export default function CreateSubdomainPage() {
                             ) : (
                                 <>
                                     <Plus className='mr-2 h-4 w-4' />
-                                    {t('serverSubdomains.createButton')}
+                                    {t('subdomainRequests.request')}
                                 </>
                             )}
                         </Button>
@@ -355,7 +356,7 @@ export default function CreateSubdomainPage() {
                             ) : (
                                 <>
                                     <Plus className='mr-2 h-4 w-4' />
-                                    {t('serverSubdomains.createButton')}
+                                    {t('subdomainRequests.request')}
                                 </>
                             )}
                         </Button>

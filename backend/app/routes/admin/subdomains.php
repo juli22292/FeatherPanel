@@ -21,8 +21,26 @@ use App\Helpers\ApiResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\RouteCollection;
 use App\Controllers\Admin\SubdomainsController;
+use App\Controllers\Admin\SubdomainRequestsController;
 
 return function (RouteCollection $routes): void {
+    $app = App::getInstance(true);
+    $app->registerAdminRoute(
+        $routes, 'admin-subdomain-requests', '/api/admin/subdomains/requests',
+        static fn (Request $request) => (new SubdomainRequestsController())->index($request),
+        Permissions::ADMIN_SUBDOMAINS_VIEW, ['GET']
+    );
+    $app->registerAdminRoute(
+        $routes, 'admin-subdomain-request-spells', '/api/admin/subdomains/requests/spells',
+        static fn (Request $request) => (new SubdomainRequestsController())->updateSpells($request),
+        Permissions::ADMIN_SUBDOMAINS_EDIT, ['PATCH']
+    );
+    $app->registerAdminRoute(
+        $routes, 'admin-subdomain-request-decision', '/api/admin/subdomains/requests/{id}/decision',
+        static fn (Request $request, array $args) => (new SubdomainRequestsController())->decide($request, (int) ($args['id'] ?? 0)),
+        Permissions::ADMIN_SUBDOMAINS_EDIT, ['POST']
+    );
+
     App::getInstance(true)->registerAdminRoute(
         $routes,
         'admin-subdomains-index',

@@ -308,6 +308,7 @@ interface ConfigInterface
     public const SERVER_ALLOW_USER_MADE_IMPORT = 'server_allow_user_made_import';
     public const SERVER_ALLOW_USER_MADE_FASTDL = 'server_allow_user_made_fastdl';
     public const SERVER_ALLOW_USER_MADE_SUBDOMAINS = 'server_allow_user_made_subdomains';
+    public const SUBDOMAIN_REQUEST_SPELLS = 'subdomain_request_spells';
     /**
      * When true, users must assign a panel subdomain before starting/restarting a server.
      * Allocation IPs are redacted until compliant. Bypass via user.servers.bypass_subdomain_requirement.

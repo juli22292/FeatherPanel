@@ -1,6 +1,6 @@
 # Eigene Releases
 
-Versionsnummern folgen `MAJOR.MINOR.PATCH` oder `MAJOR.MINOR.PATCH.BUILD`. Git-Tags beginnen mit `v`, zum Beispiel `v1.5.6.6`. Die aktuelle Fork-Version im Quellcode ist `1.5.6.6`.
+Versionsnummern folgen `MAJOR.MINOR.PATCH` oder `MAJOR.MINOR.PATCH.BUILD`. Git-Tags beginnen mit `v`, zum Beispiel `v1.5.6.7`. Die aktuelle Fork-Version im Quellcode ist `1.5.6.7`.
 
 Vor einem Release müssen `backend/boot/constants.php`, `backend/cli`, `backend/storage/cron/runner.php`, `backend/scripts/export-openapi.php` und `app` dieselbe Version enthalten. Für `v1.5.6` steht in `frontendv2/package.json` die Version `1.5.6`. Bei vierteiligen Versionsnummern wird der letzte Punkt für npm durch einen Bindestrich ersetzt. Ein Release-Tag wird erst nach erfolgreichem Build und Tests erstellt. Die GitHub Action `Fork Release` verweigert ein Tag, dessen Version nicht zum Backend und Frontend passt.
 

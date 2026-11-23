@@ -19,6 +19,8 @@ namespace App\Helpers;
 
 use App\App;
 use App\Permissions;
+use App\Chat\Server;
+use App\Chat\SubdomainRequest;
 use App\Chat\Subdomain;
 use App\Config\ConfigInterface;
 use Symfony\Component\HttpFoundation\Response;
@@ -37,6 +39,22 @@ class ServerSubdomainRequirementHelper
         $config = App::getInstance(true)->getConfig();
 
         return $config->getSetting(ConfigInterface::SERVER_REQUIRE_SUBDOMAIN, 'false') === 'true';
+    }
+
+    private static function appliesToServer(int $serverId): bool
+    {
+        if (!self::isRequired()) {
+            return false;
+        }
+
+        $spells = SubdomainRequest::configuredSpells();
+        if ($spells === null) {
+            return true;
+        }
+
+        $server = Server::getServerById($serverId);
+
+        return $server && in_array((int) $server['spell_id'], $spells, true);
     }
 
     public static function userBypasses(array $user): bool
@@ -68,7 +86,7 @@ class ServerSubdomainRequirementHelper
      */
     public static function shouldEnforce(array $user, int $serverId): bool
     {
-        if (!self::isRequired()) {
+        if (!self::appliesToServer($serverId)) {
             return false;
         }
 
@@ -84,7 +102,7 @@ class ServerSubdomainRequirementHelper
      */
     public static function requirementMeta(array $user, int $serverId): array
     {
-        $required = self::isRequired();
+        $required = self::appliesToServer($serverId);
         $bypassed = $required && self::userBypasses($user);
         $compliant = self::serverCompliant($serverId);
 
@@ -123,7 +141,7 @@ class ServerSubdomainRequirementHelper
     public static function forbiddenResponse(): Response
     {
         return ApiResponse::error(
-            'A subdomain is required before you can start this server. Create one under Network → Subdomains.',
+            'An approved subdomain is required before you can start this server. Request one under Network → Subdomains.',
             'SUBDOMAIN_REQUIRED',
             403
         );

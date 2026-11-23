@@ -48,8 +48,8 @@ export default function ServerSubdomainsPage() {
     const { hasPermission, loading: permissionsLoading } = useServerPermissions(uuidShort);
     const { getWidgets } = usePluginWidgets('server-subdomains');
 
-    const canManage = hasPermission('subdomains.manage') || hasPermission('control.start');
-    const canDelete = hasPermission('subdomains.delete') || canManage;
+    const canManage = hasPermission('subdomain.manage');
+    const canDelete = canManage;
 
     const [overview, setOverview] = React.useState<SubdomainOverview | null>(null);
     const [loading, setLoading] = React.useState(true);
@@ -152,8 +152,15 @@ export default function ServerSubdomainsPage() {
         );
     }
 
-    const limitReached = (overview?.current_total ?? 0) >= (overview?.max_allowed ?? 0);
-    const showHeaderCreateAction = !limitReached && subdomains.length > 0;
+    const limitReached =
+        (overview?.current_total ?? 0) + (overview?.pending_total ?? 0) >= (overview?.max_allowed ?? 0);
+    const canRequest = (overview?.domains.length ?? 0) > 0;
+    const showHeaderCreateAction = canRequest && !limitReached && subdomains.length > 0;
+    const requestStatusLabels = {
+        pending: t('subdomainRequests.pending'),
+        approved: t('subdomainRequests.approved'),
+        rejected: t('subdomainRequests.rejected'),
+    };
 
     return (
         <div key={pathname} className='space-y-6 pb-12'>
@@ -173,7 +180,7 @@ export default function ServerSubdomainsPage() {
                                 className='order-1 min-w-0 flex-1 sm:order-2 sm:flex-none'
                             >
                                 <Plus className='mr-2 h-5 w-5' />
-                                {t('serverSubdomains.createButton')}
+                                {t('subdomainRequests.request')}
                             </Button>
                         )}
                         <Button
@@ -214,21 +221,48 @@ export default function ServerSubdomainsPage() {
 
             <WidgetRenderer widgets={getWidgets('server-subdomains', 'before-subdomains-list')} />
 
+            {!!overview?.requests?.length && (
+                <section className='fp-surface space-y-3 rounded-xl border p-5'>
+                    <h2 className='font-semibold'>{t('subdomainRequests.title')}</h2>
+                    <ul className='divide-y'>
+                        {overview.requests.map((request) => (
+                            <li key={request.id} className='space-y-1 py-3'>
+                                <div className='flex flex-wrap items-center justify-between gap-2'>
+                                    <span className='font-mono break-all'>
+                                        {request.subdomain}.{request.domain}
+                                    </span>
+                                    <span className='text-sm'>{requestStatusLabels[request.status]}</span>
+                                </div>
+                                {request.reason && (
+                                    <p className='text-muted-foreground text-sm break-words whitespace-pre-wrap'>
+                                        {request.reason}
+                                    </p>
+                                )}
+                            </li>
+                        ))}
+                    </ul>
+                </section>
+            )}
+
             {subdomains.length === 0 ? (
                 <EmptyState
                     title={t('serverSubdomains.noSubdomains')}
-                    description={t('serverSubdomains.noSubdomainsDescription')}
+                    description={
+                        canRequest ? t('subdomainRequests.explanation') : t('serverSubdomains.noDomainsAvailable')
+                    }
                     icon={Globe}
                     action={
-                        <Button
-                            size='default'
-                            variant='default'
-                            onClick={() => router.push(`/server/${uuidShort}/subdomains/new`)}
-                            disabled={limitReached}
-                        >
-                            <Plus className='mr-2 h-6 w-6' />
-                            {t('serverSubdomains.createButton')}
-                        </Button>
+                        canRequest && (
+                            <Button
+                                size='default'
+                                variant='default'
+                                onClick={() => router.push(`/server/${uuidShort}/subdomains/new`)}
+                                disabled={limitReached}
+                            >
+                                <Plus className='mr-2 h-6 w-6' />
+                                {t('subdomainRequests.request')}
+                            </Button>
+                        )
                     }
                 />
             ) : (

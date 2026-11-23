@@ -47,7 +47,7 @@ export default function ServerInfoPage() {
     const { instance, loading } = useVmInstance();
     const { t } = useTranslation();
     if (loading) return <VdsPageLoading label={t('common.loading')} />;
-    if (!instance?.is_owner) {
+    if (!instance || (!instance.is_owner && !instance.can_view_guest_accounts)) {
         return (
             <div className='space-y-5'>
                 <VdsPageHeader title={t('vds.guestAccess.title')} icon={Key} description={instance?.hostname} />
@@ -63,10 +63,10 @@ export default function ServerInfoPage() {
         );
     }
 
-    return <OwnerServerInfo key={id} id={id} guestType={instance.vm_type} />;
+    return <GuestAccounts key={id} id={id} guestType={instance.vm_type} canManage={instance.is_owner === true} />;
 }
 
-function OwnerServerInfo({ id, guestType }: { id: string; guestType: 'qemu' | 'lxc' }) {
+function GuestAccounts({ id, guestType, canManage }: { id: string; guestType: 'qemu' | 'lxc'; canManage: boolean }) {
     const { t } = useTranslation();
     const withReauth = useVdsReauth();
     const endpoint = '/api/user/vm-instances/' + id + '/guest-access';
@@ -193,7 +193,11 @@ function OwnerServerInfo({ id, guestType }: { id: string; guestType: 'qemu' | 'l
                     {info.agent_available && (
                         <section className='bg-card space-y-4 rounded-xl border p-5'>
                             <h2 className='font-semibold'>{t('vds.guestAccess.accounts')}</h2>
-                            <p className='text-muted-foreground text-sm'>{t('vds.guestAccess.existing_accounts')}</p>
+                            {canManage && (
+                                <p className='text-muted-foreground text-sm'>
+                                    {t('vds.guestAccess.existing_accounts')}
+                                </p>
+                            )}
                             <ul className='divide-y'>
                                 {info.accounts.map((account) => {
                                     const show = revealed?.username === account.username;
@@ -212,45 +216,51 @@ function OwnerServerInfo({ id, guestType }: { id: string; guestType: 'qemu' | 'l
                                                 <p className='font-mono break-all'>{account.username}</p>
                                                 <p className='text-muted-foreground text-xs'>{label}</p>
                                             </div>
-                                            <span className='text-muted-foreground font-mono text-sm break-all'>
-                                                {show
-                                                    ? revealed.password
-                                                    : account.has_password
-                                                      ? '••••••••'
-                                                      : t('vds.guestAccess.unknown_password')}
-                                            </span>
-                                            <div className='flex flex-wrap gap-2'>
-                                                {account.has_password && (
-                                                    <Button
-                                                        variant='outline'
-                                                        disabled={loading || busy}
-                                                        onClick={() =>
-                                                            show
-                                                                ? setRevealed(undefined)
-                                                                : void accountAction('reveal', account.username)
-                                                        }
-                                                    >
-                                                        {show ? (
-                                                            <EyeOff className='h-4 w-4' />
-                                                        ) : (
-                                                            <Eye className='h-4 w-4' />
+                                            {canManage && (
+                                                <>
+                                                    <span className='text-muted-foreground font-mono text-sm break-all'>
+                                                        {show
+                                                            ? revealed.password
+                                                            : account.has_password
+                                                              ? '••••••••'
+                                                              : t('vds.guestAccess.unknown_password')}
+                                                    </span>
+                                                    <div className='flex flex-wrap gap-2'>
+                                                        {account.has_password && (
+                                                            <Button
+                                                                variant='outline'
+                                                                disabled={loading || busy}
+                                                                onClick={() =>
+                                                                    show
+                                                                        ? setRevealed(undefined)
+                                                                        : void accountAction('reveal', account.username)
+                                                                }
+                                                            >
+                                                                {show ? (
+                                                                    <EyeOff className='h-4 w-4' />
+                                                                ) : (
+                                                                    <Eye className='h-4 w-4' />
+                                                                )}
+                                                                {show
+                                                                    ? t('vds.guestAccess.hide')
+                                                                    : t('vds.guestAccess.show')}
+                                                            </Button>
                                                         )}
-                                                        {show ? t('vds.guestAccess.hide') : t('vds.guestAccess.show')}
-                                                    </Button>
-                                                )}
-                                                <Button
-                                                    variant='outline'
-                                                    disabled={loading || busy}
-                                                    onClick={() => setReset(account.username)}
-                                                >
-                                                    {t('vds.guestAccess.reset')}
-                                                </Button>
-                                            </div>
+                                                        <Button
+                                                            variant='outline'
+                                                            disabled={loading || busy}
+                                                            onClick={() => setReset(account.username)}
+                                                        >
+                                                            {t('vds.guestAccess.reset')}
+                                                        </Button>
+                                                    </div>
+                                                </>
+                                            )}
                                         </li>
                                     );
                                 })}
                             </ul>
-                            {!standard && !info.setup_pending && (
+                            {canManage && !standard && !info.setup_pending && (
                                 <Button
                                     variant='outline'
                                     disabled={loading || busy}
@@ -259,7 +269,7 @@ function OwnerServerInfo({ id, guestType }: { id: string; guestType: 'qemu' | 'l
                                     {t('vds.guestAccess.create_standard', { username: info.preferred_username })}
                                 </Button>
                             )}
-                            {additionalCount < info.additional_limit && (
+                            {canManage && additionalCount < info.additional_limit && (
                                 <form
                                     className='flex flex-wrap items-end gap-2'
                                     onSubmit={(event) => {
@@ -283,12 +293,14 @@ function OwnerServerInfo({ id, guestType }: { id: string; guestType: 'qemu' | 'l
                                     </Button>
                                 </form>
                             )}
-                            <p className='text-muted-foreground text-sm'>
-                                {t('vds.guestAccess.limit', {
-                                    count: String(additionalCount),
-                                    limit: String(info.additional_limit),
-                                })}
-                            </p>
+                            {canManage && (
+                                <p className='text-muted-foreground text-sm'>
+                                    {t('vds.guestAccess.limit', {
+                                        count: String(additionalCount),
+                                        limit: String(info.additional_limit),
+                                    })}
+                                </p>
+                            )}
                         </section>
                     )}
                 </>

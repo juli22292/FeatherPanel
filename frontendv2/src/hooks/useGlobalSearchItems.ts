@@ -462,6 +462,7 @@ export function useGlobalSearchItems(open: boolean, query: string) {
                 settings,
                 server.node?.capabilities ?? null,
                 server.node?.daemon_type ?? null,
+                server.proxy_spell_allowed === true,
             )[0];
             items.push({
                 id: `server-${server.uuid}`,
@@ -546,6 +547,7 @@ export function useGlobalSearchItems(open: boolean, query: string) {
                 settings,
                 server.node?.capabilities ?? null,
                 server.node?.daemon_type ?? null,
+                server.proxy_spell_allowed === true,
             );
         } else {
             navItems = getVdsNavigationItems(t, entityContext.routeId);
@@ -580,6 +582,7 @@ export function useGlobalSearchItems(open: boolean, query: string) {
                 settings,
                 server.node?.capabilities ?? null,
                 server.node?.daemon_type ?? null,
+                server.proxy_spell_allowed === true,
             ).filter((item) => !item.permission || hasPermission(item.permission));
             const expand = shouldExpandEntityNav(
                 server.name,

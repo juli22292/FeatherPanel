@@ -461,6 +461,7 @@ class ServerUserController
 
             $node = $nodesById[(int) $server['node_id']] ?? null;
             $caps = DaemonCapabilities::fromNode($node ?? []);
+            $server['proxy_spell_allowed'] = ReverseProxyAddresses::allowsProxy((int) $server['spell_id'], $reverseProxyRules);
             $server['node'] = [
                 'name' => $node['name'] ?? null,
                 'maintenance_mode' => $node['maintenance_mode'] ?? null,
@@ -623,6 +624,7 @@ class ServerUserController
 
             $node = $nodes[(int) $server['node_id']] ?? null;
             $caps = DaemonCapabilities::fromNode($node ?? []);
+            $server['proxy_spell_allowed'] = ReverseProxyAddresses::allowsProxy((int) $server['spell_id'], $reverseProxyRules);
             $server['node'] = [
                 'name' => $node['name'] ?? null,
                 'maintenance_mode' => $node['maintenance_mode'] ?? null,
@@ -817,6 +819,7 @@ class ServerUserController
         }
 
         $server['node'] = Node::getNodeById($server['node_id']);
+        $server['proxy_spell_allowed'] = ReverseProxyAddresses::allowsProxy((int) $server['spell_id'], ReverseProxyAddresses::configuredRules());
         if (is_array($server['node'])) {
             $caps = DaemonCapabilities::fromNode($server['node']);
             $server['node']['daemon_type'] = $caps->getType();

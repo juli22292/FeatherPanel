@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.5.6.7 (ServerPanel)
+
+- Show VDS connection details and guest account names to administrators with VDS access. Password actions stay available to the guest owner.
+- Reserve five additional Linux user accounts alongside the standard user and root, including on existing guests.
+- Restrict the game server Proxy tab and new proxies to the spells explicitly selected under System > Reverse Proxy.
+- Add a subdomain spell allowlist and an approval queue with optional reasons. A request creates DNS records only when approved.
+
 ## v1.5.6.6 (ServerPanel)
 
 - Show Serverinfo for both QEMU/KVM and LXC. VM owners can manage local Linux accounts through the shared interface.

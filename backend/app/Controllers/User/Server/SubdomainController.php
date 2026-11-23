@@ -25,6 +25,7 @@ use App\SubuserPermissions;
 use App\Chat\ServerActivity;
 use App\Helpers\ApiResponse;
 use App\Chat\SubdomainDomain;
+use App\Chat\SubdomainRequest;
 use OpenApi\Attributes as OA;
 use App\Config\ConfigInterface;
 use App\CloudFlare\CloudFlareRealIP;
@@ -115,7 +116,7 @@ class SubdomainController
                 'weight' => $mapping['weight'] ?? 1,
                 'ttl' => $mapping['ttl'] ?? 120,
             ];
-        }, SubdomainDomain::getActiveDomainsForSpell((int) $server['spell_id']));
+        }, SubdomainRequest::allowsSpell((int) $server['spell_id']) ? SubdomainDomain::getActiveDomainsForSpell((int) $server['spell_id']) : []);
 
         $subdomains = array_map(function (array $entry): array {
             $domain = SubdomainDomain::getDomainById((int) $entry['domain_id']);
@@ -133,16 +134,17 @@ class SubdomainController
         return ApiResponse::success([
             'overview' => [
                 'max_allowed' => $maxAllowed,
-                'current_total' => count($subdomains),
++$subdomains),
                 'domains' => $domains,
                 'subdomains' => $subdomains,
+                'requests' => SubdomainRequest::forServer((int) $server['id']),
             ],
         ]);
     }
 
     #[OA\Put(
         path: '/api/user/servers/{uuidShort}/subdomains',
-        summary: 'Create a subdomain',
+        summary: 'Request a subdomain for administrator approval',
         tags: ['User - Server Subdomains'],
         requestBody: new OA\RequestBody(
             required: true,
@@ -155,7 +157,7 @@ class SubdomainController
             )
         ),
         responses: [
-            new OA\Response(response: 201, description: 'Subdomain created successfully'),
+            new OA\Response(response: 202, description: 'Subdomain request is pending approval'),
             new OA\Response(response: 400, description: 'Validation failed'),
             new OA\Response(response: 403, description: 'Forbidden'),
             new OA\Response(response: 404, description: 'Domain not found'),
@@ -178,15 +180,29 @@ class SubdomainController
             return ApiResponse::error('Invalid JSON payload', 'INVALID_JSON', Response::HTTP_BAD_REQUEST);
         }
 
-        $domainUuid = isset($payload['domain_uuid']) ? trim((string) $payload['domain_uuid']) : '';
-        $label = isset($payload['subdomain']) ? strtolower(trim((string) $payload['subdomain'])) : '';
+        $domainUuid = is_string($payload['domain_uuid'] ?? null) ? trim($payload['domain_uuid']) : '';
+        $label = is_string($payload['subdomain'] ?? null) ? strtolower(trim($payload['subdomain'])) : '';
+
+        return $this->processRequest($request, $server, $domainUuid, $label, false);
+    }
+
+    public function provisionApproved(Request $request, array $server, string $domainUuid, string $label): Response
+    {
+        return $this->processRequest($request, $server, $domainUuid, $label, true);
+    }
+
+    private function processRequest(Request $request, array $server, string $domainUuid, string $label, bool $approved): Response
+    {
+        if (!$this->isSubdomainManagementEnabled() || !SubdomainRequest::allowsSpell((int) $server['spell_id'])) {
+            return ApiResponse::error('Subdomain requests are disabled for this server spell', 'DOMAIN_NOT_ALLOWED', Response::HTTP_FORBIDDEN);
+        }
 
         if ($domainUuid === '' || $label === '') {
             return ApiResponse::error('Domain UUID and subdomain are required', 'VALIDATION_FAILED', Response::HTTP_BAD_REQUEST);
         }
 
-        if (!preg_match('/^[a-z0-9-]{2,63}$/', $label)) {
-            return ApiResponse::error('Subdomain may only contain letters, numbers, and hyphen (2-63 characters)', 'INVALID_SUBDOMAIN', Response::HTTP_BAD_REQUEST);
+        if (!preg_match('/^[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$/D', $label)) {
+            return ApiResponse::error('Use 2–63 letters, numbers and hyphens, starting and ending with a letter or number', 'INVALID_SUBDOMAIN', Response::HTTP_BAD_REQUEST);
         }
 
         $domain = SubdomainDomain::getDomainByUuid($domainUuid);
@@ -211,6 +227,22 @@ class SubdomainController
 
         if (Subdomain::getByDomainAndLabel((int) $domain['id'], $label) !== null) {
             return ApiResponse::error('This subdomain is already in use for the selected domain', 'SUBDOMAIN_EXISTS', Response::HTTP_CONFLICT);
+        }
+
+        if (!$approved) {
+            $user = $request->attributes->get('user');
+            if (!is_string($user['uuid'] ?? null) || $user['uuid'] === '') {
+                return ApiResponse::error('User not authenticated', 'UNAUTHORIZED', Response::HTTP_UNAUTHORIZED);
+            }
+            $id = SubdomainRequest::enqueue((int) $server['id'], (int) $domain['id'], $label, $user['uuid'], $maxAllowed);
+            if ($id < 0) {
+                return ApiResponse::error('You have reached the maximum number of subdomains or pending requests', 'SUBDOMAIN_LIMIT_REACHED', Response::HTTP_BAD_REQUEST);
+            }
+            if ($id === 0) {
+                return ApiResponse::error('This subdomain is already reserved', 'SUBDOMAIN_EXISTS', Response::HTTP_CONFLICT);
+            }
+
+            return ApiResponse::success(['request_id' => $id, 'status' => 'pending'], 'Subdomain request submitted for approval', Response::HTTP_ACCEPTED);
         }
 
         $allocation = Allocation::getAllocationById((int) $server['allocation_id']);
@@ -267,6 +299,7 @@ class SubdomainController
         }
 
         $recordId = null;
+        $addressRecordId = null;
 
         if ($recordType === 'CNAME') {
             $recordId = $service->createCnameRecord($zoneId, $fqdn, $target, $ttl);
@@ -305,23 +338,55 @@ class SubdomainController
         }
 
         if (!$recordId) {
+            if ($addressRecordId !== null) {
+                $service->deleteRecord($zoneId, $addressRecordId);
+            }
             return ApiResponse::error('Failed to create DNS record on Cloudflare', 'CLOUDFLARE_CREATE_FAILED', Response::HTTP_BAD_REQUEST);
         }
 
-        $subdomainId = Subdomain::create([
-            'server_id' => (int) $server['id'],
-            'domain_id' => (int) $domain['id'],
-            'spell_id' => (int) $server['spell_id'],
-            'subdomain' => $label,
-            'record_type' => $recordType,
-            'port' => $recordType === 'SRV' ? $port : null,
-            'cloudflare_record_id' => $recordId,
-        ]);
+        try {
+            $subdomainId = Subdomain::create([
+                'server_id' => (int) $server['id'],
+                'domain_id' => (int) $domain['id'],
+                'spell_id' => (int) $server['spell_id'],
+                'subdomain' => $label,
+                'record_type' => $recordType,
+                'port' => $recordType === 'SRV' ? $port : null,
+                'cloudflare_record_id' => $recordId,
+            ]);
+        } catch (\PDOException $error) {
+            App::getInstance(true)->getLogger()->error('Could not save approved subdomain: ' . $error->getMessage());
+            $subdomainId = false;
+        }
 
         if ($subdomainId === false) {
+            $service->deleteRecord($zoneId, $recordId);
+            if ($addressRecordId !== null) {
+                $service->deleteRecord($zoneId, $addressRecordId);
+            }
             return ApiResponse::error('Failed to persist subdomain entry', 'SUBDOMAIN_CREATE_FAILED', Response::HTTP_INTERNAL_SERVER_ERROR);
         }
 
+        $created = Subdomain::getByDomainAndLabel((int) $domain['id'], $label);
+        $formatted = null;
+        if ($created) {
+            $formatted = [
+                'uuid' => $created['uuid'],
+                'domain' => $domain['domain'],
+                'subdomain' => $created['subdomain'],
+                'record_type' => $created['record_type'],
+                'port' => $created['port'],
+                'created_at' => $created['created_at'] ?? null,
+            ];
+        }
+
+        return ApiResponse::success([
+            'subdomain' => $formatted,
+        ], 'Subdomain created successfully', Response::HTTP_CREATED);
+    }
+
+    public function notifyApproved(Request $request, array $server, array $domain, string $label): void
+    {
         $this->logServerActivity($request, $server, 'server:subdomain.create', [
             'domain' => $domain['domain'],
             'subdomain' => $label,
@@ -343,23 +408,6 @@ class SubdomainController
                 );
             }
         }
-
-        $created = Subdomain::getByDomainAndLabel((int) $domain['id'], $label);
-        $formatted = null;
-        if ($created) {
-            $formatted = [
-                'uuid' => $created['uuid'],
-                'domain' => $domain['domain'],
-                'subdomain' => $created['subdomain'],
-                'record_type' => $created['record_type'],
-                'port' => $created['port'],
-                'created_at' => $created['created_at'] ?? null,
-            ];
-        }
-
-        return ApiResponse::success([
-            'subdomain' => $formatted,
-        ], 'Subdomain created successfully', Response::HTTP_CREATED);
     }
 
     #[OA\Delete(

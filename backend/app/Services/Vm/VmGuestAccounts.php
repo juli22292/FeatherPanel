@@ -59,6 +59,17 @@ final class VmGuestAccounts
         return $name;
     }
 
+    public static function primaryUsername(string $preferred, array $accounts): string
+    {
+        if (isset($accounts[$preferred])) {
+            return $preferred;
+        }
+        unset($accounts['root']);
+        asort($accounts, SORT_NUMERIC);
+
+        return $accounts === [] ? $preferred : (string) array_key_first($accounts);
+    }
+
     public static function password(): string
     {
         $alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
