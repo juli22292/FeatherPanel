@@ -5443,7 +5443,8 @@
         "loadFailed": "Could not load the changelog.",
         "saveFailed": "Could not save the changelog settings.",
         "saved": "Changelog settings saved.",
-        "reset": "Restore original notes"
+        "reset": "Restore original notes",
+        "discard": "Discard changes"
     },
     "subdomainRequests": {
         "title": "Subdomain Requests",

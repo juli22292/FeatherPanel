@@ -179,7 +179,7 @@ export default function ChangelogSettingsPage() {
                                                 disabled={saving}
                                                 onClick={() => setDraft(selected.body)}
                                             >
-                                                {t('common.discard')}
+                                                {t('changelogs.discard')}
                                             </Button>
                                         )}
                                         {selected.edited && (
