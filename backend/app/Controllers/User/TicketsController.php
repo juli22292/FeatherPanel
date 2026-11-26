@@ -28,6 +28,7 @@ use App\Chat\TicketMessage;
 use App\Chat\TicketCategory;
 use App\Chat\TicketPriority;
 use App\Helpers\ApiResponse;
+use App\Realtime\Events;
 use OpenApi\Attributes as OA;
 use App\Chat\TicketAttachment;
 use App\Config\ConfigInterface;
@@ -518,6 +519,7 @@ class TicketsController
             return ApiResponse::error('Failed to create reply', 'CREATE_FAILED', 500);
         }
 
+        Events::ticketChanged($ticket);
         $message = TicketMessage::getById($messageId);
         $message = $this->enrichMessageData($message);
 
@@ -726,6 +728,7 @@ class TicketsController
             return ApiResponse::error('Failed to create attachment record', 'CREATE_FAILED', 500);
         }
 
+        Events::ticketChanged($ticket);
         $attachment = TicketAttachment::getById($attachmentId);
         $attachment['url'] = $url;
 
@@ -830,6 +833,8 @@ class TicketsController
                 ]
             );
         }
+
+        Events::ticketChanged($ticket);
 
         return ApiResponse::success([], 'Message deleted successfully', 200);
     }
@@ -950,6 +955,8 @@ class TicketsController
                 ]
             );
         }
+
+        Events::ticketChanged($ticket);
 
         return ApiResponse::success([], 'Ticket deleted successfully', 200);
     }

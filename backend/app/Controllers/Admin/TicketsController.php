@@ -28,6 +28,7 @@ use App\Chat\TicketMessage;
 use App\Chat\TicketCategory;
 use App\Chat\TicketPriority;
 use App\Helpers\ApiResponse;
+use App\Realtime\Events;
 use OpenApi\Attributes as OA;
 use App\Chat\TicketAttachment;
 use App\Config\ConfigInterface;
@@ -737,6 +738,11 @@ class TicketsController
             }
         }
 
+        Events::ticketChanged($ticket);
+        if ($updatedTicket && $updatedTicket['user_uuid'] !== $ticket['user_uuid']) {
+            Events::ticketChanged($updatedTicket);
+        }
+
         return ApiResponse::success([], 'Ticket updated successfully', 200);
     }
 
@@ -808,6 +814,8 @@ class TicketsController
                 ]
             );
         }
+
+        Events::ticketChanged($ticket);
 
         return ApiResponse::success([], 'Ticket deleted successfully', 200);
     }
@@ -897,6 +905,8 @@ class TicketsController
 
         TicketNotificationService::notifyClosed($updatedTicket);
 
+        Events::ticketChanged($ticket);
+
         return ApiResponse::success([], 'Ticket closed successfully', 200);
     }
 
@@ -974,6 +984,8 @@ class TicketsController
         }
 
         TicketNotificationService::notifyReopened($updatedTicket);
+
+        Events::ticketChanged($ticket);
 
         return ApiResponse::success([], 'Ticket reopened successfully', 200);
     }
@@ -1061,6 +1073,7 @@ class TicketsController
             return ApiResponse::error('Failed to create reply', 'CREATE_FAILED', 500);
         }
 
+        Events::ticketChanged($ticket, !empty($messageData['is_internal']));
         $message = TicketMessage::getById($messageId);
 
         // Log activity

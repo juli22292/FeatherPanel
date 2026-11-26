@@ -214,7 +214,7 @@ class Subdomain
             return false;
         }
 
-        if (!in_array($recordType, ['CNAME', 'SRV'], true)) {
+        if (!in_array($recordType, ['CNAME', 'SRV', 'A', 'AAAA'], true)) {
             $recordType = 'CNAME';
         }
 

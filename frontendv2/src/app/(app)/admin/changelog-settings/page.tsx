@@ -35,41 +35,54 @@ import type { PanelChangelog } from '@/types/changelog';
 const endpoint = '/api/admin/changelogs';
 
 export default function ChangelogSettingsPage() {
-    const { t } = useTranslation();
+    const { t, locale, availableLanguages } = useTranslation();
     const { hasPermission } = useSession();
     const { refetch } = useSettings();
     const canEdit = hasPermission(Permissions.ADMIN_SETTINGS_EDIT);
-    const [config, setConfig] = useState<PanelChangelog | null>();
+    const [loaded, setLoaded] = useState<{ locale: string; config: PanelChangelog | null }>();
     const [version, setVersion] = useState('');
-    const [draft, setDraft] = useState('');
+    const [draftText, setDraftText] = useState<string | null>(null);
+    const [language, setLanguage] = useState<string>();
+    const notesLocale = language ?? locale;
+    const config = loaded?.locale === notesLocale ? loaded.config : undefined;
     const [saving, setSaving] = useState(false);
-    const selected = config?.releases.find((release) => release.version === version);
+    const selected = config?.releases.find((release) => release.version === version) ?? config?.releases[0];
+    const draft = draftText ?? selected?.body ?? '';
     const dirty = !!selected && draft !== selected.body;
+    const languageOptions = new Map([
+        ['en', 'English'],
+        ['de', 'Deutsch'],
+        ...availableLanguages.map(({ code, nativeName }) => [code, nativeName] as const),
+    ]);
+    if (!languageOptions.has(notesLocale)) languageOptions.set(notesLocale, notesLocale);
     const draftValid = draft.trim().length > 0 && new TextEncoder().encode(draft).length <= 20000;
 
     useEffect(() => {
         const controller = new AbortController();
         axios
-            .get<{ data: PanelChangelog }>(endpoint, { signal: controller.signal })
+            .get<{ data: PanelChangelog }>(endpoint, {
+                params: { locale: notesLocale },
+                signal: controller.signal,
+            })
             .then(({ data }) => {
-                setConfig(data.data);
-                const initial = data.data.releases[0];
-                if (initial) {
-                    setVersion(initial.version);
-                    setDraft(initial.body);
-                }
+                setLoaded({ locale: notesLocale, config: data.data });
+                setDraftText(null);
             })
             .catch((error: unknown) => {
-                if (!axios.isCancel(error)) setConfig(null);
+                if (!axios.isCancel(error)) setLoaded({ locale: notesLocale, config: null });
             });
         return () => controller.abort();
-    }, []);
+    }, [notesLocale]);
 
     async function setVisibility(enabled: boolean) {
         setSaving(true);
         try {
-            const { data } = await axios.patch<{ data: PanelChangelog }>(endpoint, { enabled });
-            setConfig(data.data);
+            const { data } = await axios.patch<{ data: PanelChangelog }>(
+                endpoint,
+                { enabled },
+                { params: { locale: notesLocale } },
+            );
+            setLoaded({ locale: notesLocale, config: data.data });
             await refetch();
             toast.success(t('changelogs.saved'));
         } catch (error) {
@@ -83,10 +96,13 @@ export default function ChangelogSettingsPage() {
         if (!selected) return;
         setSaving(true);
         try {
-            const { data } = await axios.put<{ data: PanelChangelog }>(endpoint + '/' + selected.version, { body });
-            setConfig(data.data);
-            const saved = data.data.releases.find((release) => release.version === selected.version);
-            if (saved) setDraft(saved.body);
+            const { data } = await axios.put<{ data: PanelChangelog }>(
+                endpoint + '/' + selected.version,
+                { body },
+                { params: { locale: notesLocale } },
+            );
+            setLoaded({ locale: notesLocale, config: data.data });
+            setDraftText(null);
             toast.success(t('changelogs.saved'));
         } catch (error) {
             toast.error(getApiErrorMessage(error, t, 'changelogs.saveFailed'));
@@ -136,10 +152,25 @@ export default function ChangelogSettingsPage() {
                                 }}
                             >
                                 <label className='block max-w-xs space-y-2'>
+                                    <span className='text-sm font-medium'>{t('changelogs.language')}</span>
+                                    <select
+                                        className='bg-background w-full rounded-md border px-3 py-2 text-sm'
+                                        value={notesLocale}
+                                        disabled={saving || dirty}
+                                        onChange={(event) => setLanguage(event.target.value)}
+                                    >
+                                        {Array.from(languageOptions, ([code, label]) => (
+                                            <option key={code} value={code}>
+                                                {label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </label>
+                                <label className='block max-w-xs space-y-2'>
                                     <span className='text-sm font-medium'>{t('changelogs.version')}</span>
                                     <select
                                         className='bg-background w-full rounded-md border px-3 py-2 text-sm'
-                                        value={version}
+                                        value={selected.version}
                                         disabled={saving || dirty}
                                         onChange={(event) => {
                                             const release = config.releases.find(
@@ -147,7 +178,7 @@ export default function ChangelogSettingsPage() {
                                             );
                                             if (release) {
                                                 setVersion(release.version);
-                                                setDraft(release.body);
+                                                setDraftText(null);
                                             }
                                         }}
                                     >
@@ -164,7 +195,7 @@ export default function ChangelogSettingsPage() {
                                         rows={12}
                                         value={draft}
                                         disabled={!canEdit || saving}
-                                        onChange={(event) => setDraft(event.target.value)}
+                                        onChange={(event) => setDraftText(event.target.value)}
                                     />
                                 </label>
                                 {canEdit && (
@@ -177,7 +208,7 @@ export default function ChangelogSettingsPage() {
                                                 type='button'
                                                 variant='outline'
                                                 disabled={saving}
-                                                onClick={() => setDraft(selected.body)}
+                                                onClick={() => setDraftText(null)}
                                             >
                                                 {t('changelogs.discard')}
                                             </Button>

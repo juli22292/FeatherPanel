@@ -377,6 +377,18 @@ export default function AdminSubdomainsPage() {
         }
     };
 
+    const getRequestedSpellMapping = (mappings: SubdomainSpellMapping[] = []) => {
+        const spellId = Number(new URLSearchParams(window.location.search).get('map_spell'));
+        if (mappings.some((mapping) => mapping.spell_id === spellId) || !spells.some((spell) => spell.id === spellId)) {
+            return mappings;
+        }
+
+        return [
+            ...mappings,
+            { spell_id: spellId, protocol_service: null, protocol_type: 'tcp', priority: 10, weight: 10, ttl: 3600 },
+        ];
+    };
+
     const openCreate = () => {
         setDialogMode('create');
         setSelectedDomain(null);
@@ -386,7 +398,7 @@ export default function AdminSubdomainsPage() {
             is_active: true,
             cloudflare_zone_id: '',
             cloudflare_account_id: '',
-            spells: [],
+            spells: getRequestedSpellMapping(),
         });
         setZoneOverrideEnabled(false);
         setManageOpen(true);
@@ -406,7 +418,7 @@ export default function AdminSubdomainsPage() {
                 is_active: !!fullDomain.is_active,
                 cloudflare_zone_id: fullDomain.cloudflare_zone_id || '',
                 cloudflare_account_id: fullDomain.cloudflare_account_id || '',
-                spells: fullDomain.spells.map((s: SubdomainSpellMapping) => ({ ...s })),
+                spells: getRequestedSpellMapping(fullDomain.spells),
             });
             setZoneOverrideEnabled(!!fullDomain.cloudflare_zone_id);
             setManageOpen(true);
@@ -989,6 +1001,7 @@ export default function AdminSubdomainsPage() {
                                                     </Label>
                                                     <Input
                                                         value={mapping.protocol_service ?? ''}
+                                                        placeholder={t('admin.subdomains.optionalProtocolService')}
                                                         onChange={(e) =>
                                                             updateSpell(idx, 'protocol_service', e.target.value)
                                                         }

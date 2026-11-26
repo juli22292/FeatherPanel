@@ -72,6 +72,7 @@ export default function CreateProxyPage() {
     const [verifiedTargetIp, setVerifiedTargetIp] = React.useState<string | null>(null);
     const [nodePublicIp, setNodePublicIp] = React.useState<string | null>(null);
     const [managed, setManaged] = React.useState(false);
+    const [domainSuffix, setDomainSuffix] = React.useState<string | null>(null);
     const [managedDns, setManagedDns] = React.useState<DnsVerifyResponse['data'] | null>(null);
 
     const { getWidgets, fetchWidgets } = usePluginWidgets('server-proxy-new');
@@ -86,6 +87,12 @@ export default function CreateProxyPage() {
         ssl_key: '',
     });
 
+    const domainInput = formData.domain.trim().toLowerCase().replace(/\.$/, '');
+    const isShortName = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(domainInput);
+    const resolvedDomain = domainSuffix && isShortName ? `${domainInput}.${domainSuffix}` : domainInput;
+    const validDomain =
+        resolvedDomain.length <= (managed ? 234 : 253) &&
+        /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]$/.test(resolvedDomain);
     const selectedAllocation = allocations.find((allocation) => Number(allocation.id) === formData.allocation_id);
     const allocationIp = selectedAllocation?.ip;
     const targetIp =
@@ -112,6 +119,7 @@ export default function CreateProxyPage() {
                 setAllocations(allocs);
                 setNodePublicIp(data.data.node?.public_ip_v4 ?? null);
                 setManaged(data.data.managed_proxy === true);
+                setDomainSuffix(data.data.proxy_domain_suffix ?? null);
                 const primary = allocs.find((allocation) => allocation.is_primary) ?? allocs[0];
                 if (primary) {
                     setFormData((prev) =>
@@ -139,12 +147,12 @@ export default function CreateProxyPage() {
     }, [fetchData, fetchWidgets, proxyEnabled, canManage]);
 
     const handleVerifyDns = async () => {
-        if (!formData.domain || !formData.port) return;
+        if (!validDomain || !formData.port) return;
         setVerifyingDns(true);
         setDnsError(null);
         try {
             const { data } = await axios.post<DnsVerifyResponse>(`/api/user/servers/${uuidShort}/proxy/verify-dns`, {
-                domain: formData.domain,
+                domain: resolvedDomain,
                 port: formData.port,
                 allocation_id: formData.allocation_id,
             });
@@ -182,7 +190,7 @@ export default function CreateProxyPage() {
     };
 
     const handleCreate = async () => {
-        if (!formData.domain || !formData.port) {
+        if (!validDomain || !formData.port) {
             toast.error(t('serverProxy.domainRequired'));
             return;
         }
@@ -193,7 +201,7 @@ export default function CreateProxyPage() {
 
         setSaving(true);
         try {
-            await axios.post(`/api/user/servers/${uuidShort}/proxy/create`, formData);
+            await axios.post(`/api/user/servers/${uuidShort}/proxy/create`, { ...formData, domain: resolvedDomain });
             toast.success(t(managed ? 'serverProxy.managedQueued' : 'serverProxy.created'));
             router.push(`/server/${uuidShort}/proxy`);
         } catch (error) {
@@ -296,22 +304,34 @@ export default function CreateProxyPage() {
 
                         <div className='space-y-6'>
                             <div className='space-y-2.5'>
-                                <label className='text-muted-foreground ml-1 text-[9px] font-black tracking-[0.2em] uppercase'>
+                                <label
+                                    htmlFor='proxy-domain'
+                                    className='text-muted-foreground ml-1 text-[9px] font-black tracking-[0.2em] uppercase'
+                                >
                                     {t('serverProxy.domain')} <span className='text-primary'>*</span>
                                 </label>
                                 <Input
+                                    id='proxy-domain'
                                     required
+                                    aria-invalid={domainInput !== '' && !validDomain}
+                                    aria-describedby='proxy-domain-help'
                                     value={formData.domain}
                                     onChange={(e) => {
                                         setFormData({ ...formData, domain: e.target.value });
                                         resetDnsVerification();
                                     }}
-                                    placeholder='play.example.com'
+                                    placeholder={domainSuffix ? `play.${domainSuffix}` : 'play.example.com'}
                                     disabled={saving || verifyingDns}
                                     className='bg-secondary/50 border-border/10 focus:border-primary/50 h-12 rounded-xl text-sm font-extrabold transition-all'
                                 />
-                                <p className='text-muted-foreground ml-1 text-xs'>
-                                    {t('serverProxy.domainDescription')}
+                                <p id='proxy-domain-help' className='text-muted-foreground ml-1 text-xs'>
+                                    {domainInput && !validDomain
+                                        ? t('serverProxy.fullDomainHelp')
+                                        : domainSuffix && isShortName
+                                          ? t('serverProxy.completedDomain', { domain: resolvedDomain })
+                                          : domainSuffix
+                                            ? t('serverProxy.shortDomainHelp', { domain: domainSuffix })
+                                            : t('serverProxy.fullDomainHelp')}
                                 </p>
                             </div>
 
@@ -351,7 +371,9 @@ export default function CreateProxyPage() {
                                             {t('serverProxy.verifyDns')}
                                         </h4>
                                         <p className='text-muted-foreground text-xs leading-relaxed'>
-                                            {t('serverProxy.pointDomain', { domain: formData.domain || 'domain' })}
+                                            {t('serverProxy.pointDomain', {
+                                                domain: (validDomain && resolvedDomain) || 'play.example.com',
+                                            })}
                                         </p>
                                     </div>
                                 </div>
@@ -396,7 +418,7 @@ export default function CreateProxyPage() {
                                     <Button
                                         onClick={handleVerifyDns}
                                         disabled={
-                                            !formData.domain || !formData.port || verifyingDns || dnsVerified || saving
+                                            !validDomain || !formData.port || verifyingDns || dnsVerified || saving
                                         }
                                         size='sm'
                                         className={cn(

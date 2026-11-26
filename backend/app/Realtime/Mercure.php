@@ -66,6 +66,16 @@ final class Mercure
         return '/users/' . $userUuid;
     }
 
+    public static function ticketTopic(string $ownerUuid, string $ticketUuid): string
+    {
+        return self::userTopic(strtolower($ownerUuid)) . '/tickets/' . strtolower($ticketUuid);
+    }
+
+    public static function adminTicketTopic(string $ticketUuid): string
+    {
+        return '/admin/tickets/' . strtolower($ticketUuid);
+    }
+
     public static function isEnabled(): bool
     {
         $flag = strtolower(trim((string) self::env('FEATHERPANEL_MERCURE', 'off')));

@@ -478,6 +478,7 @@ interface ConfigInterface
     public const CHATBOT_USER_PROMPT = 'chatbot_user_prompt';
     /** Premium: custom AI display name (empty = default FeatherPanel AI) */
     public const CHATBOT_DISPLAY_NAME = 'chatbot_display_name';
+    public const CHATBOT_SUBTITLE = 'chatbot_subtitle';
     /** Premium: custom AI avatar URL (empty = panel logo) */
     public const CHATBOT_AVATAR_URL = 'chatbot_avatar_url';
 

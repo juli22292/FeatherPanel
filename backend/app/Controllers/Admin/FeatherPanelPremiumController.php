@@ -83,12 +83,25 @@ class FeatherPanelPremiumController
 
         $config = App::getInstance(true)->getConfig();
 
+        $subtitle = null;
+        if (array_key_exists('chatbot_subtitle', $body)) {
+            $value = $body['chatbot_subtitle'];
+            if (!is_string($value) || mb_strlen(trim($value)) > 64) {
+                return ApiResponse::error('AI assistant subtitle must be at most 64 characters.', 'INVALID_CHATBOT_SUBTITLE', 400);
+            }
+            $subtitle = trim($value);
+        }
+
         if (array_key_exists('chatbot_display_name', $body)) {
             $name = trim((string) $body['chatbot_display_name']);
             if (mb_strlen($name) > 64) {
                 return ApiResponse::error('AI display name must be at most 64 characters.', 'INVALID_DISPLAY_NAME', 400);
             }
             $config->setSetting(ConfigInterface::CHATBOT_DISPLAY_NAME, $name);
+        }
+
+        if ($subtitle !== null) {
+            $config->setSetting(ConfigInterface::CHATBOT_SUBTITLE, $subtitle);
         }
 
         if (array_key_exists('chatbot_avatar_url', $body)) {
@@ -183,6 +196,7 @@ class FeatherPanelPremiumController
             'premium' => $premium,
             'settings' => [
                 'chatbot_display_name' => (string) ($config->getSetting(ConfigInterface::CHATBOT_DISPLAY_NAME, '') ?? ''),
+                'chatbot_subtitle' => (string) ($config->getSetting(ConfigInterface::CHATBOT_SUBTITLE, '') ?? ''),
                 'chatbot_avatar_url' => (string) ($config->getSetting(ConfigInterface::CHATBOT_AVATAR_URL, '') ?? ''),
                 'branding_show_powered_by' => ($config->getSetting(ConfigInterface::BRANDING_SHOW_POWERED_BY, 'true') ?? 'true') === 'true',
                 'branding_show_version' => ($config->getSetting(ConfigInterface::BRANDING_SHOW_VERSION, 'true') ?? 'true') === 'true',

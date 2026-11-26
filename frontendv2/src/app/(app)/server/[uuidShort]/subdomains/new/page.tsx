@@ -21,6 +21,7 @@ import axios, { AxiosError } from 'axios';
 import { useTranslation } from '@/contexts/TranslationContext';
 import { Globe, Lock, Settings2, Info, Plus } from 'lucide-react';
 
+import { SubdomainSetupState } from '@/components/server/SubdomainSetupState';
 import { ServerPageHeader } from '@/components/server/ServerPageHeader';
 import { Button } from '@/components/featherui/Button';
 import { Input } from '@/components/featherui/Input';
@@ -45,7 +46,7 @@ export default function CreateSubdomainPage() {
     const { settings, loading: settingsLoading } = useSettings();
     // The sidebar hides this page when admins turn the feature off; reached by URL it says so instead of erroring.
     const subdomainsEnabled = isEnabled(settings?.server_allow_user_made_subdomains);
-    const { hasPermission, loading: permissionsLoading } = useServerPermissions(uuidShort);
+    const { hasPermission, loading: permissionsLoading, server } = useServerPermissions(uuidShort);
     const { getWidgets } = usePluginWidgets('server-subdomains-new');
 
     const canManage = hasPermission('subdomain.manage');
@@ -69,16 +70,19 @@ export default function CreateSubdomainPage() {
             if (data?.data?.overview) {
                 setOverview(data.data.overview);
 
-                if (data.data.overview.domains && data.data.overview.domains.length > 0 && !formData.domain_uuid) {
-                    setFormData((prev) => ({ ...prev, domain_uuid: data.data.overview.domains[0].uuid }));
-                }
+                const domains = data.data.overview.domains;
+                setFormData((prev) =>
+                    domains.some((domain) => domain.uuid === prev.domain_uuid)
+                        ? prev
+                        : { ...prev, domain_uuid: domains[0]?.uuid ?? '' },
+                );
             }
         } catch (error) {
             console.error('Failed to fetch data:', error);
         } finally {
             setLoading(false);
         }
-    }, [uuidShort, formData.domain_uuid]);
+    }, [uuidShort]);
 
     React.useEffect(() => {
         if (settingsLoading) return;
@@ -168,26 +172,7 @@ export default function CreateSubdomainPage() {
         (overview?.max_allowed ?? 0);
 
     if (availableDomains.length === 0 && !loading) {
-        return (
-            <div className='fp-surface flex flex-col items-center justify-center space-y-8 rounded-xl border py-24 text-center'>
-                <div className='bg-primary/10 border-primary/20 relative flex h-32 w-32 items-center justify-center rounded-3xl border-2'>
-                    <Globe className='text-primary h-16 w-16' />
-                </div>
-                <div className='max-w-md space-y-3 px-4'>
-                    <h2 className='text-3xl font-black tracking-tight uppercase'>
-                        {t('serverSubdomains.noDomainsAvailable')}
-                    </h2>
-                </div>
-                <Button
-                    variant='outline'
-                    size='default'
-                    className='mt-8 h-14 rounded-2xl px-10'
-                    onClick={() => safeBack(router)}
-                >
-                    {t('common.goBack')}
-                </Button>
-            </div>
-        );
+        return <SubdomainSetupState overview={overview} spell={server?.spell} onBack={() => safeBack(router)} />;
     }
 
     return (

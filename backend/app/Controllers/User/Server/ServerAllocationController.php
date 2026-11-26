@@ -24,6 +24,9 @@ use App\App;
 use App\Chat\Node;
 use App\Chat\Server;
 use App\Chat\Allocation;
+use App\Chat\SubdomainDomain;
+use App\Permissions;
+use App\Helpers\PermissionHelper;
 use App\SubuserPermissions;
 use App\Chat\ServerActivity;
 use App\Helpers\ApiResponse;
@@ -191,8 +194,22 @@ class ServerAllocationController
                 'public_ip_v4' => $nodePublicIpv4,
             ],
             'managed_proxy' => $edge['enabled'],
+            'proxy_domain_suffix' => ReverseProxyAddresses::allowsProxy((int) $server['spell_id'], $reverseProxyRules)
+                && $this->checkPermission($request, $server, SubuserPermissions::PROXY_MANAGE) === null
+                ? $this->getProxyDomainSuffix($server, $user)
+                : null,
             'allocations' => $allocations,
         ], 'Server allocations fetched successfully');
+    }
+
+    private function getProxyDomainSuffix(array $server, array $user): ?string
+    {
+        $domains = SubdomainDomain::getActiveDomainsForSpell((int) $server['spell_id']);
+        if ($domains === [] && PermissionHelper::hasPermission($user['uuid'], Permissions::ADMIN_SUBDOMAINS_VIEW, $user)) {
+            $domains = SubdomainDomain::getDomains(1, 2, '', false);
+        }
+
+        return count($domains) === 1 ? $domains[0]['domain'] : null;
     }
 
     /**

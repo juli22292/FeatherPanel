@@ -467,6 +467,7 @@ export interface AllocationsResponse {
         allocations: AllocationItem[];
         node?: { public_ip_v4?: string | null };
         managed_proxy?: boolean;
+        proxy_domain_suffix?: string | null;
     };
     message?: string;
 }
@@ -595,6 +596,7 @@ export interface SubdomainRequestEntry {
 
 export interface SubdomainOverview {
     can_bypass_approval?: boolean;
+    spell_allowed?: boolean;
     requests?: SubdomainRequestEntry[];
     pending_total?: number;
     current_total: number;

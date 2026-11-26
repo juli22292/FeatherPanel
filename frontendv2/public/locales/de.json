@@ -1,0 +1,31 @@
+{
+    "changelogs": {
+        "title": "Changelogs",
+        "description": "Sieh nach, was sich in den einzelnen ServerPanel-Versionen geändert hat.",
+        "settings": "Changelog-Einstellungen",
+        "settingsDescription": "Lege fest, ob das Panel Changelogs anzeigt, und bearbeite die Release-Texte.",
+        "visibility": "Changelogs anzeigen",
+        "visibilityHint": "Angemeldete Nutzer finden die Seite unter Support.",
+        "notes": "Release-Texte",
+        "language": "Sprache der Release-Texte",
+        "version": "Version",
+        "markdown": "Release-Text (Markdown)",
+        "earlyBeta": "Frühe Beta",
+        "stable": "Stabil",
+        "github": "Release auf GitHub ansehen",
+        "disabled": "Changelogs sind deaktiviert.",
+        "loadFailed": "Der Changelog konnte nicht geladen werden.",
+        "saveFailed": "Die Changelog-Einstellungen konnten nicht gespeichert werden.",
+        "saved": "Changelog-Einstellungen gespeichert.",
+        "reset": "Originaltext wiederherstellen",
+        "discard": "Änderungen verwerfen"
+    },
+    "admin": {
+        "featherpanel_premium": {
+            "customize": {
+                "ai_subtitle": "KI-Assistenten-Untertitel",
+                "ai_subtitle_help": "Steht im Live-Chat unter dem Assistentennamen. Ohne Eingabe erscheint der Panelname gefolgt von AI."
+            }
+        }
+    }
+}

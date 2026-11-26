@@ -20,6 +20,7 @@ declare(strict_types=1);
 use App\App;
 use RateLimit\Rate;
 use App\Controllers\ChangelogsController;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\RouteCollection;
 
 return static function (RouteCollection $routes): void {
@@ -27,7 +28,7 @@ return static function (RouteCollection $routes): void {
         $routes,
         'user-changelogs',
         '/api/user/changelogs',
-        static fn () => (new ChangelogsController())->show(),
+        static fn (Request $request) => (new ChangelogsController())->show(false, $request),
         ['GET'],
         Rate::perMinute(60),
         'user-changelogs',

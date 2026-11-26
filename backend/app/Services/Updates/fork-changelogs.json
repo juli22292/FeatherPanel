@@ -1,93 +1,142 @@
 {
+  "1.5.6.9": {
+    "version": "1.5.6.9",
+    "published_at": "2026-11-26",
+    "channel": "stable",
+    "notes": {
+      "en": "- Linux account creation and password resets in Serverinfo recognize successful operations on Proxmox hosts whose login shell prints warnings.\n- Reverse Proxy accepts short hostnames when the server has one eligible managed domain. The Subdomains pages make missing domain-to-spell mappings clear and support IP targets for DNS records.\n- Release notes and release dates follow the selected panel language. Administrators can edit translations per language.\n- The live chat has a configurable AI assistant subtitle. Its default is the panel name followed by AI.\n- Ticket conversations update automatically for customers and staff.",
+      "de": "- Linux-Konten lassen sich unter **Serverinfo** auch dann erstellen und Passwörter zurücksetzen, wenn die Proxmox-Shell Warnungen ausgibt.\n- **Reverse Proxy** ergänzt Kurznamen, wenn genau eine verwaltete Domain für den Server infrage kommt. Bei **Subdomains** sind fehlende Domain-Zuordnungen sichtbar. IP-Ziele werden als DNS-Adressrecords unterstützt.\n- Release-Texte und Datumsangaben folgen der gewählten Panel-Sprache. Admins können die Texte je Sprache bearbeiten.\n- Der Untertitel im Live-Chat ist einstellbar. Standard ist der Panelname gefolgt von AI.\n- Ticket-Unterhaltungen aktualisieren sich für Nutzer und Support automatisch."
+    },
+    "url": "https://github.com/juli22292/FeatherPanel/releases/tag/v1.5.6.9"
+  },
   "1.5.6.8": {
     "version": "1.5.6.8",
     "published_at": "2026-11-23",
     "channel": "early_beta",
-    "body": "- Added a changelog page under Support with the fork's complete release history.\n- Added changelog settings under System for visibility and release-note editing.\n- Fixed loading the subdomain request queue. Root administrators can create mapped subdomains immediately.\n- Root administrators can view stored VDS access credentials using the same password confirmation as the owner where applicable.\n- The live AI chat uses the configured assistant name and panel branding.",
+    "notes": {
+      "en": "- Added a changelog page under Support with the fork's complete release history.\n- Added changelog settings under System for visibility and release-note editing.\n- Fixed loading the subdomain request queue. Root administrators can create mapped subdomains immediately.\n- Root administrators can view stored VDS access credentials using the same password confirmation as the owner where applicable.\n- The live AI chat uses the configured assistant name and panel branding.",
+      "de": "- Die vollständige Release-Historie des Forks steht unter **Support → Changelogs**.\n- Unter **System → Changelog Settings** lassen sich die Anzeige und die Release-Texte bearbeiten.\n- Die Subdomain-Anfrageliste lädt wieder. Panel-Root kann passend zugeordnete Subdomains direkt erstellen.\n- Panel-Root kann gespeicherte VDS-Zugangsdaten einsehen. Beim Anzeigen von Linux-Passwörtern greift die vorhandene Sicherheitsbestätigung.\n- Der Live-Chat verwendet den konfigurierten Assistentennamen und Panelnamen."
+    },
     "url": "https://github.com/juli22292/FeatherPanel/releases/tag/v1.5.6.8"
   },
   "1.5.6.7": {
     "version": "1.5.6.7",
     "published_at": "2026-11-23T18:58:40Z",
     "channel": "stable",
-    "body": "- Administratoren mit VDS-Zugriff sehen die Linux-Konten und Verbindungsdaten unter **Serverinfo**. Passwortaktionen bleiben beim Besitzer.\n- Das Standardkonto und **fünf zusätzliche Linux-Konten** sind möglich. Root wird separat geführt.\n- Der Proxy-Bereich auf Gameservern folgt der Spell-Auswahl unter **System → Reverse Proxy**.\n- Unter **Subdomains → Subdomain Requests** kannst du Spells freigeben und Anfragen mit optionaler Begründung annehmen oder ablehnen. Der DNS-Eintrag wird bei der Freigabe erstellt.\n\nDie Veröffentlichungsdateien unterstützen Panel-Updates auf Linux AMD64.",
+    "notes": {
+      "en": "- Administrators with VDS access can see Linux accounts and connection details in **Serverinfo**. Password actions are available to the owner.\n- Guests support the standard account plus up to five additional Linux accounts. Root is counted separately.\n- The game server Proxy tab follows the spell selection under **System → Reverse Proxy**.\n- Under **Subdomains → Subdomain Requests**, administrators can select eligible spells and approve or reject requests with an optional reason. Approval creates the DNS record.\n\nThe release includes Linux AMD64 Docker archives for panel updates.",
+      "de": "- Administratoren mit VDS-Zugriff sehen die Linux-Konten und Verbindungsdaten unter **Serverinfo**. Passwortaktionen bleiben beim Besitzer.\n- Das Standardkonto und **fünf zusätzliche Linux-Konten** sind möglich. Root wird separat geführt.\n- Der Proxy-Bereich auf Gameservern folgt der Spell-Auswahl unter **System → Reverse Proxy**.\n- Unter **Subdomains → Subdomain Requests** kannst du Spells freigeben und Anfragen mit optionaler Begründung annehmen oder ablehnen. Der DNS-Eintrag wird bei der Freigabe erstellt.\n\nDie Veröffentlichungsdateien unterstützen Panel-Updates auf Linux AMD64."
+    },
     "url": "https://github.com/juli22292/FeatherPanel/releases/tag/v1.5.6.7"
   },
   "1.5.6.6": {
     "version": "1.5.6.6",
     "published_at": "2026-11-22T21:16:25Z",
     "channel": "stable",
-    "body": "- **Configuration → Serverinfo** ist für alle LXC-Container und QEMU/KVM-VMs sichtbar.\n- Besitzer können lokale Linux-Konten auslesen, Passwörter gezielt setzen und zusätzliche Konten anlegen. Andere berechtigte Nutzer sehen allgemeine Verbindungsdaten.\n- Bei LXC braucht jeder Proxmox-Host einmalig den eingeschränkten SSH-Connector. Anleitung und Installer liegen unter `deploy/lxc-guest-access` im Quellcode dieses Releases.\n- Die Kontoanzeige verändert bestehende Linux-Konten nicht. Die automatische Einrichtung neuer LXC-Container kann beim Erstellen ausgewählt werden, wenn der Host konfiguriert ist.\n\nDieses Release unterstützt Linux/amd64-Updates über **Admin → System Updates**.",
+    "notes": {
+      "en": "- **Configuration → Serverinfo** is available for LXC containers and QEMU/KVM VMs.\n- Owners can list local Linux accounts, set passwords and add accounts. Other authorized users can view basic connection details.\n- Each Proxmox host needs the restricted SSH connector for LXC. The instructions and installer are in the release source under deploy/lxc-guest-access.\n- Opening the page preserves existing Linux accounts. Automatic account setup can be selected for new LXC containers on configured hosts.\n\nThis release supports Linux AMD64 updates under **Admin → System Updates**.",
+      "de": "- **Configuration → Serverinfo** ist für alle LXC-Container und QEMU/KVM-VMs sichtbar.\n- Besitzer können lokale Linux-Konten auslesen, Passwörter gezielt setzen und zusätzliche Konten anlegen. Andere berechtigte Nutzer sehen allgemeine Verbindungsdaten.\n- Bei LXC braucht jeder Proxmox-Host einmalig den eingeschränkten SSH-Connector. Anleitung und Installer liegen unter `deploy/lxc-guest-access` im Quellcode dieses Releases.\n- Die Kontoanzeige verändert bestehende Linux-Konten nicht. Die automatische Einrichtung neuer LXC-Container kann beim Erstellen ausgewählt werden, wenn der Host konfiguriert ist.\n\nDieses Release unterstützt Linux/amd64-Updates über **Admin → System Updates**."
+    },
     "url": "https://github.com/juli22292/FeatherPanel/releases/tag/v1.5.6.6"
   },
   "1.5.6.5": {
     "version": "1.5.6.5",
     "published_at": "2026-11-22T20:36:57Z",
     "channel": "stable",
-    "body": "- **KVM → Configuration → KVM Serverinfo** zeigt dem Besitzer die IP, die SSH-/SFTP-Ports und die vorhandenen Linux-Konten.\n- Bei bestehenden VMs ändert das Öffnen der Seite keine Zugangsdaten. Nur der Besitzer kann gezielt Passwörter setzen und Konten hinzufügen.\n- Neue Linux-KVMs können Root und das Standardkonto automatisch einrichten. Dafür muss die Cloud-init-Vorlage den QEMU Guest Agent enthalten. Auch bei bestehenden VMs setzt die Kontoverwaltung einen laufenden, für den Proxmox-Token erreichbaren Guest Agent voraus.\n- Die Passwörter werden bei Bedarf angezeigt und sind standardmäßig verdeckt. Das Panel erlaubt bis zu fünf zusätzliche Konten pro VM.\n\nDie Linux/amd64-Archive unterstützen das Update über **Admin → System Updates**.",
+    "notes": {
+      "en": "- **KVM → Configuration → KVM Serverinfo** shows the owner the IP address, SSH/SFTP ports and existing Linux accounts.\n- Opening the page preserves credentials on existing VMs. The owner can set passwords and add accounts.\n- New Linux KVM guests can provision root and the standard account. The cloud-init template needs a QEMU Guest Agent reachable by the Proxmox token.\n- Passwords are masked by default and available on demand. The panel allows up to five additional accounts per VM.\n\nThe Linux AMD64 archives support updates under **Admin → System Updates**.",
+      "de": "- **KVM → Configuration → KVM Serverinfo** zeigt dem Besitzer die IP, die SSH-/SFTP-Ports und die vorhandenen Linux-Konten.\n- Bei bestehenden VMs ändert das Öffnen der Seite keine Zugangsdaten. Nur der Besitzer kann gezielt Passwörter setzen und Konten hinzufügen.\n- Neue Linux-KVMs können Root und das Standardkonto automatisch einrichten. Dafür muss die Cloud-init-Vorlage den QEMU Guest Agent enthalten. Auch bei bestehenden VMs setzt die Kontoverwaltung einen laufenden, für den Proxmox-Token erreichbaren Guest Agent voraus.\n- Die Passwörter werden bei Bedarf angezeigt und sind standardmäßig verdeckt. Das Panel erlaubt bis zu fünf zusätzliche Konten pro VM.\n\nDie Linux/amd64-Archive unterstützen das Update über **Admin → System Updates**."
+    },
     "url": "https://github.com/juli22292/FeatherPanel/releases/tag/v1.5.6.5"
   },
   "1.5.6.4": {
     "version": "1.5.6.4",
     "published_at": "2026-11-22T15:31:13Z",
     "channel": "stable",
-    "body": "- Unter **Admin → System → Reverse Proxy** lassen sich der öffentliche HTTPS-Proxy, die öffentliche IP und die Zertifikats-E-Mail konfigurieren.\n- Berechtigte Nutzer können ihre Domain unter **Create Proxy** per DNS-TXT nachweisen. Der Connector richtet NGINX und HTTPS ein. Die Proxy-Liste zeigt den Fortschritt und ermöglicht Wiederholen oder Entfernen.\n- Die Datenbank bindet einen verwalteten Proxy an seine Allocation. Dadurch bleibt eine aktive Route vor einer Neuzuordnung des Zielports geschützt.\n- Für die Aktivierung ist die einmalige Installation des privaten Connectors auf dem öffentlichen NGINX-Host erforderlich. Die Anleitung steht im Release-Quellcode unter `deploy/reverse-proxy-edge/README.md`.\n\nDas Update für Linux/amd64 ist über **Admin → System Updates** verfügbar. Der Fork-Updater nutzt die Docker-Archive dieses Releases, wenn die Registry keine Images liefert.",
+    "notes": {
+      "en": "- **Admin → System → Reverse Proxy** lets administrators configure the public HTTPS proxy, the public IP address and the certificate contact email.\n- Authorized users can verify their domain with a DNS TXT record under **Create Proxy**. The connector sets up NGINX and HTTPS. The proxy list shows progress and offers retry and removal actions.\n- The database ties a managed proxy to its allocation to protect the target port of an active route.\n- Setup requires installing the private connector on the public NGINX host. The instructions are in deploy/reverse-proxy-edge/README.md in the release source.\n\nThe Linux AMD64 update is available under **Admin → System Updates**. The fork updater uses the release archives when the registry cannot deliver images.",
+      "de": "- Unter **Admin → System → Reverse Proxy** lassen sich der öffentliche HTTPS-Proxy, die öffentliche IP und die Zertifikats-E-Mail konfigurieren.\n- Berechtigte Nutzer können ihre Domain unter **Create Proxy** per DNS-TXT nachweisen. Der Connector richtet NGINX und HTTPS ein. Die Proxy-Liste zeigt den Fortschritt und ermöglicht Wiederholen oder Entfernen.\n- Die Datenbank bindet einen verwalteten Proxy an seine Allocation. Dadurch bleibt eine aktive Route vor einer Neuzuordnung des Zielports geschützt.\n- Für die Aktivierung ist die einmalige Installation des privaten Connectors auf dem öffentlichen NGINX-Host erforderlich. Die Anleitung steht im Release-Quellcode unter `deploy/reverse-proxy-edge/README.md`.\n\nDas Update für Linux/amd64 ist über **Admin → System Updates** verfügbar. Der Fork-Updater nutzt die Docker-Archive dieses Releases, wenn die Registry keine Images liefert."
+    },
     "url": "https://github.com/juli22292/FeatherPanel/releases/tag/v1.5.6.4"
   },
   "1.5.6.3": {
     "version": "1.5.6.3",
     "published_at": "2026-11-22T13:06:53Z",
     "channel": "stable",
-    "body": "- **Verbindungsadressen:** Das Dashboard, die Server-Konsole und FeatherOS verwenden zuerst eine zugewiesene Subdomain, dann den Allocation-Alias. Ist kein Alias gesetzt, dient die öffentliche Proxy-IP als Fallback. Die Allocation-Seite kopiert den Alias oder die öffentliche IP zusammen mit dem Port. Bei der DNS-Prüfung wird die öffentliche IP für A- und AAAA-Records verwendet.\n- **FeatherOS:** Unter **Admin → Settings → Modules → FeatherOS** lässt sich der Desktop für alle Nutzer ein- oder ausschalten. Bei deaktiviertem Modul führt `/os` zum Dashboard.\n\nDas Docker-Update für Linux/amd64 ist über **Admin → System Updates** verfügbar. Falls die Registry keine Images liefert, verwendet der Fork-Updater die Docker-Archive dieses Releases.",
+    "notes": {
+      "en": "- **Connection addresses:** The dashboard, server console and FeatherOS prefer the assigned subdomain or allocation alias. The public proxy IP can serve as a fallback. The allocation page copies the alias or public IP with the port. The DNS check uses the public IP for A and AAAA records.\n- **FeatherOS:** **Admin → Settings → Modules → FeatherOS** controls desktop access for all users. The dashboard opens when the desktop module is disabled.\n\nThe Linux AMD64 update is available under **Admin → System Updates**. The fork updater uses the release archives when the registry cannot deliver images.",
+      "de": "- **Verbindungsadressen:** Das Dashboard, die Server-Konsole und FeatherOS verwenden zuerst eine zugewiesene Subdomain, dann den Allocation-Alias. Ist kein Alias gesetzt, dient die öffentliche Proxy-IP als Fallback. Die Allocation-Seite kopiert den Alias oder die öffentliche IP zusammen mit dem Port. Bei der DNS-Prüfung wird die öffentliche IP für A- und AAAA-Records verwendet.\n- **FeatherOS:** Unter **Admin → Settings → Modules → FeatherOS** lässt sich der Desktop für alle Nutzer ein- oder ausschalten. Bei deaktiviertem Modul führt `/os` zum Dashboard.\n\nDas Docker-Update für Linux/amd64 ist über **Admin → System Updates** verfügbar. Falls die Registry keine Images liefert, verwendet der Fork-Updater die Docker-Archive dieses Releases."
+    },
     "url": "https://github.com/juli22292/FeatherPanel/releases/tag/v1.5.6.3"
   },
   "1.5.6.2": {
     "version": "1.5.6.2",
     "published_at": "2026-11-22T02:45:04Z",
     "channel": "stable",
-    "body": "ServerPanel v1.5.6.2\n\n- **Reverse Proxy:** Die DNS-Anleitung und DNS-Prüfung verwenden die öffentliche IP aus der passenden Regel unter **Admin → System → Reverse Proxy**. Die Regel bleibt pro Allocation-IP und Spell / Egg editierbar. Der Proxy behält das interne Weiterleitungsziel mit dem bisherigen Port.\n- **Virtual Servers:** Administratoren mit VDS-Zugriff können unter **Users** die Subuser und deren Berechtigungen einsehen.\n- **Status:** Unter **Dashboard → Status → Proxmox / VDS** gibt es eine eigene Ansicht für Node-Status und Auslastung. Die Anzeige richtet sich nach den Einstellungen der Statusseite.\n\nDas Docker-Update für Linux/amd64 ist über **Admin → System Updates** verfügbar. Der Fork-Updater verwendet die Docker-Archive dieses Releases, falls die Registry keine Images liefert.",
+    "notes": {
+      "en": "- **Reverse Proxy:** DNS instructions and verification use the public IP from the matching rule under **Admin → System → Reverse Proxy**. Rules can be configured per allocation IP and spell or egg. The proxy forwards to the assigned internal port.\n- **Virtual Servers:** Administrators with VDS access can view subusers and their permissions under **Users**.\n- **Status:** **Dashboard → Status → Proxmox / VDS** shows node health and usage according to the status-page settings.\n\nThe Linux AMD64 update is available under **Admin → System Updates**. The fork updater uses the release archives when the registry cannot deliver images.",
+      "de": "ServerPanel v1.5.6.2\n\n- **Reverse Proxy:** Die DNS-Anleitung und DNS-Prüfung verwenden die öffentliche IP aus der passenden Regel unter **Admin → System → Reverse Proxy**. Die Regel bleibt pro Allocation-IP und Spell / Egg editierbar. Der Proxy behält das interne Weiterleitungsziel mit dem bisherigen Port.\n- **Virtual Servers:** Administratoren mit VDS-Zugriff können unter **Users** die Subuser und deren Berechtigungen einsehen.\n- **Status:** Unter **Dashboard → Status → Proxmox / VDS** gibt es eine eigene Ansicht für Node-Status und Auslastung. Die Anzeige richtet sich nach den Einstellungen der Statusseite.\n\nDas Docker-Update für Linux/amd64 ist über **Admin → System Updates** verfügbar. Der Fork-Updater verwendet die Docker-Archive dieses Releases, falls die Registry keine Images liefert."
+    },
     "url": "https://github.com/juli22292/FeatherPanel/releases/tag/v1.5.6.2"
   },
   "1.5.6.1": {
     "version": "1.5.6.1",
     "published_at": "2026-11-22T01:41:26Z",
     "channel": "stable",
-    "body": "ServerPanel ist der neue Name dieses FeatherPanel-Forks.\n\n- Lokale Extras für Branding, Seitenleiste und KI-Darstellung stehen auf Installationen dieses Forks wieder standardmäßig zur Verfügung. Eine ausdrücklich gesetzte Deaktivierung bleibt wirksam.\n- Unter **Admin → System → Reverse Proxy** lassen sich interne Allocation-IPs einer öffentlichen IP zuordnen. Jede Regel kann sich auf bestimmte Spells oder Eggs beschränken.\n- Die Anzeige und die Kopierfunktion verwenden bei passenden Regeln die öffentliche Adresse mit dem bisherigen Gameserver-Port. Die Weiterleitung richtest du auf dem Root-Server ein.\n\nDas Docker-Update für Linux/amd64 ist über **Admin → System Updates** verfügbar. Wenn die Registry die Images nicht liefert, lädt der aktualisierte Host-Updater die vier geprüften Docker-Archive aus diesem Release.",
+    "notes": {
+      "en": "ServerPanel is the new name for this FeatherPanel fork.\n\n- Local branding, sidebar and AI appearance settings are available by default on fork installations. An explicit opt-out remains effective.\n- **Admin → System → Reverse Proxy** maps internal allocation IPs to public addresses. A rule can be restricted to specific spells or eggs.\n- Displayed and copied connection addresses use the public IP and assigned game port when a rule matches. Forwarding is configured on the root server.\n\nThe Linux AMD64 update is available under **Admin → System Updates**. The updated fork updater loads four verified Docker archives if the registry cannot deliver images.",
+      "de": "ServerPanel ist der neue Name dieses FeatherPanel-Forks.\n\n- Lokale Extras für Branding, Seitenleiste und KI-Darstellung stehen auf Installationen dieses Forks wieder standardmäßig zur Verfügung. Eine ausdrücklich gesetzte Deaktivierung bleibt wirksam.\n- Unter **Admin → System → Reverse Proxy** lassen sich interne Allocation-IPs einer öffentlichen IP zuordnen. Jede Regel kann sich auf bestimmte Spells oder Eggs beschränken.\n- Die Anzeige und die Kopierfunktion verwenden bei passenden Regeln die öffentliche Adresse mit dem bisherigen Gameserver-Port. Die Weiterleitung richtest du auf dem Root-Server ein.\n\nDas Docker-Update für Linux/amd64 ist über **Admin → System Updates** verfügbar. Wenn die Registry die Images nicht liefert, lädt der aktualisierte Host-Updater die vier geprüften Docker-Archive aus diesem Release."
+    },
     "url": "https://github.com/juli22292/FeatherPanel/releases/tag/v1.5.6.1"
   },
   "1.5.6": {
     "version": "1.5.6",
     "published_at": "2026-11-22T00:25:20Z",
     "channel": "stable",
-    "body": "**Stabiles Docker-Update für Linux/amd64.** Der CarrotPanel-Updater kann die vier Docker-Archive direkt aus diesem GitHub-Release laden. Mit dem aktualisierten Host-Updater wird das Update unter **Admin → System Updates** angeboten.\n\r\nCarrotPanel v1.5.6 basiert auf dem stabilen [FeatherPanel v1.5.5](https://github.com/MythicalLTD/FeatherPanel/releases/tag/v1.5.5).\n\n- Neue Statusanzeigen für Nodes und optionales Monitoring mit Prometheus, Grafana und Loki.\n- Zusätzliche Bestätigung für sensible Konto- und Admin-Aktionen.\n- Verbesserungen für WebSpace-Mail, SSO und Backups aus den übernommenen Releases.\n- Die eigenen Anpassungen für Branding und Seitenleiste bleiben erhalten.\n\nBei bestehenden Fork-Installationen den Host-Updater einmalig mit dem Installer aus diesem Quellcode aktualisieren. Er erkennt die Versionsnummer in den alten und neuen Backend-Images. Details stehen in [Updates dieses Forks](https://github.com/juli22292/FeatherPanel/blob/main/docs/updates.md).",
+    "notes": {
+      "en": "**Stable Docker update for Linux AMD64.** The updated CarrotPanel updater can install the four Docker archives from this release under **Admin → System Updates**.\n\nCarrotPanel v1.5.6 is based on [FeatherPanel v1.5.5](https://github.com/MythicalLTD/FeatherPanel/releases/tag/v1.5.5).\n\n- New node status views and optional monitoring with Prometheus, Grafana and Loki.\n- Additional confirmation for sensitive account and administration actions.\n- Improvements for WebSpace email, SSO and backups.\n- Includes the fork's branding and sidebar customization.\n\nExisting fork installations can upgrade the host updater with the installer in the release source. It recognizes old and new backend images. See the [fork update guide](https://github.com/juli22292/FeatherPanel/blob/main/docs/updates.md).",
+      "de": "**Stabiles Docker-Update für Linux/amd64.** Der CarrotPanel-Updater kann die vier Docker-Archive direkt aus diesem GitHub-Release laden. Mit dem aktualisierten Host-Updater wird das Update unter **Admin → System Updates** angeboten.\n\r\nCarrotPanel v1.5.6 basiert auf dem stabilen [FeatherPanel v1.5.5](https://github.com/MythicalLTD/FeatherPanel/releases/tag/v1.5.5).\n\n- Neue Statusanzeigen für Nodes und optionales Monitoring mit Prometheus, Grafana und Loki.\n- Zusätzliche Bestätigung für sensible Konto- und Admin-Aktionen.\n- Verbesserungen für WebSpace-Mail, SSO und Backups aus den übernommenen Releases.\n- Die eigenen Anpassungen für Branding und Seitenleiste bleiben erhalten.\n\nBei bestehenden Fork-Installationen den Host-Updater einmalig mit dem Installer aus diesem Quellcode aktualisieren. Er erkennt die Versionsnummer in den alten und neuen Backend-Images. Details stehen in [Updates dieses Forks](https://github.com/juli22292/FeatherPanel/blob/main/docs/updates.md)."
+    },
     "url": "https://github.com/juli22292/FeatherPanel/releases/tag/v1.5.6"
   },
   "1.4.3.2": {
     "version": "1.4.3.2",
     "published_at": "2026-10-20T20:03:33Z",
     "channel": "stable",
-    "body": "- Updated the fork to upstream FeatherPanel v1.5.0 and kept the fork updater and local customizations.\n\n**Full Changelog**: https://github.com/juli22292/FeatherPanel/compare/v1.4.3.1...v1.4.3.2",
+    "notes": {
+      "en": "- Updated the fork to upstream FeatherPanel v1.5.0 and kept the fork updater and local customizations.\n\n**Full Changelog**: https://github.com/juli22292/FeatherPanel/compare/v1.4.3.1...v1.4.3.2",
+      "de": "- Der Fork wurde auf FeatherPanel v1.5.0 aktualisiert. Der eigene Updater und die lokalen Anpassungen sind enthalten.\n\n[Alle Änderungen ansehen](https://github.com/juli22292/FeatherPanel/compare/v1.4.3.1...v1.4.3.2)"
+    },
     "url": "https://github.com/juli22292/FeatherPanel/releases/tag/v1.4.3.2"
   },
   "1.4.3.1": {
     "version": "1.4.3.1",
     "published_at": "2026-10-14T14:40:56Z",
     "channel": "stable",
-    "body": "## What's Changed\n* Release 1.4.3.1 with panel update support by @juli22292 in https://github.com/juli22292/FeatherPanel/pull/3\n\n\n**Full Changelog**: https://github.com/juli22292/FeatherPanel/compare/v1.4.3...v1.4.3.1",
+    "notes": {
+      "en": "## What's Changed\n* Release 1.4.3.1 with panel update support by @juli22292 in https://github.com/juli22292/FeatherPanel/pull/3\n\n\n**Full Changelog**: https://github.com/juli22292/FeatherPanel/compare/v1.4.3...v1.4.3.1",
+      "de": "- Diese Version ermöglicht Updates über das Panel.\n\n[Alle Änderungen ansehen](https://github.com/juli22292/FeatherPanel/compare/v1.4.3...v1.4.3.1)"
+    },
     "url": "https://github.com/juli22292/FeatherPanel/releases/tag/v1.4.3.1"
   },
   "1.4.3": {
     "version": "1.4.3",
     "published_at": "2026-10-13T18:40:17Z",
     "channel": "stable",
-    "body": "## What's Changed\n* Release 1.4.3: upload filename and fork updater by @juli22292 in https://github.com/juli22292/FeatherPanel/pull/2\n\n\n**Full Changelog**: https://github.com/juli22292/FeatherPanel/compare/v1.4.2...v1.4.3",
+    "notes": {
+      "en": "## What's Changed\n* Release 1.4.3: upload filename and fork updater by @juli22292 in https://github.com/juli22292/FeatherPanel/pull/2\n\n\n**Full Changelog**: https://github.com/juli22292/FeatherPanel/compare/v1.4.2...v1.4.3",
+      "de": "- Die Anzeige des Upload-Dateinamens wurde korrigiert. Der Fork-Updater ist enthalten.\n\n[Alle Änderungen ansehen](https://github.com/juli22292/FeatherPanel/compare/v1.4.2...v1.4.3)"
+    },
     "url": "https://github.com/juli22292/FeatherPanel/releases/tag/v1.4.3"
   },
   "1.4.2": {
     "version": "1.4.2",
     "published_at": "2026-10-13T13:12:24Z",
     "channel": "stable",
-    "body": "## What's Changed\n* Release 1.4.2: local customization and sidebar fix by @juli22292 in https://github.com/juli22292/FeatherPanel/pull/1\n\n## New Contributors\n* @juli22292 made their first contribution in https://github.com/juli22292/FeatherPanel/pull/1\n\n**Full Changelog**: https://github.com/juli22292/FeatherPanel/commits/v1.4.2",
+    "notes": {
+      "en": "## What's Changed\n* Release 1.4.2: local customization and sidebar fix by @juli22292 in https://github.com/juli22292/FeatherPanel/pull/1\n\n## New Contributors\n* @juli22292 made their first contribution in https://github.com/juli22292/FeatherPanel/pull/1\n\n**Full Changelog**: https://github.com/juli22292/FeatherPanel/commits/v1.4.2",
+      "de": "- Lokale Anpassungen für den Fork und eine Korrektur für die Seitenleiste. Dies war der erste Beitrag von @juli22292.\n\n[Alle Änderungen ansehen](https://github.com/juli22292/FeatherPanel/commits/v1.4.2)"
+    },
     "url": "https://github.com/juli22292/FeatherPanel/releases/tag/v1.4.2"
   }
 }

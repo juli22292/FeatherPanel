@@ -155,7 +155,6 @@ export default function ChatbotContainer({ open, onClose, mode = 'server', vdsIn
     const [loadingConversations, setLoadingConversations] = useState(false);
     const [showSidebar, setShowSidebar] = useState(false);
     const [expandedActivityMessages, setExpandedActivityMessages] = useState<string[]>([]);
-    const [chatModelName, setChatModelName] = useState('FeatherPanel AI');
     const [pendingActions, setPendingActions] = useState<PendingAction[]>([]);
     const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState>({
         open: false,
@@ -183,6 +182,8 @@ export default function ChatbotContainer({ open, onClose, mode = 'server', vdsIn
         customAvatar ||
         (theme === 'dark' ? settings?.app_logo_dark || '/logo.png' : settings?.app_logo_white || '/logo.png');
     const assistantName = settings?.chatbot_display_name?.trim() || t('chatbot.title');
+    const assistantSubtitle =
+        settings?.chatbot_subtitle?.trim() || (settings?.app_name?.trim() || 'ServerPanel') + ' AI';
     const slashQuery = inputMessage.startsWith('/') ? inputMessage.trim().toLowerCase() : '';
     const commandSuggestions = useMemo(() => {
         if (!slashQuery) return [];
@@ -372,12 +373,6 @@ export default function ChatbotContainer({ open, onClose, mode = 'server', vdsIn
             );
             if (typeof window !== 'undefined') {
                 window.localStorage.setItem(lastConversationStorageKey, String(conversationId));
-            }
-            if (data.messages.length > 0) {
-                const lastMessage = data.messages[data.messages.length - 1];
-                if (lastMessage?.model) {
-                    setChatModelName(lastMessage.model || 'FeatherPanel AI');
-                }
             }
             setShowSidebar(false);
             setTimeout(() => {
@@ -1005,10 +1000,6 @@ export default function ChatbotContainer({ open, onClose, mode = 'server', vdsIn
                 ),
             );
 
-            if (result.model) {
-                setChatModelName(result.model);
-            }
-
             if (result.conversation_id && !currentConversationId) {
                 setCurrentConversationId(result.conversation_id);
                 if (typeof window !== 'undefined') {
@@ -1177,13 +1168,11 @@ export default function ChatbotContainer({ open, onClose, mode = 'server', vdsIn
                                                         <h2 className='text-foreground text-sm font-semibold'>
                                                             {assistantName}
                                                         </h2>
-                                                        {chatModelName &&
-                                                            chatModelName !== assistantName &&
-                                                            chatModelName !== t('chatbot.title') && (
-                                                                <p className='text-muted-foreground truncate text-xs'>
-                                                                    {chatModelName}
-                                                                </p>
-                                                            )}
+                                                        {assistantSubtitle !== assistantName && (
+                                                            <p className='text-muted-foreground truncate text-xs'>
+                                                                {assistantSubtitle}
+                                                            </p>
+                                                        )}
                                                         <div className='mt-1 flex items-center gap-1.5'>
                                                             <span className='h-1.5 w-1.5 rounded-full bg-emerald-500' />
                                                             <span className='text-muted-foreground text-[11px]'>

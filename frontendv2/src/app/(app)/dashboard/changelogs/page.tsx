@@ -23,23 +23,27 @@ import remarkGfm from 'remark-gfm';
 import { PageHeader } from '@/components/featherui/PageHeader';
 import { PageLoading } from '@/components/featherui/PageLoading';
 import { useTranslation } from '@/contexts/TranslationContext';
+import { formatDateInTz } from '@/lib/dateUtils';
 import type { PanelChangelog } from '@/types/changelog';
 
-const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'long', timeZone: 'UTC' });
-
 export default function ChangelogsPage() {
-    const { t } = useTranslation();
-    const [data, setData] = useState<PanelChangelog | null>();
+    const { t, locale } = useTranslation();
+
+    const [loaded, setLoaded] = useState<{ locale: string; data: PanelChangelog | null }>();
+    const data = loaded?.locale === locale ? loaded.data : undefined;
     useEffect(() => {
         const controller = new AbortController();
         axios
-            .get<{ data: PanelChangelog }>('/api/user/changelogs', { signal: controller.signal })
-            .then((response) => setData(response.data.data))
+            .get<{ data: PanelChangelog }>('/api/user/changelogs', {
+                params: { locale },
+                signal: controller.signal,
+            })
+            .then((response) => setLoaded({ locale, data: response.data.data }))
             .catch((error: unknown) => {
-                if (!axios.isCancel(error)) setData(null);
+                if (!axios.isCancel(error)) setLoaded({ locale, data: null });
             });
         return () => controller.abort();
-    }, []);
+    }, [locale]);
 
     return (
         <div className='space-y-5'>
@@ -68,7 +72,7 @@ export default function ChangelogsPage() {
                                         : t('changelogs.stable')}
                                 </span>
                                 <time className='text-muted-foreground text-sm' dateTime={release.published_at}>
-                                    {dateFormat.format(new Date(release.published_at))}
+                                    {formatDateInTz(new Date(release.published_at), { locale, timeZone: 'UTC' })}
                                 </time>
                                 <ChevronDown
                                     className='text-muted-foreground ml-auto h-4 w-4 group-open:rotate-180'
@@ -76,7 +80,10 @@ export default function ChangelogsPage() {
                                 />
                             </summary>
                             <div className='border-t px-4 py-5 sm:px-6'>
-                                <div className='prose prose-sm dark:prose-invert max-w-none break-words'>
+                                <div
+                                    lang={release.content_locale}
+                                    className='prose prose-sm dark:prose-invert max-w-none break-words'
+                                >
                                     <ReactMarkdown remarkPlugins={[remarkGfm]}>{release.body}</ReactMarkdown>
                                 </div>
                                 <a

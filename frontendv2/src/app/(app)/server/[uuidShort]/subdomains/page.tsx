@@ -22,6 +22,7 @@ import { useTranslation } from '@/contexts/TranslationContext';
 import { ResourceCard } from '@/components/featherui/ResourceCard';
 import { Globe, Plus, Trash2, RefreshCw, AlertTriangle, Lock, Loader2 } from 'lucide-react';
 
+import { SubdomainSetupState } from '@/components/server/SubdomainSetupState';
 import { ServerPageHeader } from '@/components/server/ServerPageHeader';
 import { EmptyState } from '@/components/featherui/EmptyState';
 import { Button } from '@/components/featherui/Button';
@@ -45,7 +46,7 @@ export default function ServerSubdomainsPage() {
     const { settings, loading: settingsLoading } = useSettings();
     // The sidebar hides this page when admins turn the feature off; reached by URL it says so instead of erroring.
     const subdomainsEnabled = isEnabled(settings?.server_allow_user_made_subdomains);
-    const { hasPermission, loading: permissionsLoading } = useServerPermissions(uuidShort);
+    const { hasPermission, loading: permissionsLoading, server } = useServerPermissions(uuidShort);
     const { getWidgets } = usePluginWidgets('server-subdomains');
 
     const canManage = hasPermission('subdomain.manage');
@@ -245,12 +246,12 @@ export default function ServerSubdomainsPage() {
                 </section>
             )}
 
-            {subdomains.length === 0 ? (
+            {subdomains.length === 0 && !canRequest ? (
+                <SubdomainSetupState overview={overview} spell={server?.spell} />
+            ) : subdomains.length === 0 ? (
                 <EmptyState
                     title={t('serverSubdomains.noSubdomains')}
-                    description={
-                        canRequest ? t('subdomainRequests.explanation') : t('serverSubdomains.noDomainsAvailable')
-                    }
+                    description={t('subdomainRequests.explanation')}
                     icon={Globe}
                     action={
                         canRequest && (

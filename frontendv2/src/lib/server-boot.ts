@@ -156,9 +156,10 @@ function resolveIconLibrary(cookieValue: string | null | undefined): IconLibrary
 
 /**
  * Mirror client TranslationContext merge order:
- * 1) frontend `/locales/{lang|en}.json` base
- * 2) backend primary (`en`) overlays (custom/admin strings)
- * 3) backend selected locale overlays (installed FeatherCloud / uploaded langs)
+ * 1) frontend English base
+ * 2) backend English overrides
+ * 3) frontend locale strings
+ * 4) backend selected locale overrides
  */
 export const getServerBootData = cache(
     async (cookieLocale?: string | null, cookieIconLibrary?: string | null): Promise<ServerBootData> => {
@@ -168,7 +169,7 @@ export const getServerBootData = cache(
         const locale = resolveLocale(cookieLocale, settings);
         const iconLibrary = resolveIconLibrary(cookieIconLibrary);
 
-        let translations = (await loadFrontendLocale(locale)) || (await loadFrontendLocale(PRIMARY_LOCALE)) || {};
+        let translations = (await loadFrontendLocale(PRIMARY_LOCALE)) || {};
 
         // Backend catalogs are the source of truth for downloaded/custom languages.
         const backendPrimary = await loadBackendTranslations(PRIMARY_LOCALE);
@@ -177,6 +178,13 @@ export const getServerBootData = cache(
         }
 
         if (locale !== PRIMARY_LOCALE) {
+            const baseLanguage = locale.split('-')[0];
+            const frontendSelected =
+                (await loadFrontendLocale(locale)) ??
+                (baseLanguage !== locale && baseLanguage !== PRIMARY_LOCALE
+                    ? await loadFrontendLocale(baseLanguage)
+                    : null);
+            if (frontendSelected) translations = deepMerge(translations, frontendSelected);
             const backendLang = await loadBackendTranslations(locale);
             if (Object.keys(backendLang).length > 0) {
                 translations = deepMerge(translations, backendLang);

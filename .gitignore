@@ -37,6 +37,7 @@ backend/tests/*
 !backend/tests/SpellEggCompatibilityTest.php
 !backend/tests/LocalCustomizationTest.php
 !backend/tests/ReverseProxyAddressesTest.php
+!backend/tests/SubdomainDnsRecordTest.php
 !backend/tests/Backup/
 !backend/tests/Backup/*.php
 !backend/tests/Telemetry/

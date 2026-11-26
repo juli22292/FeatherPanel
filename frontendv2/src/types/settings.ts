@@ -76,6 +76,7 @@ export interface AppSettings {
     branding_show_version?: string;
     /** Premium: custom AI display name (empty = i18n default) */
     chatbot_display_name?: string;
+    chatbot_subtitle?: string;
     /** Premium: custom AI avatar URL (empty = panel logo) */
     chatbot_avatar_url?: string;
     /** Premium: JSON sidebar hide/order/custom links */

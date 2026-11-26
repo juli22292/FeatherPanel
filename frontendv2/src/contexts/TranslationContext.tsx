@@ -45,7 +45,7 @@ const TranslationContext = createContext<TranslationContextType | undefined>(und
 
 const DEFAULT_LOCALE = 'en';
 const PRIMARY_LOCALE = 'en';
-const CACHE_VERSION = '1.10';
+const CACHE_VERSION = '1.11';
 const LOCALE_USER_OVERRIDE_KEY = 'localeUserOverride';
 const LOCALE_MIGRATION_KEY = 'localeMigrationV1';
 
@@ -174,7 +174,8 @@ export function TranslationProvider({ children, initialLocale, initialTranslatio
 
     const loadFullTranslations = useCallback(
         async (lang: string) => {
-            let frontendTranslations: Record<string, unknown> = {};
+            let frontendPrimaryTranslations: Record<string, unknown> = {};
+            let frontendLocaleTranslations: Record<string, unknown> = {};
             let backendPrimaryTranslations: Record<string, unknown> = {};
             let backendLangTranslations: Record<string, unknown> = {};
             const cacheKey = translationCacheKey(lang);
@@ -188,13 +189,18 @@ export function TranslationProvider({ children, initialLocale, initialTranslatio
             }
 
             try {
-                let frontendData = await fetchJsonObject(`/locales/${lang}.json`);
-                if (!frontendData && lang !== PRIMARY_LOCALE) {
-                    frontendData = await fetchJsonObject(`/locales/${PRIMARY_LOCALE}.json`);
-                }
-                if (frontendData) {
-                    frontendTranslations = frontendData;
-                }
+                const baseLanguage = lang.split('-')[0];
+                const [primary, selected] = await Promise.all([
+                    fetchJsonObject('/locales/en.json'),
+                    lang === PRIMARY_LOCALE ? Promise.resolve(null) : fetchJsonObject('/locales/' + lang + '.json'),
+                ]);
+                frontendPrimaryTranslations = primary ?? {};
+                frontendLocaleTranslations =
+                    selected ??
+                    (baseLanguage !== lang && baseLanguage !== PRIMARY_LOCALE
+                        ? await fetchJsonObject('/locales/' + baseLanguage + '.json')
+                        : null) ??
+                    {};
             } catch (error) {
                 console.warn('Failed to load frontend translations:', error);
             }
@@ -231,10 +237,11 @@ export function TranslationProvider({ children, initialLocale, initialTranslatio
                 console.warn('Failed to load backend language translations:', error);
             }
 
-            let mergedTranslations = frontendTranslations;
+            let mergedTranslations = frontendPrimaryTranslations;
             if (Object.keys(backendPrimaryTranslations).length > 0) {
                 mergedTranslations = deepMerge(mergedTranslations, backendPrimaryTranslations);
             }
+            mergedTranslations = deepMerge(mergedTranslations, frontendLocaleTranslations);
             if (Object.keys(backendLangTranslations).length > 0) {
                 mergedTranslations = deepMerge(mergedTranslations, backendLangTranslations);
             }

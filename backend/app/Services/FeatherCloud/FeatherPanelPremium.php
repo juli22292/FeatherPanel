@@ -401,6 +401,7 @@ class FeatherPanelPremium
         $config->setSetting(ConfigInterface::BRANDING_SHOW_POWERED_BY, 'true');
         $config->setSetting(ConfigInterface::BRANDING_SHOW_VERSION, 'true');
         $config->setSetting(ConfigInterface::CHATBOT_DISPLAY_NAME, '');
+        $config->setSetting(ConfigInterface::CHATBOT_SUBTITLE, '');
         $config->setSetting(ConfigInterface::CHATBOT_AVATAR_URL, '');
         $config->setSetting(ConfigInterface::SIDEBAR_NAVIGATION_CONFIG, '');
     }

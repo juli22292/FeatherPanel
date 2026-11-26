@@ -18,6 +18,7 @@ export interface PanelReleaseNote {
     published_at: string;
     channel: 'stable' | 'early_beta';
     body: string;
+    content_locale?: string;
     url: string;
     edited?: boolean;
 }

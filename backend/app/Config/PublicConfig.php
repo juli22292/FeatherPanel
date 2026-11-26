@@ -82,6 +82,7 @@ class PublicConfig extends ConfigFactory
             ConfigInterface::BRANDING_SHOW_POWERED_BY => 'true',
             ConfigInterface::BRANDING_SHOW_VERSION => 'true',
             ConfigInterface::CHATBOT_DISPLAY_NAME => '',
+            ConfigInterface::CHATBOT_SUBTITLE => '',
             ConfigInterface::CHATBOT_AVATAR_URL => '',
             ConfigInterface::SIDEBAR_NAVIGATION_CONFIG => '',
 

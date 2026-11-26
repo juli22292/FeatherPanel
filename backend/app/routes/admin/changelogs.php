@@ -29,7 +29,7 @@ return static function (RouteCollection $routes): void {
         $routes,
         'admin-changelogs-view',
         '/api/admin/changelogs',
-        static fn () => (new ChangelogsController())->show(true),
+        static fn (Request $request) => (new ChangelogsController())->show(true, $request),
         Permissions::ADMIN_SETTINGS_VIEW,
         ['GET'],
     );

@@ -32,6 +32,8 @@ import ReactMarkdown from 'react-markdown';
 import Link from 'next/link';
 import { WidgetRenderer } from '@/components/server/WidgetRenderer';
 import { usePluginWidgets } from '@/hooks/usePluginWidgets';
+import { useTicketLiveRefresh } from '@/hooks/useTicketLiveRefresh';
+import { realtimeTopics } from '@/lib/realtime';
 import { RoleBadge } from '@/components/RoleBadge';
 import { cn } from '@/lib/utils';
 import { formatBytes } from '@/lib/format';
@@ -129,7 +131,7 @@ export interface Ticket {
 }
 
 export default function TicketViewPage() {
-    const { uuid } = useParams();
+    const { uuid } = useParams<{ uuid: string }>();
     const router = useRouter();
     const { t } = useTranslation();
     const dateOpts = useDateFormatOptions();
@@ -144,6 +146,8 @@ export default function TicketViewPage() {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [mobileDetailsOpen, setMobileDetailsOpen] = useState(false);
     const scrollRef = useRef<HTMLDivElement>(null);
+    const followLatest = useRef(true);
+    const ticketRequest = useRef<AbortController | null>(null);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [userServers, setUserServers] = useState<any[]>([]);
@@ -169,39 +173,56 @@ export default function TicketViewPage() {
 
     const { getWidgets, fetchWidgets } = usePluginWidgets('admin-tickets-view');
 
-    const fetchTicket = useCallback(async () => {
-        try {
-            const { data } = await axios.get<{ data: { ticket: Ticket; messages: Message[] } }>(
-                `/api/admin/tickets/${uuid}`,
-            );
+    const fetchTicket = useCallback(
+        async (quiet = false) => {
+            ticketRequest.current?.abort();
+            const controller = new AbortController();
+            ticketRequest.current = controller;
+            try {
+                const { data } = await axios.get<{ data: { ticket: Ticket; messages: Message[] } }>(
+                    `/api/admin/tickets/${uuid}`,
+                    { signal: controller.signal },
+                );
+                if (controller.signal.aborted) return;
 
-            const ticketData = { ...data.data.ticket, messages: data.data.messages || [] };
+                const messages = (data.data.messages || []).sort(
+                    (a, b) => a.created_at.localeCompare(b.created_at) || a.id - b.id,
+                );
+                setTicket({ ...data.data.ticket, messages });
+            } catch (error) {
+                if (controller.signal.aborted) return;
+                const status = axios.isAxiosError(error) ? error.response?.status : undefined;
+                if (quiet && status !== 401 && status !== 403 && status !== 404) return;
 
-            if (ticketData.messages && Array.isArray(ticketData.messages)) {
-                ticketData.messages.sort((a, b) => a.created_at.localeCompare(b.created_at));
+                console.error('Error fetching ticket:', error);
+                setTicket(null);
+                toast.error(t('admin.tickets.messages.fetch_failed'));
+                router.push('/admin/tickets');
+            } finally {
+                if (!controller.signal.aborted) setLoading(false);
             }
+        },
+        [uuid, t, router],
+    );
 
-            setTicket(ticketData);
+    const refreshTicket = useCallback(() => {
+        void fetchTicket(true);
+    }, [fetchTicket]);
+    useTicketLiveRefresh(
+        ticket?.uuid.toLowerCase() === uuid.toLowerCase() ? realtimeTopics.adminTicket(uuid) : undefined,
+        refreshTicket,
+    );
 
-            setEditForm({
-                title: ticketData.title || '',
-                description: ticketData.description || '',
-                category_id: ticketData.category_id?.toString() || '',
-                priority_id: ticketData.priority_id?.toString() || '',
-                status_id: ticketData.status_id?.toString() || '',
-            });
-
-            if (ticketData.user_uuid) {
-                fetchUserData(ticketData.user_uuid);
-            }
-        } catch (error) {
-            console.error('Error fetching ticket:', error);
-            toast.error(t('admin.tickets.messages.fetch_failed'));
-            router.push('/admin/tickets');
-        } finally {
-            setLoading(false);
-        }
-    }, [uuid, t, router]);
+    const openEditForm = (current: Ticket) => {
+        setEditForm({
+            title: current.title || '',
+            description: current.description || '',
+            category_id: current.category_id?.toString() || '',
+            priority_id: current.priority_id?.toString() || '',
+            status_id: current.status_id?.toString() || '',
+        });
+        setEditOpen(true);
+    };
 
     const fetchUserData = async (userUuid: string) => {
         setLoadingSidebar(true);
@@ -249,7 +270,11 @@ export default function TicketViewPage() {
     };
 
     useEffect(() => {
-        fetchTicket();
+        void fetchTicket();
+        return () => ticketRequest.current?.abort();
+    }, [fetchTicket]);
+
+    useEffect(() => {
         fetchDependencies();
         fetchWidgets();
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -261,11 +286,12 @@ export default function TicketViewPage() {
         }
     }, [ticket?.user_uuid]);
 
+    const latestMessageId = ticket?.messages.at(-1)?.id;
     useEffect(() => {
-        if (scrollRef.current) {
+        if (followLatest.current && scrollRef.current) {
             scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }
-    }, [ticket?.messages]);
+    }, [ticket?.uuid, latestMessageId]);
 
     const addFiles = (newFiles: File[]) => {
         const maxSize = 50 * 1024 * 1024;
@@ -323,6 +349,7 @@ export default function TicketViewPage() {
             setReply('');
             setFiles([]);
             setIsInternal(false);
+            followLatest.current = true;
             fetchTicket();
         } catch (error) {
             console.error(error);
@@ -365,15 +392,13 @@ export default function TicketViewPage() {
         }
     };
 
-    if (loading) {
+    if (loading || (ticket && ticket.uuid.toLowerCase() !== uuid.toLowerCase())) {
         return (
             <div className='flex min-h-[400px] items-center justify-center'>
                 <RefreshCw className='text-primary h-8 w-8 animate-spin' />
             </div>
         );
     }
-
-    if (!ticket) return null;
 
     if (!ticket) return null;
 
@@ -441,7 +466,7 @@ export default function TicketViewPage() {
                         <Button
                             variant='outline'
                             size='sm'
-                            onClick={() => setEditOpen(true)}
+                            onClick={() => openEditForm(ticket)}
                             className='h-9 rounded-lg text-xs font-medium'
                         >
                             <Settings className='mr-2 h-3.5 w-3.5' /> {t('admin.tickets.view.edit')}
@@ -476,6 +501,10 @@ export default function TicketViewPage() {
                     <div
                         className='custom-scrollbar flex-1 space-y-7 overflow-y-auto p-4 sm:p-6 lg:p-8'
                         ref={scrollRef}
+                        onScroll={({ currentTarget }) => {
+                            followLatest.current =
+                                currentTarget.scrollHeight - currentTarget.scrollTop - currentTarget.clientHeight < 96;
+                        }}
                     >
                         <div className='group flex gap-4'>
                             <Avatar className='ring-border/50 mt-1 h-10 w-10 ring-2'>
@@ -631,7 +660,6 @@ export default function TicketViewPage() {
                                 </div>
                             );
                         })}
-                        <div ref={scrollRef} />
                     </div>
 
                     <div className='bg-background/50 border-border/50 border-t p-4 backdrop-blur-sm'>

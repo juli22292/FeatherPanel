@@ -17,11 +17,14 @@
 
 namespace App\Controllers\User;
 
+use App\App;
 use App\Chat\Server;
+use App\Chat\Ticket;
 use App\Permissions;
 use App\Realtime\Mercure;
 use App\Helpers\ApiResponse;
 use App\Helpers\ServerGateway;
+use App\Config\ConfigInterface;
 use App\Helpers\PermissionHelper;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -96,6 +99,22 @@ class RealtimeController
 
         if ($topic === Mercure::TOPIC_ADMIN_ACTIVITY) {
             return PermissionHelper::hasPermission((string) $user['uuid'], Permissions::ADMIN_USERS_VIEW, $user);
+        }
+
+        if (preg_match('#^/admin/tickets/([0-9a-f-]{36})$#D', $topic, $match) === 1) {
+            return PermissionHelper::hasPermission((string) $user['uuid'], Permissions::ADMIN_TICKETS_VIEW, $user)
+                && Ticket::getByUuid($match[1]) !== null;
+        }
+
+        if (preg_match('#^/users/([0-9a-f-]{36})/tickets/([0-9a-f-]{36})$#D', $topic, $match) === 1) {
+            if ($match[1] !== strtolower((string) $user['uuid'])
+                || App::getInstance(true)->getConfig()->getSetting(ConfigInterface::TICKET_SYSTEM_ENABLED, 'true') !== 'true') {
+                return false;
+            }
+
+            $ticket = Ticket::getByUuid($match[2]);
+
+            return $ticket !== null && $ticket['user_uuid'] === $user['uuid'];
         }
 
         if (preg_match('#^/servers/([A-Za-z0-9-]{1,64})$#', $topic, $m) === 1) {

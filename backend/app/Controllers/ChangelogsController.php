@@ -29,16 +29,39 @@ final class ChangelogsController
 {
     private const NOTES_PREFIX = 'changelog_notes_';
 
-    public function show(bool $admin = false): Response
+    public function show(bool $admin = false, ?Request $request = null): Response
     {
         $config = App::getInstance(true)->getConfig();
+        $locale = self::locale($request);
+        $preferences = [$locale];
+        $parent = $locale;
+        while (($separator = strrpos($parent, '-')) !== false) {
+            $parent = substr($parent, 0, $separator);
+            $preferences[] = $parent;
+        }
+        if ($parent !== 'en') {
+            $preferences[] = 'en';
+        }
         $enabled = $config->getSetting(ConfigInterface::CHANGELOGS_ENABLED, 'true') === 'true';
         $releases = [];
         if ($admin || $enabled) {
             foreach (self::releases() as $release) {
                 $version = $release['version'];
-                $override = $config->getSetting(self::NOTES_PREFIX . $version, null);
-                $release['body'] = $override ?? $release['body'];
+                $override = $config->getSetting(self::notesKey($version, $locale), null);
+                $release['body'] = $override;
+                $release['content_locale'] = $locale;
+                if ($override === null) {
+                    foreach ($preferences as $candidate) {
+                        $stored = $candidate === $locale ? null : $config->getSetting(self::notesKey($version, $candidate), null);
+                        $body = $stored ?? $release['notes'][$candidate] ?? null;
+                        if ($body !== null) {
+                            $release['body'] = $body;
+                            $release['content_locale'] = $candidate;
+                            break;
+                        }
+                    }
+                }
+                unset($release['notes']);
                 if ($admin) {
                     $release['edited'] = $override !== null;
                 }
@@ -62,7 +85,7 @@ final class ChangelogsController
             return ApiResponse::error('Could not save changelog settings', 'CHANGELOG_SAVE_FAILED', 500);
         }
 
-        return $this->show(true);
+        return $this->show(true, $request);
     }
 
     public function saveNotes(Request $request, string $version): Response
@@ -81,15 +104,28 @@ final class ChangelogsController
             return ApiResponse::error('Enter up to 20,000 bytes of release notes', 'VALIDATION_FAILED', 422);
         }
 
-        if (!App::getInstance(true)->getConfig()->setSetting(self::NOTES_PREFIX . $version, $body)) {
+        if (!App::getInstance(true)->getConfig()->setSetting(self::notesKey($version, self::locale($request)), $body)) {
             return ApiResponse::error('Could not save changelog settings', 'CHANGELOG_SAVE_FAILED', 500);
         }
 
-        return $this->show(true);
+        return $this->show(true, $request);
+    }
+
+    private static function locale(?Request $request): string
+    {
+        $locale = strtolower(str_replace('_', '-', trim($request?->query->getString('locale', 'en') ?? 'en')));
+
+        return preg_match('/^[a-z]{2,3}(?:-[a-z0-9]{2,8}){0,2}$/D', $locale) ? $locale : 'en';
+    }
+
+    private static function notesKey(string $version, string $locale): string
+    {
+        // The previous editor stored a single default text under the English key.
+        return self::NOTES_PREFIX . $version . ($locale === 'en' ? '' : '_' . $locale);
     }
 
     /**
-     * @return array<string, array{version: string, published_at: string, channel: string, body: string, url: string}>
+     * @return array<string, array{version: string, published_at: string, channel: string, notes: array<string,string>, url: string}>
      */
     private static function releases(): array
     {

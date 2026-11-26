@@ -28,6 +28,7 @@ use App\SubuserPermissions;
 use App\Chat\ServerActivity;
 use App\Helpers\ApiResponse;
 use App\Chat\SubdomainDomain;
+use App\Services\Servers\ReverseProxyAddresses;
 use App\Chat\SubdomainRequest;
 use OpenApi\Attributes as OA;
 use App\Config\ConfigInterface;
@@ -107,19 +108,17 @@ class SubdomainController
             $maxAllowed = 1;
         }
 
-        $domains = array_map(function (array $domain) use ($server): array {
-            $mapping = $this->getSpellMappingForDomain($domain['id'], (int) $server['spell_id']);
-
-            return [
-                'uuid' => $domain['uuid'],
-                'domain' => $domain['domain'],
-                'protocol_service' => $mapping['protocol_service'] ?? null,
-                'protocol_type' => $mapping['protocol_type'] ?? 'tcp',
-                'priority' => $mapping['priority'] ?? 1,
-                'weight' => $mapping['weight'] ?? 1,
-                'ttl' => $mapping['ttl'] ?? 120,
-            ];
-        }, ($canBypassApproval || SubdomainRequest::allowsSpell((int) $server['spell_id'])) ? SubdomainDomain::getActiveDomainsForSpell((int) $server['spell_id']) : []);
+        $spellId = (int) $server['spell_id'];
+        $spellAllowed = $canBypassApproval || SubdomainRequest::allowsSpell($spellId);
+        $domains = array_map(static fn (array $domain): array => [
+            'uuid' => $domain['uuid'],
+            'domain' => $domain['domain'],
+            'protocol_service' => $domain['protocol_service'] ?? null,
+            'protocol_type' => $domain['protocol_type'] ?? 'tcp',
+            'priority' => $domain['priority'] ?? 1,
+            'weight' => $domain['weight'] ?? 1,
+            'ttl' => $domain['ttl'] ?? 120,
+        ], $spellAllowed ? SubdomainDomain::getActiveDomainsForSpell($spellId) : []);
 
         $subdomains = array_map(function (array $entry): array {
             $domain = SubdomainDomain::getDomainById((int) $entry['domain_id']);
@@ -140,6 +139,7 @@ class SubdomainController
                 'current_total' => count($subdomains),
                 'pending_total' => SubdomainRequest::pendingCount((int) $server['id']),
                 'can_bypass_approval' => $canBypassApproval,
+                'spell_allowed' => $spellAllowed,
                 'domains' => $domains,
                 'subdomains' => $subdomains,
                 'requests' => SubdomainRequest::forServer((int) $server['id']),
@@ -328,22 +328,20 @@ class SubdomainController
         }
 
         $protocolService = $mapping['protocol_service'] ?? null;
-        $recordType = $protocolService ? 'SRV' : 'CNAME';
-
-        // If ip_alias is not set, use the node public ipv4; else use ip_alias or fallback to allocation ip
-        if (!empty($allocation['ip_alias'])) {
-            // Just use those assuming it exists in cloudflare already!
-            $target = $allocation['ip_alias'];
-        } elseif (!empty($allocation['node_id'])) {
-            $node = Node::getNodeById((int) $allocation['node_id']);
-            if (!empty($node['public_ip_v4'])) {
-                $target = $node['public_ip_v4'];
-            } else {
-                $target = $allocation['ip'];
-            }
-        } else {
-            $target = $allocation['ip'];
+        $target = trim((string) ($allocation['ip_alias'] ?? ''));
+        if ($target === '') {
+            $target = ReverseProxyAddresses::publicIp(
+                $allocation['ip'],
+                (int) $server['spell_id'],
+                ReverseProxyAddresses::configuredRules(),
+            ) ?? '';
         }
+        if ($target === '') {
+            $node = empty($allocation['node_id']) ? null : Node::getNodeById((int) $allocation['node_id']);
+            $target = ($node['public_ip_v4'] ?? '') ?: $allocation['ip'];
+        }
+
+        $recordType = CloudflareSubdomainService::recordType($target, $protocolService);
 
         $port = (int) ($allocation['port'] ?? 0);
         $ttl = (int) ($mapping['ttl'] ?? 120);
@@ -361,6 +359,8 @@ class SubdomainController
 
         if ($recordType === 'CNAME') {
             $recordId = $service->createCnameRecord($zoneId, $fqdn, $target, $ttl);
+        } elseif ($recordType !== 'SRV') {
+            $recordId = $service->createAddressRecord($zoneId, $fqdn, $target, $recordType, $ttl);
         } else {
             $protocolType = $mapping['protocol_type'] ?? 'tcp';
             if ($port <= 0) {
@@ -368,13 +368,12 @@ class SubdomainController
             }
 
             $srvTarget = $target;
-            $ipVersion = null;
-            if (filter_var($target, FILTER_VALIDATE_IP) !== false) {
-                $ipVersion = filter_var($target, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false ? 'AAAA' : 'A';
-                if (!$service->ensureRecordDoesNotExist($zoneId, $ipVersion, $fqdn)) {
+            $addressType = CloudflareSubdomainService::addressRecordType($target);
+            if ($addressType !== null) {
+                if (!$service->ensureRecordDoesNotExist($zoneId, $addressType, $fqdn)) {
                     return ApiResponse::error('An address record already exists for this subdomain', 'ADDRESS_RECORD_EXISTS', Response::HTTP_CONFLICT);
                 }
-                $addressRecordId = $service->createAddressRecord($zoneId, $fqdn, $target, $ipVersion, $ttl);
+                $addressRecordId = $service->createAddressRecord($zoneId, $fqdn, $target, $addressType, $ttl);
                 if (!$addressRecordId) {
                     return ApiResponse::error('Failed to create address record for SRV target', 'CLOUDFLARE_ADDRESS_CREATE_FAILED', Response::HTTP_BAD_REQUEST);
                 }

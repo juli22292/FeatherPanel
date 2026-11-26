@@ -50,7 +50,7 @@ class TicketMessage
         }
 
         $pdo = Database::getPdoConnection();
-        $stmt = $pdo->prepare('SELECT * FROM ' . self::$table . ' WHERE ticket_id = :ticket_id ORDER BY created_at DESC LIMIT :limit OFFSET :offset');
+        $stmt = $pdo->prepare('SELECT * FROM ' . self::$table . ' WHERE ticket_id = :ticket_id ORDER BY created_at DESC, id DESC LIMIT :limit OFFSET :offset');
         $stmt->bindValue('ticket_id', $ticketId, \PDO::PARAM_INT);
         $stmt->bindValue('limit', $limit, \PDO::PARAM_INT);
         $stmt->bindValue('offset', $offset, \PDO::PARAM_INT);

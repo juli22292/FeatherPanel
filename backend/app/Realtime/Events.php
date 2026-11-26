@@ -35,6 +35,7 @@ final class Events
     public const NOTIFICATIONS_UPDATED = 'notifications.updated';
     public const WEBSPACES_UPDATED = 'webspaces.updated';
     public const ACTIVITY_UPDATED = 'activity.updated';
+    public const TICKET_UPDATED = 'ticket.updated';
 
     /**
      * Run $publish only when $response is a 2xx, then hand the response back.
@@ -93,6 +94,16 @@ final class Events
     public static function notificationsChanged(): void
     {
         Mercure::publish(Mercure::TOPIC_NOTIFICATIONS, self::NOTIFICATIONS_UPDATED);
+    }
+
+    public static function ticketChanged(array $ticket, bool $staffOnly = false): void
+    {
+        $topics = [Mercure::adminTicketTopic($ticket['uuid'])];
+        if (!$staffOnly) {
+            $topics[] = Mercure::ticketTopic($ticket['user_uuid'], $ticket['uuid']);
+        }
+
+        Mercure::publish($topics, self::TICKET_UPDATED);
     }
 
     public static function webspaceChanged(string $webspaceUuid): void

@@ -57,6 +57,8 @@ export const realtimeTopics = {
     adminWebspaces: '/admin/webspaces',
     /** Panel-wide activity feed for admins with users.view. */
     adminActivity: '/admin/activity',
+    adminTicket: (uuid: string) => '/admin/tickets/' + uuid.toLowerCase(),
+    ticket: (ownerUuid: string, uuid: string) => '/users/' + ownerUuid.toLowerCase() + '/tickets/' + uuid.toLowerCase(),
     server: (uuidShort: string) => `/servers/${uuidShort}`,
     /** Per user stream (inbox + activity); the token grants only the signed-in user's own topic. */
     user: (uuid: string) => `/users/${uuid}`,

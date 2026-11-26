@@ -108,6 +108,8 @@ final class LxcGuestAccess implements GuestAccountClient
                 $host = $this->profile['host'];
                 $ssh = new SSH2(str_contains($host, ':') ? '[' . $host . ']' : $host, $this->profile['port'], 9);
                 $ssh->setPreferredAlgorithms(['hostkey' => ['ssh-ed25519']]);
+                // The connector's response is stdout. SSH login-shell warnings belong to stderr.
+                $ssh->enableQuietMode();
                 $publicKey = $ssh->getServerPublicHostKey();
                 $encodedKey = is_string($publicKey) ? (explode(' ', $publicKey, 3)[1] ?? '') : '';
                 $blob = base64_decode($encodedKey, true);

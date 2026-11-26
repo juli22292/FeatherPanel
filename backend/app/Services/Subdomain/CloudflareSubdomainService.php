@@ -173,6 +173,20 @@ class CloudflareSubdomainService
         return null;
     }
 
+    public static function recordType(string $target, ?string $srvService): string
+    {
+        return $srvService ? 'SRV' : (self::addressRecordType($target) ?? 'CNAME');
+    }
+
+    public static function addressRecordType(string $target): ?string
+    {
+        if (filter_var($target, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4) !== false) {
+            return 'A';
+        }
+
+        return filter_var($target, FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) !== false ? 'AAAA' : null;
+    }
+
     public function createAddressRecord(string $zoneId, string $fqdn, string $ip, string $type = 'A', int $ttl = 120): ?string
     {
         if (!$this->available) {

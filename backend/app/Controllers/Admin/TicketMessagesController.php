@@ -23,6 +23,7 @@ use App\Chat\Activity;
 use App\Chat\Database;
 use App\Chat\TicketMessage;
 use App\Helpers\ApiResponse;
+use App\Realtime\Events;
 use OpenApi\Attributes as OA;
 use App\CloudFlare\CloudFlareRealIP;
 use App\Plugins\Events\Events\TicketEvent;
@@ -278,7 +279,7 @@ class TicketMessagesController
             'ip_address' => CloudFlareRealIP::getRealIP(),
         ]);
 
-        // Get created message for event
+        Events::ticketChanged($ticket, !empty($messageData['is_internal']));
         $createdMessage = TicketMessage::getById($messageId);
 
         // Emit event
@@ -403,6 +404,8 @@ class TicketMessagesController
 
         // Get updated message for event
         $updatedMessage = TicketMessage::getById($id);
+        // A change to/from an internal note also changes the customer conversation.
+        Events::ticketChanged($ticket, !empty($message['is_internal']) && !empty($updatedMessage['is_internal']));
 
         // Emit event
         global $eventManager;
@@ -508,6 +511,8 @@ class TicketMessagesController
                 ]
             );
         }
+
+        Events::ticketChanged($ticket, !empty($message['is_internal']));
 
         return ApiResponse::success([], 'Message deleted successfully', 200);
     }

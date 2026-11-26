@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.5.6.9 (ServerPanel)
+
+- Fix Linux account operations in Serverinfo when a Proxmox login shell prints warnings.
+- Expand a short reverse proxy hostname when one managed domain is eligible. Show missing subdomain mappings and support DNS address records for mapped IP targets.
+- Localize the changelog and allow release notes to be edited by language.
+- Add a configurable AI assistant subtitle to the live chat.
+- Refresh ticket conversations in real time on the user and support pages.
+
 ## v1.5.6.8 (Early Beta)
 
 - Added the fork release history under Support and an editor under System > Changelog Settings.

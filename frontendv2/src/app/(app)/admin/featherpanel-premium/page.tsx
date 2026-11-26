@@ -87,6 +87,7 @@ type PremiumPayload = {
     premium: FeatherPanelPremiumStatus;
     settings: {
         chatbot_display_name: string;
+        chatbot_subtitle?: string;
         chatbot_avatar_url: string;
         branding_show_powered_by: boolean;
         branding_show_version: boolean;
@@ -97,7 +98,7 @@ type PremiumPayload = {
 export default function FeatherPanelPremiumPage() {
     const { t } = useTranslation();
     const router = useRouter();
-    const { refetch: refetchSettings } = useSettings();
+    const { settings, refetch: refetchSettings } = useSettings();
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -106,6 +107,7 @@ export default function FeatherPanelPremiumPage() {
     const [data, setData] = useState<PremiumPayload | null>(null);
 
     const [displayName, setDisplayName] = useState('');
+    const [subtitle, setSubtitle] = useState('');
     const [avatarUrl, setAvatarUrl] = useState('');
     const [showPoweredBy, setShowPoweredBy] = useState(true);
     const [showVersion, setShowVersion] = useState(true);
@@ -114,6 +116,7 @@ export default function FeatherPanelPremiumPage() {
     const applyPayload = useCallback((payload: PremiumPayload) => {
         setData(payload);
         setDisplayName(payload.settings.chatbot_display_name || '');
+        setSubtitle(payload.settings.chatbot_subtitle || '');
         setAvatarUrl(payload.settings.chatbot_avatar_url || '');
         setShowPoweredBy(payload.settings.branding_show_powered_by !== false);
         setShowVersion(payload.settings.branding_show_version !== false);
@@ -158,6 +161,7 @@ export default function FeatherPanelPremiumPage() {
                 '/api/admin/featherpanel-premium',
                 {
                     chatbot_display_name: displayName,
+                    chatbot_subtitle: subtitle,
                     chatbot_avatar_url: avatarUrl,
                     branding_show_powered_by: showPoweredBy,
                     branding_show_version: showVersion,
@@ -453,6 +457,22 @@ export default function FeatherPanelPremiumPage() {
                                         />
                                         <p className='text-muted-foreground text-xs'>
                                             {t('admin.featherpanel_premium.customize.ai_name_help')}
+                                        </p>
+                                    </div>
+
+                                    <div className='space-y-2'>
+                                        <Label htmlFor='premium-ai-subtitle'>
+                                            {t('admin.featherpanel_premium.customize.ai_subtitle')}
+                                        </Label>
+                                        <Input
+                                            id='premium-ai-subtitle'
+                                            value={subtitle}
+                                            onChange={(event) => setSubtitle(event.target.value)}
+                                            placeholder={(settings?.app_name?.trim() || 'ServerPanel') + ' AI'}
+                                            maxLength={64}
+                                        />
+                                        <p className='text-muted-foreground text-xs'>
+                                            {t('admin.featherpanel_premium.customize.ai_subtitle_help')}
                                         </p>
                                     </div>
 

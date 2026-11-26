@@ -15,7 +15,7 @@ See the LICENSE file or <https://www.gnu.org/licenses/>.
 
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -43,6 +43,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
 import clsx from 'clsx';
 import { usePluginWidgets } from '@/hooks/usePluginWidgets';
+import { useTicketLiveRefresh } from '@/hooks/useTicketLiveRefresh';
+import { realtimeTopics } from '@/lib/realtime';
 import { WidgetRenderer } from '@/components/server/WidgetRenderer';
 import { useDateFormatOptions } from '@/contexts/PreferencesContext';
 import { formatDateTimeInTz, formatTimeInTz, parseApiDate } from '@/lib/dateUtils';
@@ -119,9 +121,9 @@ interface ReplyResponse {
 }
 
 export default function TicketViewPage() {
-    const { uuid } = useParams();
+    const { uuid } = useParams<{ uuid: string }>();
     const { t } = useTranslation();
-    const { user: currentUser } = useSession();
+    const { user: currentUser, hasPermission } = useSession();
     const dateOpts = useDateFormatOptions();
 
     const [loading, setLoading] = useState(true);
@@ -135,41 +137,70 @@ export default function TicketViewPage() {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [isDragging, setIsDragging] = useState(false);
 
-    const messagesEndRef = useRef<HTMLDivElement>(null);
+    const scrollRef = useRef<HTMLDivElement>(null);
+    const followLatest = useRef(true);
+    const ticketRequest = useRef<AbortController | null>(null);
 
-    const fetchTicketDetails = async () => {
-        try {
-            const { data } = await axios.get<TicketResponse>(`/api/user/tickets/${uuid}`);
-            if (data.success) {
-                setTicket(data.data.ticket);
-
-                const sortedMessages = [...(data.data.messages || [])].sort((a, b) => {
-                    return (parseApiDate(a.created_at)?.getTime() ?? 0) - (parseApiDate(b.created_at)?.getTime() ?? 0);
+    const fetchTicketDetails = useCallback(
+        async (quiet = false) => {
+            ticketRequest.current?.abort();
+            const controller = new AbortController();
+            ticketRequest.current = controller;
+            try {
+                const { data } = await axios.get<TicketResponse>(`/api/user/tickets/${uuid}`, {
+                    signal: controller.signal,
                 });
-                setMessages(sortedMessages);
-            } else {
-                setError(getApiErrorMessageFromPayload(data, t, 'tickets.failedToLoad'));
+                if (controller.signal.aborted) return;
+                if (data.success) {
+                    setTicket(data.data.ticket);
+                    setError(null);
+
+                    const sortedMessages = [...(data.data.messages || [])].sort((a, b) => {
+                        const byTime =
+                            (parseApiDate(a.created_at)?.getTime() ?? 0) - (parseApiDate(b.created_at)?.getTime() ?? 0);
+                        return byTime || a.id - b.id;
+                    });
+                    setMessages(sortedMessages);
+                } else if (!quiet) {
+                    setError(getApiErrorMessageFromPayload(data, t, 'tickets.failedToLoad'));
+                }
+            } catch (err: unknown) {
+                if (controller.signal.aborted) return;
+                const status = axios.isAxiosError(err) ? err.response?.status : undefined;
+                if (quiet && status !== 401 && status !== 403 && status !== 404) return;
+
+                console.error('Failed to load ticket', err);
+                setTicket(null);
+                setError(getApiErrorMessage(err, t, 'tickets.failedToLoad'));
+            } finally {
+                if (!controller.signal.aborted) setLoading(false);
             }
-        } catch (err: unknown) {
-            console.error('Failed to load ticket', err);
-            setError(getApiErrorMessage(err, t, 'tickets.failedToLoad'));
-        } finally {
-            setLoading(false);
-        }
-    };
+        },
+        [uuid, t],
+    );
 
     useEffect(() => {
-        if (uuid) {
-            fetchTicketDetails();
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [uuid]);
+        void fetchTicketDetails();
+        return () => ticketRequest.current?.abort();
+    }, [fetchTicketDetails]);
 
+    const refreshTicket = useCallback(() => {
+        void fetchTicketDetails(true);
+    }, [fetchTicketDetails]);
+    const ticketTopic =
+        ticket?.uuid.toLowerCase() === uuid.toLowerCase() && currentUser
+            ? hasPermission('admin.tickets.view')
+                ? realtimeTopics.adminTicket(uuid)
+                : realtimeTopics.ticket(currentUser.uuid, uuid)
+            : undefined;
+    useTicketLiveRefresh(ticketTopic, refreshTicket);
+
+    const latestMessageId = messages.at(-1)?.id;
     useEffect(() => {
-        if (messagesEndRef.current) {
-            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        if (followLatest.current && scrollRef.current) {
+            scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
         }
-    }, [messages]);
+    }, [ticket?.uuid, latestMessageId]);
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) addFiles(Array.from(e.target.files));
@@ -222,6 +253,7 @@ export default function TicketViewPage() {
                     }),
                 );
             }
+            followLatest.current = true;
             fetchTicketDetails();
         } catch (err: unknown) {
             console.error('Failed to send reply', err);
@@ -263,7 +295,7 @@ export default function TicketViewPage() {
         return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
     };
 
-    if (loading) {
+    if (loading || (ticket && ticket.uuid.toLowerCase() !== uuid.toLowerCase())) {
         return (
             <div className='flex h-[50vh] items-center justify-center'>
                 <div className='border-primary h-8 w-8 animate-spin rounded-full border-2 border-t-transparent' />
@@ -321,7 +353,14 @@ export default function TicketViewPage() {
 
             <div className='grid min-h-0 flex-1 grid-cols-1 gap-4 xl:grid-cols-12 xl:gap-6'>
                 <div className='fp-surface flex h-full flex-col overflow-hidden rounded-xl border xl:col-span-9 2xl:col-span-10'>
-                    <div className='custom-scrollbar flex-1 space-y-8 overflow-y-auto p-4 sm:p-6 lg:p-8'>
+                    <div
+                        className='custom-scrollbar flex-1 space-y-8 overflow-y-auto p-4 sm:p-6 lg:p-8'
+                        ref={scrollRef}
+                        onScroll={({ currentTarget }) => {
+                            followLatest.current =
+                                currentTarget.scrollHeight - currentTarget.scrollTop - currentTarget.clientHeight < 96;
+                        }}
+                    >
                         <div className='group flex gap-4'>
                             <Avatar className='ring-border/50 bg-primary/10 text-primary mt-1 h-10 w-10 ring-2'>
                                 <div className='flex h-full w-full items-center justify-center'>
@@ -494,7 +533,6 @@ export default function TicketViewPage() {
                                 </div>
                             );
                         })}
-                        <div ref={messagesEndRef} />
                     </div>
 
                     <div className='bg-card/70 border-border/50 border-t p-4 backdrop-blur-md'>
