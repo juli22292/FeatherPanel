@@ -572,7 +572,11 @@ export default function AdminUpdatesPage() {
                         <div
                             className={cn(
                                 'flex h-12 w-12 shrink-0 items-center justify-center rounded-xl',
-                                panelUpdate ? 'fp-icon-tile' : githubCheckUnavailable ? 'bg-amber-500/10 text-amber-500' : 'bg-emerald-500/10 text-emerald-500',
+                                panelUpdate
+                                    ? 'fp-icon-tile'
+                                    : githubCheckUnavailable
+                                      ? 'bg-amber-500/10 text-amber-500'
+                                      : 'bg-emerald-500/10 text-emerald-500',
                             )}
                         >
                             {panelUpdate ? <ArrowUpCircle className='h-6 w-6' /> : <ShieldCheck className='h-6 w-6' />}
@@ -585,10 +589,10 @@ export default function AdminUpdatesPage() {
                                         : panelUpdate
                                           ? t('admin_updates.hero.available_title', { version: latestVersion })
                                           : githubCheckUnavailable
-                                             ? panelVersion?.check_error
-                                                 ? t('admin.system_health.status.unavailable')
-                                                 : t('admin.version.no_releases_yet')
-                                             : t('admin_updates.hero.latest_title')}
+                                            ? panelVersion?.check_error
+                                                ? t('admin.system_health.status.unavailable')
+                                                : t('admin.version.no_releases_yet')
+                                            : t('admin_updates.hero.latest_title')}
                                 </h2>
                                 <p className='text-muted-foreground text-sm'>
                                     {panelUpdate
@@ -616,7 +620,8 @@ export default function AdminUpdatesPage() {
                                         {t('admin.version.security_release')}
                                     </span>
                                 ) : null}
-                                {panelVersion?.source !== 'github' && panelVersion?.current_listed_on_update_server === false ? (
+                                {panelVersion?.source !== 'github' &&
+                                panelVersion?.current_listed_on_update_server === false ? (
                                     <span className='rounded-full border border-amber-500/25 bg-amber-500/[0.06] px-2.5 py-1 text-xs font-medium text-amber-600 dark:text-amber-400'>
                                         {t('admin.version.unlisted_update_server_badge')}
                                     </span>
@@ -677,8 +682,8 @@ export default function AdminUpdatesPage() {
                                   ? t('admin.system_health.status.unavailable')
                                   : t('admin.version.no_releases_yet')
                               : panelVersion?.current?.version
-                              ? t('admin_updates.overview.up_to_date_version', { version: currentVersion })
-                              : t('admin_updates.overview.checking')
+                                ? t('admin_updates.overview.up_to_date_version', { version: currentVersion })
+                                : t('admin_updates.overview.checking')
                     }
                 />
                 <SummaryTile

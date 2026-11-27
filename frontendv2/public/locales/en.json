@@ -363,6 +363,12 @@
             "cloudflare_challenge": "Cloudflare verification is still in progress. Please wait a moment and try again."
         },
         "codes": {
+            "INVALID_BACKUP_CONFIRMATION": "Enter the backup version to confirm the restore.",
+            "INVALID_FILTER": "Invalid delivery log filter.",
+            "SYSTEM_TEMPLATE_PROTECTED": "Built-in template names cannot be changed or disabled.",
+            "INVALID_MAIL_TEMPLATE_DRAFT": "This email template draft is invalid.",
+            "INVALID_TEMPLATE_PLACEHOLDERS": "Check the highlighted placeholders in the preview.",
+            "PANEL_RESTORE_UNAVAILABLE": "The updater could not start the restore. Check the current backup and try again.",
             "ABOVE_MAXIMUM": "Maximum purchase amount is {$maximum} {$resource['unit']}",
             "ABUSEIPDB_NOT_CONFIGURED": "AbuseIPDB is not enabled or the API key is missing. Configure it under Admin → Settings → Security.",
             "ACCESS_DENIED": "Access denied",

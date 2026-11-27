@@ -1,4 +1,14 @@
 {
+    "errors": {
+        "codes": {
+            "INVALID_BACKUP_CONFIRMATION": "Gib die Version der Sicherung ein, um die Wiederherstellung zu bestätigen.",
+            "INVALID_FILTER": "Der Filter für das Versandprotokoll ist ungültig.",
+            "SYSTEM_TEMPLATE_PROTECTED": "Integrierte Vorlagen können weder umbenannt noch deaktiviert werden.",
+            "INVALID_MAIL_TEMPLATE_DRAFT": "Dieser Entwurf für eine E-Mail-Vorlage ist ungültig.",
+            "INVALID_TEMPLATE_PLACEHOLDERS": "Prüfe die markierten Platzhalter in der Vorschau.",
+            "PANEL_RESTORE_UNAVAILABLE": "Der Updater konnte die Wiederherstellung nicht starten. Prüfe die aktuelle Sicherung und versuche es erneut."
+        }
+    },
     "serverpanel_update_history": {
         "title": "Update-Verlauf",
         "description": "Sieh Panel-Updates, Datenbankmigrationen und die letzte wiederherstellbare Sicherung ein.",

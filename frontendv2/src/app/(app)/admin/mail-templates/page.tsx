@@ -260,7 +260,10 @@ export default function MailTemplatesPage() {
         e.preventDefault();
         setProcessing(true);
         try {
-            const { data } = await axios.post('/api/admin/mail-templates/test-email', { ...testEmailData, template_name: testTemplateName });
+            const { data } = await axios.post('/api/admin/mail-templates/test-email', {
+                ...testEmailData,
+                template_name: testTemplateName,
+            });
             if (data.success) {
                 toast.success(t('admin.mail_templates.messages.test_email_sent'));
                 setTestEmailOpen(false);
@@ -397,14 +400,14 @@ export default function MailTemplatesPage() {
                                         </Button>
                                         {!template.built_in && (
                                             <Button
-                                            variant='ghost'
-                                            size='sm'
-                                            title={t('common.delete')}
-                                            className='text-destructive hover:text-destructive hover:bg-destructive/10'
-                                            onClick={() => handleDelete(template.id)}
-                                        >
-                                            <Trash2 className='h-4 w-4' />
-                                        </Button>
+                                                variant='ghost'
+                                                size='sm'
+                                                title={t('common.delete')}
+                                                className='text-destructive hover:text-destructive hover:bg-destructive/10'
+                                                onClick={() => handleDelete(template.id)}
+                                            >
+                                                <Trash2 className='h-4 w-4' />
+                                            </Button>
                                         )}
                                     </div>
                                 }

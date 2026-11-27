@@ -53,7 +53,8 @@ export function MailTemplatePreview({ name, subject, body }: Draft) {
     useEffect(() => {
         const controller = new AbortController();
         const debounce = window.setTimeout(() => {
-            axios.post('/api/admin/mail-templates/preview', { name, subject, body }, { signal: controller.signal })
+            axios
+                .post('/api/admin/mail-templates/preview', { name, subject, body }, { signal: controller.signal })
                 .then(({ data }) => {
                     if (controller.signal.aborted) return;
                     setPreview(data.data);
@@ -69,16 +70,23 @@ export function MailTemplatePreview({ name, subject, body }: Draft) {
         };
     }, [name, subject, body]);
 
-    if (failed) return <p role='alert' className='text-destructive'>{t('admin.mail_templates.preview.failed')}</p>;
+    if (failed)
+        return (
+            <p role='alert' className='text-destructive'>
+                {t('admin.mail_templates.preview.failed')}
+            </p>
+        );
     if (!preview) return <p className='text-muted-foreground'>{t('common.loading')}</p>;
 
     return (
         <section className='space-y-3'>
             <p className='text-muted-foreground text-sm'>{t('admin.mail_templates.preview.example_data')}</p>
-            <p className='break-words font-medium'>{preview.subject}</p>
+            <p className='font-medium break-words'>{preview.subject}</p>
             {preview.issues.length > 0 && (
                 <ul role='alert' className='text-destructive list-inside list-disc text-sm'>
-                    {preview.issues.map((issue) => <li key={issue}>{issue}</li>)}
+                    {preview.issues.map((issue) => (
+                        <li key={issue}>{issue}</li>
+                    ))}
                 </ul>
             )}
             <div className='grid gap-3 sm:grid-cols-2'>
@@ -88,7 +96,7 @@ export function MailTemplatePreview({ name, subject, body }: Draft) {
                 </div>
                 <div className='min-w-0 space-y-2'>
                     <h3 className='text-sm font-medium'>{t('admin.mail_templates.preview.plain_text')}</h3>
-                    <pre className='border-border bg-muted/50 h-80 overflow-auto rounded-lg border p-3 text-sm whitespace-pre-wrap break-words'>
+                    <pre className='border-border bg-muted/50 h-80 overflow-auto rounded-lg border p-3 text-sm break-words whitespace-pre-wrap'>
                         {plainText(preview.body)}
                     </pre>
                 </div>

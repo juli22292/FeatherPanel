@@ -964,11 +964,11 @@ class MailTemplatesController
     {
         $input = json_decode($request->getContent(), true);
         if (!is_array($input)) {
-            return ApiResponse::error('Invalid template draft.', 'INVALID_TEMPLATE', 400);
+            return ApiResponse::error('Invalid template draft.', 'INVALID_MAIL_TEMPLATE_DRAFT', 400);
         }
         foreach (['name' => 255, 'subject' => 255, 'body' => 65535] as $field => $limit) {
             if (!isset($input[$field]) || !is_string($input[$field]) || strlen($input[$field]) > $limit) {
-                return ApiResponse::error('Invalid template draft.', 'INVALID_TEMPLATE', 400);
+                return ApiResponse::error('Invalid template draft.', 'INVALID_MAIL_TEMPLATE_DRAFT', 400);
             }
         }
         $preview = $this->renderPreview($input['name'], $input['subject'], $input['body']);
