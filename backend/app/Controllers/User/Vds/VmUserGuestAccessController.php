@@ -20,10 +20,9 @@ declare(strict_types=1);
 namespace App\Controllers\User\Vds;
 
 use App\App;
-use App\Permissions;
-use App\Helpers\PermissionHelper;
 use App\Chat\User;
 use App\Chat\Database;
+use App\Chat\VmInstanceActivity;
 use App\Helpers\VmGateway;
 use App\Helpers\ApiResponse;
 use App\Services\Vm\VdsReauth;
@@ -38,21 +37,17 @@ final class VmUserGuestAccessController
     {
         $user = $request->attributes->get('user');
         $instance = $request->attributes->get('vmInstance');
-        $uuid = $user['uuid'] ?? '';
-        $isOwner = $uuid !== '' && ($instance['user_uuid'] ?? null) === $uuid;
         $readOnly = $request->isMethod('GET');
-        $isRoot = $uuid !== '' && PermissionHelper::hasPermission($uuid, Permissions::ADMIN_ROOT, $user);
-        if (!is_array($instance) || !in_array($instance['vm_type'] ?? null, ['qemu', 'lxc'], true)
-            || (!$isOwner && !$isRoot && (!$readOnly || $uuid === '' || !VmGateway::hasAdminAccess($uuid)))) {
+        $permissions = VmGateway::guestAccountPermissions(is_array($instance) ? $instance : [], is_array($user) ? $user : []);
+        if (!$permissions[$readOnly ? 'view' : 'manage']) {
             return ApiResponse::error('You do not have access to guest accounts for this instance', 'PERMISSION_DENIED', 403);
         }
 
         $db = Database::getPdoConnection();
         if ($readOnly) {
             $guest = VmGuestAccounts::connect($instance)?->inspect();
-            $owner = $isOwner ? $user : (empty($instance['user_uuid']) ? [] : (User::getUserByUuid($instance['user_uuid']) ?? []));
-            [$preferred, $pending] = self::preferredAccount($db, $instance, $owner, $guest);
-            $passwords = ($isOwner || $isRoot) && $guest !== null
+            [$preferred, $pending] = self::preferredAccount($db, $instance, self::owner($instance, $user), $guest);
+            $passwords = $permissions['manage'] && $guest !== null
                 ? VmGuestAccounts::passwords($db, $instance, $guest)
                 : [];
             $accounts = [];
@@ -70,6 +65,7 @@ final class VmUserGuestAccessController
                 'ip' => $instance['ip_address'],
                 'ssh_ports' => $guest['ssh_ports'] ?? [],
                 'accounts' => $accounts,
+                'can_manage_accounts' => $permissions['manage'],
                 'agent_available' => $guest !== null,
                 'preferred_username' => $preferred,
                 'setup_pending' => $pending,
@@ -84,9 +80,6 @@ final class VmUserGuestAccessController
             !preg_match('/^[a-zA-Z0-9_][a-zA-Z0-9_.@-]{0,62}\$?$/D', $name)) {
             return ApiResponse::error('Invalid guest account or action', 'VALIDATION_FAILED', 422);
         }
-        if (!$isOwner && $action !== 'reveal') {
-            return ApiResponse::error('Only the owner can change guest accounts for this instance', 'PERMISSION_DENIED', 403);
-        }
         if ($reauth = VdsReauth::check($request, 'guest_access')) {
             return $reauth;
         }
@@ -94,7 +87,8 @@ final class VmUserGuestAccessController
         $db->beginTransaction();
         try {
             $vm = VmGuestAccounts::lockInstance($db, (int) $instance['id'], (string) ($instance['user_uuid'] ?? ''));
-            if (!$vm) {
+            if (!$vm || (int) $vm['vmid'] !== (int) $instance['vmid']
+                || (int) $vm['vm_node_id'] !== (int) $instance['vm_node_id']) {
                 return ApiResponse::error('The instance is currently unavailable', 'PERMISSION_DENIED', 403);
             }
             $client = VmGuestAccounts::connect($vm);
@@ -114,7 +108,11 @@ final class VmUserGuestAccessController
                     return ApiResponse::error('No panel-generated password is available for this account', 'KVM_GUEST_PASSWORD_UNAVAILABLE', 404);
                 }
 
-                return self::privateResponse(['password' => App::getInstance(true)->decryptValue($encrypted)]);
+                $password = App::getInstance(true)->decryptValue($encrypted);
+                $db->commit();
+                self::recordAction($vm, $user, $action, $name);
+
+                return self::privateResponse(['password' => $password]);
             }
 
             $password = VmGuestAccounts::password();
@@ -124,6 +122,7 @@ final class VmUserGuestAccessController
             }
             VmGuestAccounts::savePassword($db, $vm, $guest, $name, $password, $hash);
             $db->commit();
+            self::recordAction($vm, $user, $action, $name);
 
             return self::privateResponse([]);
         } finally {
@@ -141,7 +140,7 @@ final class VmUserGuestAccessController
         if (array_key_exists($name, $guest['accounts'])) {
             return ApiResponse::error('The Linux account already exists', 'KVM_GUEST_ACCOUNT_EXISTS', 409);
         }
-        [$preferred] = self::preferredAccount($db, $vm, $user, $guest);
+        [$preferred] = self::preferredAccount($db, $vm, self::owner($vm, $user), $guest);
         $additional = count(array_diff(array_keys($guest['accounts']), ['root', $preferred]));
         if ($name !== $preferred && $additional >= VmGuestAccounts::ADDITIONAL_LIMIT) {
             return ApiResponse::error('This VM has reached the limit for additional Linux accounts', 'KVM_GUEST_ACCOUNT_LIMIT', 409);
@@ -158,14 +157,40 @@ final class VmUserGuestAccessController
         }
         VmGuestAccounts::savePassword($db, $vm, $updated, $name, $password, $hash);
         $db->commit();
+        self::recordAction($vm, $user, 'add', $name);
 
         return self::privateResponse([], 201);
+    }
+
+    private static function owner(array $vm, array $actor): array
+    {
+        $uuid = trim((string) ($vm['user_uuid'] ?? ''));
+        if ($uuid === '' || $uuid === $actor['uuid']) {
+            return $uuid === '' ? [] : $actor;
+        }
+
+        return User::getUserByUuid($uuid) ?? [];
+    }
+
+    private static function recordAction(array $vm, array $actor, string $action, string $name): void
+    {
+        try {
+            VmInstanceActivity::createActivity([
+                'vm_instance_id' => $vm['id'],
+                'vm_node_id' => $vm['vm_node_id'],
+                'user_id' => $actor['id'] ?? null,
+                'event' => 'guest_account.' . $action,
+                'metadata' => ['username' => $name],
+            ]);
+        } catch (\Throwable) {
+            App::getInstance(true)->getLogger()->warning('Could not record guest account activity for instance ' . (int) $vm['id']);
+        }
     }
 
     private static function preferredAccount(\PDO $db, array $vm, array $user, ?array $guest): array
     {
         $stmt = $db->prepare('SELECT username, retry_at FROM featherpanel_vm_guest_setup WHERE instance_id = ? AND owner_uuid = ? AND vmid = ?');
-        $stmt->execute([$vm['id'], $vm['user_uuid'], $vm['vmid']]);
+        $stmt->execute([$vm['id'], $vm['user_uuid'] ?? '', $vm['vmid']]);
         if ($setup = $stmt->fetch(\PDO::FETCH_ASSOC)) {
             return [$setup['username'], $setup['retry_at'] !== null];
         }

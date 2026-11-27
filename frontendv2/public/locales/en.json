@@ -18127,7 +18127,7 @@
     "vds": {
         "guestAccess": {
             "title": "Serverinfo",
-            "denied": "Linux accounts and passwords are available to the server owner.",
+            "denied": "The server owner and panel root administrators can manage these Linux accounts.",
             "connection": "Connection",
             "ip": "Server IP",
             "ssh_ports": "SSH and SFTP ports",
@@ -18141,7 +18141,7 @@
             "connector_unavailable": "Start the container and ask your administrator to check the LXC connector on its Proxmox host.",
             "pending": "Automatic account setup is waiting for Cloud-init to finish and the QEMU Guest Agent to respond.",
             "pending_lxc": "Automatic account setup is waiting for the container and its LXC connector.",
-            "unknown_password": "Existing password unavailable",
+            "unknown_password": "No current password saved in the panel",
             "existing_accounts": "Existing Linux accounts appear automatically. You can set a panel-generated password by choosing Reset password.",
             "show": "Show password",
             "hide": "Hide password",

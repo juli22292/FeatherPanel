@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import MailHtmlFrame from '@/components/common/MailHtmlFrame';
+import { Button } from '@/components/featherui/Button';
 import { useTranslation } from '@/contexts/TranslationContext';
 
 export interface Draft {
@@ -49,6 +50,7 @@ export function MailTemplatePreview({ name, subject, body }: Draft) {
     const { t } = useTranslation();
     const [preview, setPreview] = useState<RenderedMail>();
     const [failed, setFailed] = useState(false);
+    const [format, setFormat] = useState<'html' | 'plain'>('html');
 
     useEffect(() => {
         const controller = new AbortController();
@@ -79,7 +81,30 @@ export function MailTemplatePreview({ name, subject, body }: Draft) {
     if (!preview) return <p className='text-muted-foreground'>{t('common.loading')}</p>;
 
     return (
-        <section className='space-y-3'>
+        <section className='flex min-w-0 flex-col gap-3'>
+            <div className='flex flex-wrap items-center justify-between gap-2'>
+                <h3 className='text-sm font-medium'>{t('admin.mail_templates.form.live_preview')}</h3>
+                <div className='flex gap-1'>
+                    <Button
+                        type='button'
+                        size='sm'
+                        variant={format === 'html' ? 'secondary' : 'ghost'}
+                        aria-pressed={format === 'html'}
+                        onClick={() => setFormat('html')}
+                    >
+                        HTML
+                    </Button>
+                    <Button
+                        type='button'
+                        size='sm'
+                        variant={format === 'plain' ? 'secondary' : 'ghost'}
+                        aria-pressed={format === 'plain'}
+                        onClick={() => setFormat('plain')}
+                    >
+                        {t('admin.mail_templates.preview.plain_text')}
+                    </Button>
+                </div>
+            </div>
             <p className='text-muted-foreground text-sm'>{t('admin.mail_templates.preview.example_data')}</p>
             <p className='font-medium break-words'>{preview.subject}</p>
             {preview.issues.length > 0 && (
@@ -89,17 +114,18 @@ export function MailTemplatePreview({ name, subject, body }: Draft) {
                     ))}
                 </ul>
             )}
-            <div className='grid gap-3 sm:grid-cols-2'>
-                <div className='min-w-0 space-y-2'>
-                    <h3 className='text-sm font-medium'>HTML</h3>
-                    <MailHtmlFrame html={preview.body} title='HTML' className='h-80 rounded-lg' />
-                </div>
-                <div className='min-w-0 space-y-2'>
-                    <h3 className='text-sm font-medium'>{t('admin.mail_templates.preview.plain_text')}</h3>
-                    <pre className='border-border bg-muted/50 h-80 overflow-auto rounded-lg border p-3 text-sm break-words whitespace-pre-wrap'>
+            <div className='border-border/50 flex min-h-[480px] flex-1 flex-col overflow-hidden rounded-2xl border shadow-xl lg:min-h-[600px]'>
+                {format === 'html' ? (
+                    <MailHtmlFrame
+                        html={preview.body}
+                        title={t('admin.mail_templates.form.live_preview')}
+                        className='block h-[480px] flex-1 lg:min-h-[600px]'
+                    />
+                ) : (
+                    <pre className='bg-muted/50 h-[480px] overflow-auto p-4 text-sm break-words whitespace-pre-wrap lg:h-[600px]'>
                         {plainText(preview.body)}
                     </pre>
-                </div>
+                )}
             </div>
         </section>
     );

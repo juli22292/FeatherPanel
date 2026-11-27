@@ -36,6 +36,7 @@ type GuestInfo = {
     ip: string | null;
     ssh_ports: number[];
     accounts: GuestAccount[];
+    can_manage_accounts: boolean;
     agent_available: boolean;
     preferred_username: string;
     setup_pending: boolean;
@@ -63,28 +64,10 @@ export default function ServerInfoPage() {
         );
     }
 
-    return (
-        <GuestAccounts
-            key={id}
-            id={id}
-            guestType={instance.vm_type}
-            canManage={instance.is_owner === true}
-            canViewPasswords={Boolean(instance.is_owner || instance.can_view_guest_passwords)}
-        />
-    );
+    return <GuestAccounts key={id} id={id} guestType={instance.vm_type} />;
 }
 
-function GuestAccounts({
-    id,
-    guestType,
-    canManage,
-    canViewPasswords,
-}: {
-    id: string;
-    guestType: 'qemu' | 'lxc';
-    canManage: boolean;
-    canViewPasswords: boolean;
-}) {
+function GuestAccounts({ id, guestType }: { id: string; guestType: 'qemu' | 'lxc' }) {
     const { t } = useTranslation();
     const withReauth = useVdsReauth();
     const endpoint = '/api/user/vm-instances/' + id + '/guest-access';
@@ -149,6 +132,7 @@ function GuestAccounts({
         }
     }
 
+    const canManage = info?.can_manage_accounts === true;
     const standard = info?.accounts.find((account) => account.kind === 'standard');
     const address = info?.ip?.includes(':') ? '[' + info.ip + ']' : info?.ip;
     const port = info?.ssh_ports[0];
@@ -234,7 +218,7 @@ function GuestAccounts({
                                                 <p className='font-mono break-all'>{account.username}</p>
                                                 <p className='text-muted-foreground text-xs'>{label}</p>
                                             </div>
-                                            {canViewPasswords && (
+                                            {canManage && (
                                                 <>
                                                     <span className='text-muted-foreground font-mono text-sm break-all'>
                                                         {show
@@ -264,15 +248,13 @@ function GuestAccounts({
                                                                     : t('vds.guestAccess.show')}
                                                             </Button>
                                                         )}
-                                                        {canManage && (
-                                                            <Button
-                                                                variant='outline'
-                                                                disabled={loading || busy}
-                                                                onClick={() => setReset(account.username)}
-                                                            >
-                                                                {t('vds.guestAccess.reset')}
-                                                            </Button>
-                                                        )}
+                                                        <Button
+                                                            variant='outline'
+                                                            disabled={loading || busy}
+                                                            onClick={() => setReset(account.username)}
+                                                        >
+                                                            {t('vds.guestAccess.reset')}
+                                                        </Button>
                                                     </div>
                                                 </>
                                             )}
@@ -344,7 +326,9 @@ function GuestAccounts({
                     <Button
                         disabled={busy}
                         onClick={() => {
-                            if (reset) void accountAction('reset', reset);
+                            if (!reset) return;
+                            setReset(undefined);
+                            void accountAction('reset', reset);
                         }}
                     >
                         {t('vds.guestAccess.reset')}

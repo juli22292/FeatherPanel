@@ -35,6 +35,20 @@ class VmGateway
             || PermissionHelper::hasPermission($userUuid, Permissions::ADMIN_VM_INSTANCES_DELETE);
     }
 
+    /** @return array{view: bool, manage: bool} */
+    public static function guestAccountPermissions(array $instance, array $user): array
+    {
+        $uuid = (string) ($user['uuid'] ?? '');
+        if ($uuid === '' || !in_array($instance['vm_type'] ?? null, ['qemu', 'lxc'], true)) {
+            return ['view' => false, 'manage' => false];
+        }
+
+        $manage = trim((string) ($instance['user_uuid'] ?? '')) === $uuid
+            || PermissionHelper::hasPermission($uuid, Permissions::ADMIN_ROOT, $user);
+
+        return ['view' => $manage || self::hasAdminAccess($uuid), 'manage' => $manage];
+    }
+
     /**
      * Check if a user can access a VM instance (owner, subuser, or admin).
      */

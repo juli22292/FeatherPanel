@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.5.7.1 (ServerPanel)
+
+- Restore the large mail-template editor and full-width HTML preview. Plain text is available via a display switch.
+- Allow panel root administrators to create guest accounts, reset passwords, and show saved current passwords in Serverinfo for customer-owned QEMU and LXC instances.
+
 ## v1.5.7 (ServerPanel)
 
 - SMTP messages now include plain-text and HTML alternatives, a Date header, and a unique Message-ID using the sender domain.

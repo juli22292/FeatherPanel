@@ -118,7 +118,7 @@ final class VmGuestAccounts
     public static function passwords(\PDO $db, array $vm, array $guest): array
     {
         $stmt = $db->prepare('SELECT username, guest_uid, password_digest, password_encrypted FROM featherpanel_vm_guest_passwords WHERE instance_id = ? AND owner_uuid = ? AND vmid = ? AND guest_id = ?');
-        $stmt->execute([$vm['id'], $vm['user_uuid'], $vm['vmid'], $guest['guest_id']]);
+        $stmt->execute([$vm['id'], $vm['user_uuid'] ?? '', $vm['vmid'], $guest['guest_id']]);
         $passwords = [];
         foreach ($stmt->fetchAll(\PDO::FETCH_ASSOC) as $row) {
             if (($guest['accounts'][$row['username']] ?? null) === (int) $row['guest_uid']
@@ -135,7 +135,7 @@ final class VmGuestAccounts
         if (($vm['vm_type'] ?? null) !== 'lxc') {
             return false;
         }
-        $params = [$vm['id'], $vm['user_uuid'], $vm['vmid']];
+        $params = [$vm['id'], $vm['user_uuid'] ?? '', $vm['vmid']];
         $stmt = Database::getPdoConnection()->prepare(
             "SELECT 1 FROM featherpanel_vm_guest_passwords WHERE instance_id = ? AND owner_uuid = ? AND vmid = ? AND username = 'root'
              UNION ALL
@@ -154,12 +154,12 @@ final class VmGuestAccounts
                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                        ON DUPLICATE KEY UPDATE owner_uuid = VALUES(owner_uuid), vmid = VALUES(vmid), guest_id = VALUES(guest_id),
                          guest_uid = VALUES(guest_uid), password_digest = VALUES(password_digest), password_encrypted = VALUES(password_encrypted)')
-            ->execute([$vm['id'], $vm['user_uuid'], $vm['vmid'], $username, $guest['guest_id'], $guest['accounts'][$username], hash('sha256', $hash), $encrypted]);
+            ->execute([$vm['id'], $vm['user_uuid'] ?? '', $vm['vmid'], $username, $guest['guest_id'], $guest['accounts'][$username], hash('sha256', $hash), $encrypted]);
     }
 
     public static function lockInstance(\PDO $db, int $id, string $owner): ?array
     {
-        $stmt = $db->prepare("SELECT * FROM featherpanel_vm_instances WHERE id = ? AND user_uuid = ? AND vm_type IN ('qemu', 'lxc')
+        $stmt = $db->prepare("SELECT * FROM featherpanel_vm_instances WHERE id = ? AND COALESCE(user_uuid, '') = ? AND vm_type IN ('qemu', 'lxc')
                             AND suspended = 0 AND status NOT IN ('creating', 'reinstalling', 'restoring', 'deleting', 'suspended') FOR UPDATE");
         $stmt->execute([$id, $owner]);
 

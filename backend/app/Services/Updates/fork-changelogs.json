@@ -1,4 +1,14 @@
 {
+  "1.5.7.1": {
+    "version": "1.5.7.1",
+    "published_at": "2026-11-27",
+    "channel": "stable",
+    "notes": {
+      "en": "- Restore the large mail-template editor and full-width HTML preview. Plain text is available via a display switch.\n- Allow panel root administrators to create guest accounts, reset passwords, and show saved current passwords in Serverinfo for customer-owned QEMU and LXC instances.",
+      "de": "- Der Mailvorlagen-Editor zeigt wieder eine große HTML-Vorschau. Die Nur-Text-Ansicht ist über den Umschalter erreichbar.\n- Panel-Root kann in Serverinfo Linux-Konten für kundeneigene QEMU- und LXC-Instanzen anlegen, Passwörter zurücksetzen und aktuell gespeicherte Passwörter anzeigen."
+    },
+    "url": "https://github.com/juli22292/FeatherPanel/releases/tag/v1.5.7.1"
+  },
   "1.5.7": {
     "version": "1.5.7",
     "published_at": "2026-11-27",

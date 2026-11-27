@@ -1,4 +1,15 @@
 {
+    "vds": {
+        "guestAccess": {
+            "denied": "Der VDS-Inhaber und Panel-Root können diese Linux-Konten verwalten.",
+            "existing_accounts": "Vorhandene Linux-Konten erscheinen automatisch. Über „Passwort zurücksetzen“ kannst du ein neues Passwort im Panel hinterlegen.",
+            "unknown_password": "Kein aktuelles Passwort im Panel gespeichert",
+            "show": "Passwort anzeigen",
+            "hide": "Passwort ausblenden",
+            "reset": "Passwort zurücksetzen",
+            "confirm_reset": "Ein neues Passwort für {username} erstellen? Das bisherige Passwort verliert seine Gültigkeit."
+        }
+    },
     "errors": {
         "codes": {
             "INVALID_BACKUP_CONFIRMATION": "Gib die Version der Sicherung ein, um die Wiederherstellung zu bestätigen.",

@@ -494,8 +494,8 @@ export default function MailTemplatesPage() {
                         className='flex flex-1 flex-col gap-6 overflow-hidden'
                         data-fp-save-shortcut
                     >
-                        <div className='grid grid-cols-1 gap-6 lg:grid-cols-2 lg:overflow-hidden'>
-                            <div className='space-y-6 lg:overflow-y-auto lg:pr-2'>
+                        <div className='grid grid-cols-1 gap-6 lg:grid-cols-2'>
+                            <div className='min-w-0 space-y-6 lg:pr-2'>
                                 <div className='space-y-2'>
                                     <Label htmlFor='create-name'>{t('admin.mail_templates.form.name')}</Label>
                                     <Input
@@ -552,8 +552,8 @@ export default function MailTemplatesPage() {
                         className='flex flex-1 flex-col gap-6 overflow-hidden'
                         data-fp-save-shortcut
                     >
-                        <div className='grid grid-cols-1 gap-6 lg:grid-cols-2 lg:overflow-hidden'>
-                            <div className='space-y-6 lg:overflow-y-auto lg:pr-2'>
+                        <div className='grid grid-cols-1 gap-6 lg:grid-cols-2'>
+                            <div className='min-w-0 space-y-6 lg:pr-2'>
                                 <div className='space-y-2'>
                                     <Label htmlFor='edit-name'>{t('admin.mail_templates.form.name')}</Label>
                                     <Input

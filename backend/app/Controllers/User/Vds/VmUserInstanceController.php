@@ -192,7 +192,7 @@ class VmUserInstanceController
         $fullPerms = ['power', 'console', 'backup', 'activity.read', 'reinstall', 'settings', 'snapshot', 'iso.upload', 'firewall', 'schedules'];
         $isPanelVmAdmin = VmGateway::hasAdminAccess($user['uuid']);
         $vmInstance['can_view_subusers'] = $vmInstance['is_owner'] || $isPanelVmAdmin;
-        $vmInstance['can_view_guest_accounts'] = $vmInstance['is_owner'] || $isPanelVmAdmin;
+        $vmInstance['can_view_guest_accounts'] = VmGateway::guestAccountPermissions($vmInstance, $user)['view'];
         $isRoot = PermissionHelper::hasPermission($user['uuid'], Permissions::ADMIN_ROOT, $user);
         $vmInstance['can_view_guest_passwords'] = $vmInstance['is_owner'] || $isRoot;
 
