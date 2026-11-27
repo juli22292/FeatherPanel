@@ -1,7 +1,7 @@
 //! SMTP mail controller (lettre).
 
-use anyhow::{Context, Result, anyhow};
-use lettre::message::header::ContentType;
+use anyhow::{Context, Result};
+use lettre::message::{Mailbox, MultiPart};
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::transport::smtp::client::{Tls, TlsParameters};
 use lettre::{Message, SmtpTransport, Transport};
@@ -13,7 +13,7 @@ use std::time::Duration;
 use tracing::{debug, info, warn};
 
 use crate::mail::controller::MailController;
-use crate::mail::helpers::from_header;
+use crate::mail::helpers::{from_header, html_to_plain_text};
 use crate::types::MailConfig;
 
 static PREFER_IPV4_SMTP: Lazy<AtomicBool> = Lazy::new(|| AtomicBool::new(false));
@@ -36,22 +36,7 @@ impl MailController for SmtpController {
         subject: &str,
         body: &str,
     ) -> Result<()> {
-        let from = from_header(config);
-
-        let email = Message::builder()
-            .from(from.parse().with_context(|| {
-                format!(
-                    "Invalid From address '{}' check smtp_from ('{}') and app_name ('{}')",
-                    from, config.from, config.from_name
-                )
-            })?)
-            .to(to
-                .parse()
-                .with_context(|| format!("Invalid To address '{}'", to))?)
-            .subject(subject)
-            .header(ContentType::TEXT_HTML)
-            .body(body.to_string())?;
-
+        let email = build_message(config, to, subject, body)?;
         let creds = Credentials::new(config.user.clone(), config.pass.clone());
 
         let lookup_target = format!("{}:{}", config.host, config.port);
@@ -126,35 +111,43 @@ impl MailController for SmtpController {
                     fallback_host, config.host
                 );
 
-                Self::send_via_host(config, &creds, &email, &fallback_host, &config.host).map_err(
-                    |e| {
-                        anyhow!(
-                            "SMTP send failed via {}:{} (encryption={}, ipv4={}, ipv6={}): {}",
-                            config.host,
-                            config.port,
-                            config.encryption,
-                            ipv4_count,
-                            ipv6_count,
-                            e
+                Self::send_via_host(config, &creds, &email, &fallback_host, &config.host)
+                    .with_context(|| {
+                        format!(
+                            "SMTP send failed via {}:{} (encryption={}, ipv4={}, ipv6={})",
+                            config.host, config.port, config.encryption, ipv4_count, ipv6_count
                         )
-                    },
-                )?;
+                    })?;
             } else {
-                return Err(anyhow!(
-                    "SMTP send failed via {}:{} (encryption={}, ipv4={}, ipv6={}): {}",
-                    config.host,
-                    config.port,
-                    config.encryption,
-                    ipv4_count,
-                    ipv6_count,
-                    primary_error
-                ));
+                return Err(primary_error.context(format!(
+                    "SMTP send failed via {}:{} (encryption={}, ipv4={}, ipv6={})",
+                    config.host, config.port, config.encryption, ipv4_count, ipv6_count
+                )));
             }
         }
 
         info!("SMTP delivery accepted for {}", to);
         Ok(())
     }
+}
+
+fn build_message(config: &MailConfig, to: &str, subject: &str, html: &str) -> Result<Message> {
+    let sender = from_header(config);
+    let from: Mailbox = sender
+        .parse()
+        .with_context(|| format!("Invalid SMTP From address '{}'", sender))?;
+    let message_id = format!("<{}@{}>", uuid::Uuid::new_v4(), from.email.domain());
+
+    Ok(Message::builder()
+        .from(from)
+        .to(to.parse().with_context(|| format!("Invalid To address '{}'", to))?)
+        .subject(subject)
+        .date_now()
+        .message_id(Some(message_id))
+        .multipart(MultiPart::alternative_plain_html(
+            html_to_plain_text(html),
+            html.to_string(),
+        ))?)
 }
 
 impl SmtpController {
@@ -188,5 +181,49 @@ impl SmtpController {
         let mailer = builder.build();
         mailer.send(email)?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn smtp_message_has_both_parts_and_standard_headers() {
+        let config = MailConfig {
+            transport: "smtp".into(),
+            host: "smtp.example.net".into(),
+            port: 587,
+            user: String::new(),
+            pass: String::new(),
+            from: "noreply@example.net".into(),
+            from_name: "ServerPanel".into(),
+            encryption: "starttls".into(),
+            enabled: true,
+            api_key: String::new(),
+            api_domain: String::new(),
+            api_region: String::new(),
+        };
+
+        let html = "<p>Hello <strong>world</strong></p>";
+        let first = build_message(&config, "reader@example.org", "Panel mail", html).unwrap();
+        let second = build_message(&config, "reader@example.org", "Panel mail", html).unwrap();
+        let raw = String::from_utf8(first.formatted()).unwrap();
+        let second_raw = String::from_utf8(second.formatted()).unwrap();
+        for expected in [
+            "MIME-Version: 1.0",
+            "Content-Type: multipart/alternative",
+            "Content-Type: text/plain",
+            "Content-Type: text/html",
+            "Date: ",
+            "From: ServerPanel <noreply@example.net>",
+            "Hello world",
+            html,
+        ] {
+            assert!(raw.contains(expected), "missing {expected} in {raw}");
+        }
+        let message_id = raw.lines().find(|line| line.starts_with("Message-ID: <")).unwrap();
+        assert!(message_id.ends_with("@example.net>"));
+        assert!(!second_raw.contains(message_id));
     }
 }

@@ -86,6 +86,7 @@ class AccountBanned
         }
 
         $id = MailQueue::create([
+            'template_name' => 'account_suspended',
             'user_uuid' => $data['uuid'],
             'subject' => $subject,
             'body' => $template,

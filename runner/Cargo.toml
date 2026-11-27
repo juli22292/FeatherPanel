@@ -1,6 +1,6 @@
 [package]
 name = "async-runner"
-version = "1.5.5"
+version = "1.5.7"
 edition = "2021"
 
 [dependencies]
@@ -32,3 +32,6 @@ aws-credential-types = { version = "1", features = ["hardcoded-credentials"] }
 axum = { version = "0.7", features = ["ws"] }
 tokio-tungstenite = { version = "0.24", features = ["native-tls"] }
 native-tls = "0.2"
+scraper = { version = "0.24", default-features = false }
+ego-tree = "0.10"
+uuid = { version = "1", features = ["v4"] }

@@ -134,6 +134,24 @@ return function (RouteCollection $routes): void {
     );
     App::getInstance(true)->registerAdminRoute(
         $routes,
+        'admin-settings-docker-update-history',
+        '/api/admin/settings/docker/update-history',
+        static fn (Request $request) => (new SettingsController())->dockerUpdateHistory($request),
+        Permissions::ADMIN_SETTINGS_VIEW,
+        ['GET'],
+    );
+
+    App::getInstance(true)->registerAdminRoute(
+        $routes,
+        'admin-settings-docker-restore',
+        '/api/admin/settings/docker/restore',
+        static fn (Request $request) => (new SettingsController())->restoreDockerUpdate($request),
+        Permissions::ADMIN_SETTINGS_EDIT,
+        ['POST'],
+    );
+
+    App::getInstance(true)->registerAdminRoute(
+        $routes,
         'admin-settings-docker-update',
         '/api/admin/settings/docker/update',
         function (Request $request) {

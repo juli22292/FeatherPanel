@@ -102,6 +102,7 @@ class UserWarning
         }
 
         $id = MailQueue::create([
+            'template_name' => 'user_warning',
             'user_uuid' => $data['uuid'],
             'subject' => $subject,
             'body' => $template,

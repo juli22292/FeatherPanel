@@ -1,6 +1,6 @@
 # Eigene Releases
 
-Versionsnummern folgen `MAJOR.MINOR.PATCH` oder `MAJOR.MINOR.PATCH.BUILD`. Git-Tags beginnen mit `v`, zum Beispiel `v1.5.6.9`. Die aktuelle Fork-Version im Quellcode ist `1.5.6.9`.
+Versionsnummern folgen `MAJOR.MINOR.PATCH` oder `MAJOR.MINOR.PATCH.BUILD`. Git-Tags beginnen mit `v`, zum Beispiel `v1.5.6.9`. Die aktuelle Fork-Version im Quellcode ist `1.5.7`.
 
 Vor einem Release müssen `backend/boot/constants.php`, `backend/cli`, `backend/storage/cron/runner.php`, `backend/scripts/export-openapi.php` und `app` dieselbe Version enthalten. Für `v1.5.6` steht in `frontendv2/package.json` die Version `1.5.6`. Bei vierteiligen Versionsnummern wird der letzte Punkt für npm durch einen Bindestrich ersetzt. Ein Release-Tag wird erst nach erfolgreichem Build und Tests erstellt. Die GitHub Action `Fork Release` verweigert ein Tag, dessen Version nicht zum Backend und Frontend passt.
 
@@ -17,3 +17,5 @@ Version 1.4.3.1 ergänzt vierteilige Release-Versionen in der GitHub-Erkennung, 
 Version 1.4.3.2 übernimmt die Änderungen von Upstream v1.5.0 und behält die eigene Premium-Anpassung und den GitHub-Updatepfad bei.
 
 Version 1.5.6 übernimmt die stabilen Upstream-Releases bis v1.5.5. Die eigene Premium-Anpassung und der GitHub-Updatepfad bleiben erhalten. Der aktualisierte Host-Dienst unterstützt sowohl alte als auch neue Backend-Images.
+
+Version 1.5.7 ergänzt SMTP-Alternativen, editierbare Vorlagen für alle automatischen Panel-E-Mails, Testversand und ein Versandprotokoll. Der Update-Verlauf mit Wiederherstellung setzt den [Host-Updater aus dieser Version](updates.md#update-verlauf-und-wiederherstellung-ab-157) voraus.

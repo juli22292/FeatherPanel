@@ -85,6 +85,7 @@ class AccountDeletionOtp
         }
 
         $id = MailQueue::create([
+            'template_name' => 'account_deletion_otp',
             'user_uuid' => $data['uuid'],
             'subject' => $subject,
             'body' => $body,

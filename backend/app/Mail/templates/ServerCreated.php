@@ -93,6 +93,7 @@ class ServerCreated
         }
 
         $id = MailQueue::create([
+            'template_name' => 'server_created',
             'user_uuid' => $data['uuid'],
             'subject' => $subject,
             'body' => $template,

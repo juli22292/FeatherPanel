@@ -35,6 +35,24 @@ return function (RouteCollection $routes): void {
         ['GET']
     );
 
+    App::getInstance(true)->registerAdminRoute(
+        $routes,
+        'admin-mail-templates-delivery-log',
+        '/api/admin/mail-templates/delivery-log',
+        static fn (Request $request) => (new MailTemplatesController())->deliveryLog($request),
+        Permissions::ADMIN_TEMPLATE_EMAIL_VIEW,
+        ['GET'],
+    );
+
+    App::getInstance(true)->registerAdminRoute(
+        $routes,
+        'admin-mail-templates-preview',
+        '/api/admin/mail-templates/preview',
+        static fn (Request $request) => (new MailTemplatesController())->preview($request),
+        Permissions::ADMIN_TEMPLATE_EMAIL_VIEW,
+        ['POST'],
+    );
+
     // Get specific mail template
     App::getInstance(true)->registerAdminRoute(
         $routes,

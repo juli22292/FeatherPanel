@@ -23,3 +23,18 @@ Der Dienst nimmt keine frei wählbaren Images, Tags oder Befehle vom Panel an. E
 Falls die Container-Registry ein Release nicht liefert, kann der aktualisierte Host-Dienst die vier Docker-Archive aus demselben stabilen GitHub-Release laden. Er prüft die architekturspezifischen Dateinamen, die veröffentlichte Größe, die SHA-256-Prüfsumme und den enthaltenen Image-Tag. Der Neustart beginnt erst, wenn alle vier Images geladen sind. Für Releases mit Docker-Archiven muss ein älterer Host-Dienst vor dem Update einmalig über den Installer erneuert werden.
 
 Ab 1.4.3.1 unterstützen Dashboard und Host-Updater auch vierteilige Versionsnummern. Ein unverändertes 1.4.3 ignoriert solche Releases noch; für den ersten Klick auf 1.4.3.1 müssen dessen GitHub-Prüfung und Host-Updater einmalig angepasst werden. Die lokale Testinstallation erhält diese Kompatibilitätsanpassung vor dem Test.
+
+## Update-Verlauf und Wiederherstellung ab 1.5.7
+
+Ein bereits eingerichteter Fork-Updater, der Docker-Archive von GitHub laden kann, installiert 1.5.7 über **Admin → System Updates**. Um das Update auf 1.5.7 bereits aufzuzeichnen, aktualisiere den Host-Dienst vor dem Klick auf „Update“ mit der Version aus dem 1.5.7-Quellcode.
+
+Führe den folgenden Befehl auf dem Linux-System mit der Panel-Compose-Installation aus. Er setzt ein bereits eingerichtetes Fork-Update voraus und übernimmt dessen Konfigurationsdatei und Token.
+
+```bash
+sudo install -m 700 deploy/fork-updater/updater.py /etc/featherpanel/fork-updater/updater.py
+sudo systemctl restart featherpanel-fork-updater.service
+```
+
+Der Verlauf erfasst Updates, die der neue Host-Dienst ausführt, einschließlich der angewendeten Datenbankmigrationen. Die Wiederherstellung verwendet den Datenbankdump und die lokalen Projektvolumes des letzten geeigneten Updates. Sie setzt voraus, dass dessen vier frühere Images noch lokal vorhanden sind und Datenbank und Volume-Zuordnung übereinstimmen. Ältere Sicherungen ohne Manifest bleiben für eine manuelle Wiederherstellung verfügbar.
+
+Unter **Admin → System Updates → Update-Verlauf** startet ein Administrator die Wiederherstellung nach Eingabe der Zielversion und Bestätigung seiner Sitzung. Das Panel ersetzt seinen Datenstand durch die Sicherung und startet mit dem früheren Image-Tag. Vorher erstellt der Dienst eine weitere Sicherung des aktuellen Zustands. Daten nach dem Sicherungszeitpunkt gehen beim Umschalten verloren. Der Wiederherstellungsstatus steht auch im Journal des Host-Dienstes.

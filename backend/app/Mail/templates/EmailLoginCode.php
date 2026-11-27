@@ -106,6 +106,7 @@ class EmailLoginCode
         }
 
         $id = MailQueue::create([
+            'template_name' => 'email_login_code',
             'user_uuid' => $data['uuid'],
             'subject' => $subject,
             'body' => $body,

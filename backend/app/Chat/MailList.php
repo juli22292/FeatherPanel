@@ -42,7 +42,10 @@ class MailList
         $sql = 'INSERT INTO ' . self::$table . ' (`' . implode('`, `', $fields) . '`) VALUES (' . implode(',', $placeholders) . ')';
         $stmt = $pdo->prepare($sql);
         if ($stmt->execute($data)) {
-            return (int) $pdo->lastInsertId();
+            $id = (int) $pdo->lastInsertId();
+            \App\Helpers\IAsyncRunnerService::notifyMailPending((int) $data['queue_id']);
+
+            return $id;
         }
 
         return false;

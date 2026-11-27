@@ -1333,37 +1333,29 @@ pub(super) async fn send_vm_email(pool: &MySqlPool, instance_id: i64, meta: &Val
     let password = resolve_vm_access_password(pool, &instance, meta).await.unwrap_or_default();
     placeholders.insert("vm_password".to_string(), password.to_string());
     
-    // Parse template
-    let mut subject: String = template.try_get("subject")?;
-    let mut body: String = template.try_get("body")?;
-    
-    for (key, value) in &placeholders {
-        let placeholder = format!("{{{}}}", key);
-        subject = subject.replace(&placeholder, value);
-        body = body.replace(&placeholder, value);
-    }
-    
+    let subject = render_vm_mail_field(&template.try_get::<String, _>("subject")?, &placeholders, false);
+    let body = render_vm_mail_field(&template.try_get::<String, _>("body")?, &placeholders, true);
     let user_email: String = user.try_get("email")?;
-    
-    // Insert into mail queue
+
+    let mut tx = pool.begin().await?;
     let result = sqlx::query(
-        "INSERT INTO featherpanel_mail_queue (user_uuid, subject, body, status, created_at, updated_at) VALUES (?, ?, ?, 'pending', NOW(), NOW())"
+        "INSERT INTO featherpanel_mail_queue (user_uuid, template_name, subject, body) VALUES (?, ?, ?, ?)",
     )
     .bind(&user_uuid)
+    .bind(template_name)
     .bind(&subject)
     .bind(&body)
-    .execute(pool)
+    .execute(&mut *tx)
     .await?;
-    
     let queue_id = result.last_insert_id();
-    
-    // Insert into mail list
-    sqlx::query("INSERT INTO featherpanel_mail_list (queue_id, user_uuid, created_at, updated_at) VALUES (?, ?, NOW(), NOW())")
+
+    sqlx::query("INSERT INTO featherpanel_mail_list (queue_id, user_uuid) VALUES (?, ?)")
         .bind(queue_id)
         .bind(&user_uuid)
-        .execute(pool)
+        .execute(&mut *tx)
         .await?;
-    
+    tx.commit().await?;
+
     info!("✅ Queued {} email (queue_id: {}) for {}", template_name, queue_id, user_email);
     
     // Publish Redis notification to trigger mail worker
@@ -1374,8 +1366,25 @@ pub(super) async fn send_vm_email(pool: &MySqlPool, instance_id: i64, meta: &Val
     Ok(())
 }
 
+fn render_vm_mail_field(template: &str, values: &std::collections::HashMap<String, String>, html: bool) -> String {
+    static TOKEN: once_cell::sync::Lazy<regex::Regex> = once_cell::sync::Lazy::new(|| {
+        regex::Regex::new(r"\{([a-zA-Z][a-zA-Z0-9_]*)\}").expect("valid mail placeholder regex")
+    });
+    TOKEN.replace_all(template, |captures: &regex::Captures<'_>| {
+        let Some(value) = values.get(&captures[1]) else {
+            return captures[0].to_owned();
+        };
+        if html {
+            value.replace('&', "&amp;").replace('<', "&lt;").replace('>', "&gt;")
+                .replace('"', "&quot;").replace('\'', "&#39;")
+        } else {
+            value.replace(['\r', '\n'], " ")
+        }
+    }).into_owned()
+}
+
 async fn get_config_value(pool: &MySqlPool, key: &str) -> Result<String> {
-    let row = sqlx::query("SELECT value FROM featherpanel_settings WHERE `key` = ?")
+    let row = sqlx::query("SELECT value FROM featherpanel_settings WHERE name = ?")
         .bind(key)
         .fetch_optional(pool)
         .await?;

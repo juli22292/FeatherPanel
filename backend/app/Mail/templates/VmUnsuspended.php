@@ -80,6 +80,7 @@ class VmUnsuspended
         }
 
         $id = MailQueue::create([
+            'template_name' => 'vm_unsuspended',
             'user_uuid' => $data['uuid'],
             'subject' => $subject,
             'body' => $template,

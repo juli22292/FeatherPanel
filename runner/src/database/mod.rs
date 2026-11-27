@@ -48,7 +48,7 @@ pub async fn get_mail_queue(pool: &MySqlPool, queue_id: &str) -> Result<Option<M
 
 pub async fn get_pending_mail_queue_ids(pool: &MySqlPool, limit: u32) -> Result<Vec<String>> {
     let rows = sqlx::query(
-        "SELECT CAST(id AS CHAR) AS id FROM featherpanel_mail_queue WHERE status = 'pending' ORDER BY created_at ASC LIMIT ?",
+        "SELECT CAST(q.id AS CHAR) AS id FROM featherpanel_mail_queue q WHERE q.status = 'pending' AND q.deleted = 'false' AND EXISTS (SELECT 1 FROM featherpanel_mail_list m WHERE m.queue_id = q.id AND m.deleted = 'false') ORDER BY q.created_at ASC LIMIT ?",
     )
     .bind(limit)
     .fetch_all(pool)
@@ -128,7 +128,7 @@ pub async fn get_smtp_config(_pool: &MySqlPool) -> Result<SmtpConfig> {
 
 pub async fn try_lock_mail(pool: &MySqlPool, queue_id: &str) -> Result<bool> {
     let result = sqlx::query(
-        "UPDATE featherpanel_mail_queue SET locked = 'true' WHERE id = ? AND status = 'pending' AND locked = 'false'",
+        "UPDATE featherpanel_mail_queue SET locked = 'true', processed_at = NULL WHERE id = ? AND status = 'pending' AND locked = 'false' AND deleted = 'false'",
     )
     .bind(queue_id)
     .execute(pool)
@@ -147,18 +147,25 @@ pub async fn release_stale_mail_locks(pool: &MySqlPool) -> Result<u64> {
     Ok(result.rows_affected())
 }
 
-pub async fn mark_sent(pool: &MySqlPool, queue_id: &str) -> Result<()> {
-    sqlx::query("UPDATE featherpanel_mail_queue SET status = 'sent', locked = 'false' WHERE id = ?")
-        .bind(queue_id)
-        .execute(pool)
-        .await?;
-    Ok(())
-}
-
-pub async fn mark_failed(pool: &MySqlPool, queue_id: &str) -> Result<()> {
-    sqlx::query("UPDATE featherpanel_mail_queue SET status = 'failed', locked = 'false' WHERE id = ?")
-        .bind(queue_id)
-        .execute(pool)
-        .await?;
+pub async fn finish_mail(
+    pool: &MySqlPool,
+    queue_id: &str,
+    transport: Option<&str>,
+    attempts: u32,
+    failure_code: Option<&str>,
+) -> Result<()> {
+    let status = if failure_code.is_some() { "failed" } else { "sent" };
+    sqlx::query(
+        "UPDATE featherpanel_mail_queue SET status = ?, locked = 'false', transport = ?, \
+         attempts = attempts + ?, processed_at = CURRENT_TIMESTAMP, failure_code = ? \
+         WHERE id = ? AND status = 'pending' AND locked = 'true'",
+    )
+    .bind(status)
+    .bind(transport)
+    .bind(attempts)
+    .bind(failure_code)
+    .bind(queue_id)
+    .execute(pool)
+    .await?;
     Ok(())
 }

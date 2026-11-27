@@ -24,6 +24,7 @@ use App\Chat\Activity;
 use App\Chat\Database;
 use App\Chat\MailList;
 use App\Chat\MailQueue;
+use App\Mail\MailTemplateCatalog;
 use App\Chat\ServerActivity;
 use App\Services\Wings\Wings;
 use App\Chat\UserNotification;
@@ -385,18 +386,16 @@ class InactiveCleanupService
         $config = App::getInstance(true)->getConfig();
         $appName = (string) $config->getSetting(ConfigInterface::APP_NAME, 'FeatherPanel');
         $url = rtrim((string) $config->getSetting(ConfigInterface::APP_URL, ''), '/') . '/server/' . $item['uuid_short'];
-        $esc = static fn (string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
-        $what = [
-            'notify' => 'This is only a reminder.',
-            'suspend' => 'If it stays unused, it will be suspended after ' . $due . ' UTC.',
-            'archive' => 'If it stays unused, it will be backed up and then deleted after ' . $due . ' UTC.',
-            'delete' => 'If it stays unused, it will be deleted after ' . $due . ' UTC.',
-        ][$action];
-        $body = '<p>Hello ' . $esc((string) $user['username']) . ',</p>'
-            . '<p>Your server <strong>' . $esc($item['name']) . '</strong> has not been used for ' . (int) $item['inactive_days'] . ' days. ' . $esc($what) . '</p>'
-            . '<p>To keep it, open it and use it (start it, open the console or the files) before then.</p>'
-            . '<p><a href="' . $esc($url) . '">Open ' . $esc($item['name']) . '</a></p>';
-        $id = MailQueue::create(['user_uuid' => $user['uuid'], 'subject' => $appName . ': ' . $item['name'] . ' is inactive', 'body' => $body]);
+        $name = 'server_inactive_' . $action;
+        $mail = MailTemplateCatalog::render($name, [
+            'app_name' => $appName,
+            'username' => $user['username'],
+            'server_name' => $item['name'],
+            'days' => (int) $item['inactive_days'],
+            'due_at' => $due,
+            'url' => $url,
+        ]);
+        $id = MailQueue::create(['user_uuid' => $user['uuid'], 'template_name' => $name, ...$mail]);
         if ($id === true) {
             return 'warned (inbox; mail is off)';
         }

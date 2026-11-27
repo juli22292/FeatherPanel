@@ -21,6 +21,7 @@ use App\App;
 use App\Chat\Database;
 use App\Chat\MailList;
 use App\Chat\MailQueue;
+use App\Mail\MailTemplateCatalog;
 use App\Helpers\IpAddressMatcher;
 
 /**
@@ -229,12 +230,14 @@ class SecurityPolicy
             }
             $app = App::getInstance(true);
             $appName = (string) $app->getConfig()->getSetting(\App\Config\ConfigInterface::APP_NAME, 'FeatherPanel');
-            $esc = static fn (string $s): string => htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
-            $body = '<h2>New sign-in to your account</h2>'
-                . '<p>Your ' . $esc($appName) . ' account was just signed in to from a new IP address.</p>'
-                . '<p>IP address: ' . $esc($ip) . '<br>Device: ' . $esc(mb_substr((string) $userAgent, 0, 200)) . '<br>Time: ' . gmdate('Y-m-d H:i') . ' UTC</p>'
-                . '<p>If this was you, no action is needed. If not, change your password and enable two-factor authentication right away.</p>';
-            $id = MailQueue::create(['user_uuid' => $user['uuid'], 'subject' => $appName . ': new sign-in to your account', 'body' => $body]);
+            $mail = MailTemplateCatalog::render('security_new_login', [
+                'app_name' => $appName,
+                'ip_address' => $ip,
+                'device' => mb_substr((string) $userAgent, 0, 200),
+                'time' => gmdate('Y-m-d H:i'),
+                'username' => $user['username'] ?? '',
+            ]);
+            $id = MailQueue::create(['user_uuid' => $user['uuid'], 'template_name' => 'security_new_login', ...$mail]);
             if ($id === false || $id === true) {
                 return;
             }

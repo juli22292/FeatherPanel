@@ -43,7 +43,7 @@ pub async fn process_mail(pool: &MySqlPool, queue_id: &str) -> Result<()> {
         Some(m) => m,
         None => {
             error!("❌ MailList entry not found for {}", queue_id);
-            database::mark_failed(pool, queue_id).await?;
+            database::finish_mail(pool, queue_id, None, 0, Some("recipient_missing")).await?;
             return Ok(());
         }
     };
@@ -53,7 +53,7 @@ pub async fn process_mail(pool: &MySqlPool, queue_id: &str) -> Result<()> {
         Some(u) => u,
         None => {
             error!("❌ User not found for uuid {}", mail_list.user_uuid);
-            database::mark_failed(pool, queue_id).await?;
+            database::finish_mail(pool, queue_id, None, 0, Some("recipient_missing")).await?;
             return Ok(());
         }
     };
@@ -62,7 +62,7 @@ pub async fn process_mail(pool: &MySqlPool, queue_id: &str) -> Result<()> {
     let smtp_config = database::get_smtp_config(pool).await?;
     if !smtp_config.enabled {
         warn!("⚠️  Mail {} not sent because email is disabled", queue_id);
-        database::mark_failed(pool, queue_id).await?;
+        database::finish_mail(pool, queue_id, None, 0, Some("mail_disabled")).await?;
         return Ok(());
     }
     if smtp_config.transport != "smtp" && smtp_config.api_key.trim().is_empty() {
@@ -70,15 +70,17 @@ pub async fn process_mail(pool: &MySqlPool, queue_id: &str) -> Result<()> {
             "❌ Mail {} failed: mail_transport={} requires mail_api_key",
             queue_id, smtp_config.transport
         );
-        database::mark_failed(pool, queue_id).await?;
+        database::finish_mail(pool, queue_id, None, 0, Some("api_key_missing")).await?;
         return Ok(());
     }
 
     // Send mail with retries
     let max_retries = 3;
-    let mut success = false;
+    let mut attempts = 0;
+    let mut failure = Some("transport_error".to_owned());
 
     for attempt in 1..=max_retries {
+        attempts = attempt;
         info!(
             "📧 Attempt {}/{} sending to {}",
             attempt, max_retries, user.email
@@ -91,12 +93,13 @@ pub async fn process_mail(pool: &MySqlPool, queue_id: &str) -> Result<()> {
         .await
         {
             Ok(Ok(_)) => {
-                success = true;
+                failure = None;
                 info!("✅ Mail sent to {}", user.email);
                 break;
             }
             Ok(Err(e)) => {
-                let err_str = e.to_string();
+                failure = Some(delivery_failure(&e));
+                let err_str = format!("{:#}", e);
                 let err_chain = format!("{:#}", e);
                 error!(
                     "❌ Attempt {} failed for queue_id {}: {}",
@@ -114,6 +117,7 @@ pub async fn process_mail(pool: &MySqlPool, queue_id: &str) -> Result<()> {
                 }
             }
             Err(_) => {
+                failure = Some("timeout".into());
                 error!(
                     "❌ Attempt {} timed out while sending mail {}",
                     attempt, queue_id
@@ -126,11 +130,38 @@ pub async fn process_mail(pool: &MySqlPool, queue_id: &str) -> Result<()> {
         }
     }
 
-    if success {
-        database::mark_sent(pool, queue_id).await?;
-    } else {
-        database::mark_failed(pool, queue_id).await?;
-    }
+    database::finish_mail(
+        pool,
+        queue_id,
+        Some(&smtp_config.transport),
+        attempts,
+        failure.as_deref(),
+    ).await?;
 
     Ok(())
+}
+
+fn delivery_failure(error: &anyhow::Error) -> String {
+    // Never persist raw SMTP or provider responses in the delivery log.
+    if let Some(smtp) = error.downcast_ref::<lettre::transport::smtp::Error>() {
+        if let Some(code) = smtp.status() {
+            return format!("smtp_{code}");
+        }
+        if smtp.is_timeout() {
+            return "timeout".into();
+        }
+        if smtp.is_tls() {
+            return "smtp_tls".into();
+        }
+        return "smtp_connection".into();
+    }
+    if let Some(http) = error.downcast_ref::<reqwest::Error>() {
+        if let Some(status) = http.status() {
+            return format!("http_{}", status.as_u16());
+        }
+        if http.is_timeout() {
+            return "timeout".into();
+        }
+    }
+    "transport_error".into()
 }

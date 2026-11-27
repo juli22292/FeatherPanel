@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.5.7 (ServerPanel)
+
+- SMTP messages now include plain-text and HTML alternatives, a Date header, and a unique Message-ID using the sender domain.
+- All automatic outbound panel emails have editable templates. The editor previews both formats with sample data, flags placeholder errors, and can send a test message.
+- The admin delivery log shows queued and processed timestamps, provider acceptance, and safe failure codes.
+- System Updates shows recorded updates and database migrations. With the new host updater, administrators can restore the latest eligible backup.
+
 ## v1.5.6.9 (ServerPanel)
 
 - Fix Linux account operations in Serverinfo when a Proxmox login shell prints warnings.

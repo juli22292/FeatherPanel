@@ -86,6 +86,7 @@ class AccountUnBanned
         }
 
         $id = MailQueue::create([
+            'template_name' => 'account_unsuspended',
             'user_uuid' => $data['uuid'],
             'subject' => $subject,
             'body' => $template,
@@ -122,6 +123,7 @@ class AccountUnBanned
             'dashboard_url' => $data['app_url'] . '/dashboard',
             'support_url' => $data['app_support_url'],
             'unsuspension_time' => $data['unsuspend_time'],
+            'unsuspend_time' => $data['unsuspend_time'],
         ]);
     }
 }

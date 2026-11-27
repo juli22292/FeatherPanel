@@ -85,6 +85,7 @@ class VerifyEmail
         }
 
         $id = MailQueue::create([
+            'template_name' => 'verify_email',
             'user_uuid' => $data['uuid'],
             'subject' => $subject,
             'body' => $body,

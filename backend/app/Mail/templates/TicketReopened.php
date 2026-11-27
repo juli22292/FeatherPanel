@@ -55,6 +55,7 @@ class TicketReopened
         }
 
         $id = MailQueue::create([
+            'template_name' => 'ticket_reopened',
             'user_uuid' => $data['uuid'],
             'subject' => $subject,
             'body' => $template,

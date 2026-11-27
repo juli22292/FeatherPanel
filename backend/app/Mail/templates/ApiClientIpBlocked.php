@@ -108,6 +108,7 @@ class ApiClientIpBlocked
         }
 
         $id = MailQueue::create([
+            'template_name' => 'api_client_ip_blocked',
             'user_uuid' => $data['uuid'],
             'subject' => $subject,
             'body' => $body,

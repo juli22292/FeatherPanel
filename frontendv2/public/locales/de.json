@@ -1,4 +1,25 @@
 {
+    "serverpanel_update_history": {
+        "title": "Update-Verlauf",
+        "description": "Sieh Panel-Updates, Datenbankmigrationen und die letzte wiederherstellbare Sicherung ein.",
+        "error": "Der Panel-Updater ist gerade nicht erreichbar. Versuche es erneut, sobald das Panel verfügbar ist.",
+        "unavailable": "Der Update-Verlauf benötigt den Host-Updater aus v1.5.7 oder neuer.",
+        "setup": "Host-Updater einrichten",
+        "empty": "Es wurden noch keine Updates aufgezeichnet.",
+        "restore_version": "Sicherung für {version} wiederherstellen",
+        "restore_warning": "Die Sicherung ersetzt die Panel-Datenbank und die Volumes. Änderungen seit der Sicherung gehen verloren. Vor der Wiederherstellung wird der aktuelle Stand gesichert.",
+        "confirm": "Gib zur Bestätigung {version} ein",
+        "restore": "Sicherung wiederherstellen",
+        "update": "Update",
+        "running": "Läuft",
+        "success": "Abgeschlossen",
+        "failed": "Fehlgeschlagen",
+        "migrations": "Ausgeführte Datenbankmigrationen",
+        "no_migrations": "Keine neuen Datenbankmigrationen",
+        "unknown_migrations": "Migrationsstatus nicht verfügbar",
+        "started": "Wiederherstellung gestartet. Das Panel startet neu.",
+        "reauth": "Eine Sicherung aus dem Update-Verlauf wiederherstellen"
+    },
     "changelogs": {
         "title": "Changelogs",
         "description": "Sieh nach, was sich in den einzelnen ServerPanel-Versionen geändert hat.",
@@ -21,6 +42,42 @@
         "discard": "Änderungen verwerfen"
     },
     "admin": {
+        "mail_templates": {
+            "preview": {
+                "failed": "Die Vorschau konnte nicht geladen werden. Prüfe die Feldlängen und versuche es erneut.",
+                "example_data": "Die Vorschau verwendet Beispieldaten.",
+                "plain_text": "Nur-Text",
+                "placeholders": "Verfügbare Platzhalter"
+            },
+            "delivery": {
+                "title": "Versandprotokoll",
+                "description": "Sieh, wann E-Mails eingereiht und vom Mailanbieter angenommen wurden. Den Eingang im Postfach kann der Empfänger bestätigen.",
+                "failed": "Das Versandprotokoll konnte nicht geladen werden.",
+                "empty": "Keine E-Mails für diesen Filter.",
+                "status": {
+                    "all": "Alle",
+                    "pending": "In Warteschlange",
+                    "sent": "Vom Anbieter angenommen",
+                    "failed": "Fehlgeschlagen"
+                },
+                "reason": {
+                    "smtp_tls": "TLS-Verbindung fehlgeschlagen",
+                    "smtp_connection": "SMTP-Verbindung fehlgeschlagen",
+                    "timeout": "Zeitüberschreitung",
+                    "recipient_missing": "Empfänger fehlt",
+                    "mail_disabled": "Mailversand deaktiviert",
+                    "api_key_missing": "API-Schlüssel des Anbieters fehlt",
+                    "transport_error": "Der Versanddienst hat die E-Mail abgelehnt oder war nicht erreichbar"
+                },
+                "message": "Nachricht",
+                "queued_at": "Eingereiht um",
+                "processed_at": "Verarbeitet um",
+                "status_label": "Status",
+                "attempts": "Versuche: {count}",
+                "older": "Ältere Nachrichten",
+                "newest": "Neueste Nachrichten"
+            }
+        },
         "featherpanel_premium": {
             "customize": {
                 "ai_subtitle": "KI-Assistenten-Untertitel",

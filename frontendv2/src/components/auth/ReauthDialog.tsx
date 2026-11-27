@@ -32,6 +32,7 @@ const ACTION_KEYS: Record<string, string> = {
     admin_role: 'auth.reauth.actions.admin_role',
     api_key: 'auth.reauth.actions.api_key',
     custom_js: 'auth.reauth.actions.custom_js',
+    panel_restore: 'serverpanel_update_history.reauth',
     account_security: 'auth.reauth.actions.account_security',
 };
 

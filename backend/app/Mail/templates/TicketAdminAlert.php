@@ -72,6 +72,7 @@ class TicketAdminAlert
         }
 
         $id = MailQueue::create([
+            'template_name' => 'ticket_admin_alert',
             'user_uuid' => $data['uuid'],
             'subject' => $subject,
             'body' => $template,

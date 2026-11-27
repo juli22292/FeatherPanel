@@ -1,4 +1,25 @@
 {
+    "serverpanel_update_history": {
+        "title": "Update history",
+        "description": "Review panel updates, database migrations, and the latest restorable backup.",
+        "error": "Could not reach the panel updater. Try again when the panel is available.",
+        "unavailable": "Update history requires the v1.5.7 or newer host updater.",
+        "setup": "Host updater setup",
+        "empty": "No updates have been recorded yet.",
+        "restore_version": "Restore backup for {version}",
+        "restore_warning": "This replaces the panel database and volumes with the backup. Changes after the backup will be lost. A current backup is made before restoring.",
+        "confirm": "Enter {version} to confirm",
+        "restore": "Restore backup",
+        "update": "Update",
+        "running": "In progress",
+        "success": "Completed",
+        "failed": "Failed",
+        "migrations": "Applied database migrations",
+        "no_migrations": "No new database migrations",
+        "unknown_migrations": "Migration status unavailable",
+        "started": "Restore started. The panel will restart.",
+        "reauth": "Restore a panel update backup"
+    },
     "auth": {
         "legal": {
             "login_prefix": "By continuing, you agree to our",
@@ -14750,6 +14771,40 @@
             }
         },
         "mail_templates": {
+            "preview": {
+                "failed": "Could not preview this draft. Check the field lengths and try again.",
+                "example_data": "Preview uses sample data.",
+                "plain_text": "Plain text",
+                "placeholders": "Available placeholders"
+            },
+            "delivery": {
+                "title": "Delivery log",
+                "description": "See when emails were queued and accepted by the mail provider. Mailbox delivery is confirmed by the recipient.",
+                "failed": "Could not load the delivery log.",
+                "empty": "No emails match this filter.",
+                "status": {
+                    "all": "All",
+                    "pending": "Queued",
+                    "sent": "Accepted by provider",
+                    "failed": "Failed"
+                },
+                "reason": {
+                    "smtp_tls": "TLS connection failed",
+                    "smtp_connection": "SMTP connection failed",
+                    "timeout": "Connection timed out",
+                    "recipient_missing": "Recipient missing",
+                    "mail_disabled": "Mail is disabled",
+                    "api_key_missing": "Provider API key missing",
+                    "transport_error": "Transport rejected the message or could not be reached"
+                },
+                "message": "Message",
+                "queued_at": "Queued at",
+                "processed_at": "Processed at",
+                "status_label": "Status",
+                "attempts": "Attempts: {count}",
+                "older": "Older messages",
+                "newest": "Newest messages"
+            },
             "title": "Mail Templates",
             "subtitle": "Manage email templates for your system.",
             "create": "Template",

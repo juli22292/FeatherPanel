@@ -81,6 +81,7 @@ class VmSuspended
         }
 
         $id = MailQueue::create([
+            'template_name' => 'vm_suspended',
             'user_uuid' => $data['uuid'],
             'subject' => $subject,
             'body' => $template,

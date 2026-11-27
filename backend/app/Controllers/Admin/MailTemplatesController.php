@@ -23,6 +23,7 @@ use App\Chat\Database;
 use App\Chat\MailList;
 use App\Chat\MailQueue;
 use App\Chat\MailTemplate;
+use App\Mail\MailTemplateCatalog;
 use App\Helpers\ApiResponse;
 use OpenApi\Attributes as OA;
 use App\CloudFlare\CloudFlareRealIP;
@@ -187,7 +188,7 @@ class MailTemplatesController
         $to = min($from + $limit - 1, $total);
 
         return ApiResponse::success([
-            'templates' => $templates,
+            'templates' => array_map(MailTemplateCatalog::describe(...), $templates),
             'pagination' => [
                 'current_page' => $page,
                 'per_page' => $limit,
@@ -242,7 +243,7 @@ class MailTemplatesController
             return ApiResponse::error('Mail template not found', 'TEMPLATE_NOT_FOUND', 404);
         }
 
-        return ApiResponse::success(['template' => $template], 'Mail template fetched successfully', 200);
+        return ApiResponse::success(['template' => MailTemplateCatalog::describe($template)], 'Mail template fetched successfully', 200);
     }
 
     #[OA\Post(
@@ -434,6 +435,21 @@ class MailTemplatesController
             }
         }
 
+        if (MailTemplateCatalog::isBuiltIn($template['name'])) {
+            if (($data['name'] ?? $template['name']) !== $template['name']
+                || ($data['deleted'] ?? 'false') !== 'false') {
+                return ApiResponse::error('Built-in template names cannot be changed or disabled.', 'SYSTEM_TEMPLATE_PROTECTED', 400);
+            }
+            $issues = MailTemplateCatalog::issues(
+                $template['name'],
+                $data['subject'] ?? $template['subject'],
+                $data['body'] ?? $template['body'],
+            );
+            if ($issues !== []) {
+                return ApiResponse::error(implode(' ', $issues), 'INVALID_TEMPLATE_PLACEHOLDERS', 400);
+            }
+        }
+
         // Check if template name already exists (excluding current template)
         if (isset($data['name'])) {
             $existingTemplate = MailTemplate::getByName($data['name']);
@@ -520,7 +536,7 @@ class MailTemplatesController
             return ApiResponse::error('Mail template not found', 'TEMPLATE_NOT_FOUND', 404);
         }
 
-        if ($id >= 1 && $id <= 10) {
+        if (($id >= 1 && $id <= 10) || MailTemplateCatalog::isBuiltIn($template['name'])) {
             return ApiResponse::error('Cannot delete system mail templates', 'SYSTEM_TEMPLATE_DELETE_FAILED', 400);
         }
 
@@ -642,6 +658,10 @@ class MailTemplatesController
         $template = MailTemplate::getById($id);
         if (!$template) {
             return ApiResponse::error('Mail template not found', 'TEMPLATE_NOT_FOUND', 404);
+        }
+
+        if (MailTemplateCatalog::isBuiltIn($template['name'])) {
+            return ApiResponse::error('Cannot delete system mail templates', 'SYSTEM_TEMPLATE_DELETE_FAILED', 400);
         }
 
         $deleted = MailTemplate::hardDelete($id);
@@ -868,6 +888,20 @@ class MailTemplatesController
             }
         }
 
+        $templateName = isset($data['template_name']) && is_string($data['template_name']) ? $data['template_name'] : '';
+        if ($templateName !== '') {
+            $issues = MailTemplateCatalog::issues($templateName, $data['subject'], $data['body']);
+            if ($issues !== []) {
+                return ApiResponse::error(implode(' ', $issues), 'INVALID_TEMPLATE_PLACEHOLDERS', 400);
+            }
+            $preview = $this->renderPreview($templateName, $data['subject'], $data['body']);
+            $data['subject'] = $preview['subject'];
+            $data['body'] = $preview['body'];
+            if (strlen($data['body']) > 65535) {
+                return ApiResponse::error('The rendered email exceeds the supported size.', 'INVALID_DATA_LENGTH', 400);
+            }
+        }
+
         $recipientEmail = trim($data['email']);
         $recipientUser = User::getUserByEmail($recipientEmail);
         if (!$recipientUser || !isset($recipientUser['uuid'])) {
@@ -883,7 +917,8 @@ class MailTemplatesController
         // Create mail queue entry
         $queueData = [
             'user_uuid' => $recipientUser['uuid'],
-            'subject' => '[TEST] ' . $data['subject'],
+            'subject' => mb_strcut('[TEST] ' . $data['subject'], 0, 255),
+            'template_name' => $templateName === '' ? null : $templateName,
             'body' => $data['body'],
             'status' => 'pending',
             'locked' => 'false',
@@ -923,5 +958,42 @@ class MailTemplatesController
         return ApiResponse::success([
             'queue_id' => $queueId,
         ], 'Test email queued successfully. It will be sent shortly.', 200);
+    }
+
+    public function preview(Request $request): Response
+    {
+        $input = json_decode($request->getContent(), true);
+        if (!is_array($input)) {
+            return ApiResponse::error('Invalid template draft.', 'INVALID_TEMPLATE', 400);
+        }
+        foreach (['name' => 255, 'subject' => 255, 'body' => 65535] as $field => $limit) {
+            if (!isset($input[$field]) || !is_string($input[$field]) || strlen($input[$field]) > $limit) {
+                return ApiResponse::error('Invalid template draft.', 'INVALID_TEMPLATE', 400);
+            }
+        }
+        $preview = $this->renderPreview($input['name'], $input['subject'], $input['body']);
+        $preview['issues'] = MailTemplateCatalog::issues($input['name'], $input['subject'], $input['body']);
+
+        return ApiResponse::success($preview);
+    }
+
+    public function deliveryLog(Request $request): Response
+    {
+        $status = $request->query->get('status');
+        $before = $request->query->get('before');
+        if (($status !== null && !in_array($status, ['pending', 'sent', 'failed'], true))
+            || ($before !== null && (!ctype_digit($before) || (int) $before <= 0))) {
+            return ApiResponse::error('Invalid delivery log filter.', 'INVALID_FILTER', 400);
+        }
+
+        return ApiResponse::success(MailQueue::deliveryLog($status, $before === null ? null : (int) $before));
+    }
+
+    private function renderPreview(string $name, string $subject, string $body): array
+    {
+        $appName = (string) \App\App::getInstance(true)->getConfig()
+            ->getSetting(\App\Config\ConfigInterface::APP_NAME, 'FeatherPanel');
+
+        return MailTemplateCatalog::preview($name, $subject, $body, $appName);
     }
 }

@@ -95,6 +95,7 @@ class AccountDeletionScheduled
         }
 
         $id = MailQueue::create([
+            'template_name' => 'account_deletion_scheduled',
             'user_uuid' => $data['uuid'],
             'subject' => $subject,
             'body' => $body,

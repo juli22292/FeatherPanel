@@ -83,6 +83,7 @@ class AccountDeleted
         }
 
         $id = MailQueue::create([
+            'template_name' => 'account_deleted',
             'user_uuid' => $data['uuid'],
             'subject' => $subject,
             'body' => $template,

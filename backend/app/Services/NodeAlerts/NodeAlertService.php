@@ -22,6 +22,8 @@ use App\Chat\Node;
 use App\Chat\Database;
 use App\Chat\MailList;
 use App\Chat\MailQueue;
+use App\Mail\MailTemplateCatalog;
+use App\Mail\MailTemplateRenderer;
 use App\Chat\UserNotification;
 use App\Config\ConfigInterface;
 use App\Helpers\NodeStatusHelper;
@@ -400,15 +402,21 @@ class NodeAlertService
     /** @return string "sent", "mail_disabled" or "failed" */
     private function email(array $user, string $appName, string $title, array $alert, string $url): string
     {
-        $esc = static fn (string $s): string => htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
-        $body = '<h2>' . $esc($title) . '</h2>';
-        if (!empty($alert['details']['error'])) {
-            $body .= '<p>Error: ' . $esc((string) $alert['details']['error']) . '</p>';
-        }
-        $body .= '<p>Severity: ' . $esc((string) $alert['severity']) . '<br>Time: ' . gmdate('Y-m-d H:i') . ' UTC</p>'
-            . '<p><a href="' . $esc($url) . '">Open node status in ' . $esc($appName) . '</a></p>'
-            . '<p style="color:#888;font-size:12px">Change node alert channels under Admin, Nodes, Status.</p>';
-        $id = MailQueue::create(['user_uuid' => $user['uuid'], 'subject' => $appName . ': ' . $title, 'body' => $body]);
+        $name = 'node_alert_' . $alert['type'];
+        $error = (string) ($alert['details']['error'] ?? '');
+        $mail = MailTemplateCatalog::render($name, [
+            'app_name' => $appName,
+            'title' => $title,
+            'severity' => $alert['severity'],
+            'state' => $alert['state'],
+            'message' => $alert['message'],
+            'node_name' => $alert['details']['node'] ?? '',
+            'time' => gmdate('Y-m-d H:i'),
+            'url' => $url,
+            'error' => $error,
+            'error_detail' => $error === '' ? '' : '<p>Error: ' . MailTemplateRenderer::escape($error) . '</p>',
+        ]);
+        $id = MailQueue::create(['user_uuid' => $user['uuid'], 'template_name' => $name, ...$mail]);
         if ($id === true) {
             return 'mail_disabled';
         }

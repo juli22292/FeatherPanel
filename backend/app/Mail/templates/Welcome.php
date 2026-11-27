@@ -84,6 +84,7 @@ class Welcome
         }
 
         $id = MailQueue::create([
+            'template_name' => 'account_created',
             'user_uuid' => $data['uuid'],
             'subject' => $subject,
             'body' => $template,

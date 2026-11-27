@@ -160,6 +160,10 @@ async fn connect_and_listen(
 }
 
 async fn recover_pending_mail(pool: &MySqlPool) -> Result<()> {
+    // The backend may still be adding the delivery log columns during a Compose update.
+    sqlx::query("SELECT processed_at FROM featherpanel_mail_queue LIMIT 0")
+        .execute(pool)
+        .await?;
     let released = database::release_stale_mail_locks(pool).await?;
     if released > 0 {
         warn!(
@@ -201,7 +205,7 @@ async fn process_mail_with_timeout(pool: &MySqlPool, queue_id: &str) -> Result<(
         Ok(result) => result,
         Err(_) => {
             error!("❌ Mail processing timed out for queue {}", queue_id);
-            database::mark_failed(pool, queue_id).await?;
+            database::finish_mail(pool, queue_id, None, 0, Some("timeout")).await?;
             Ok(())
         }
     }

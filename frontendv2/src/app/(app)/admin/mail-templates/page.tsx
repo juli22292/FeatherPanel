@@ -15,7 +15,8 @@ See the LICENSE file or <https://www.gnu.org/licenses/>.
 
 'use client';
 
-import MailHtmlFrame, { MAIL_FRAME_SANDBOX, buildMailFrameDocument } from '@/components/common/MailHtmlFrame';
+import { MailTemplatePreview, type Draft } from './MailTemplatePreview';
+import { MailDeliveryLog } from './MailDeliveryLog';
 import { TipCard } from '@/components/featherui/TipCard';
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from '@/contexts/TranslationContext';
@@ -61,6 +62,8 @@ interface MailTemplate {
     body: string;
     created_at: string;
     updated_at: string;
+    built_in?: boolean;
+    placeholders?: string[];
 }
 
 interface Pagination {
@@ -113,6 +116,8 @@ export default function MailTemplatesPage() {
     const [editOpen, setEditOpen] = useState(false);
     const [previewOpen, setPreviewOpen] = useState(false);
     const [massEmailOpen, setMassEmailOpen] = useState(false);
+    const [deliveryLogOpen, setDeliveryLogOpen] = useState(false);
+    const [testTemplateName, setTestTemplateName] = useState<string>();
     const [testEmailOpen, setTestEmailOpen] = useState(false);
 
     const [selectedTemplate, setSelectedTemplate] = useState<MailTemplate | null>(null);
@@ -255,7 +260,7 @@ export default function MailTemplatesPage() {
         e.preventDefault();
         setProcessing(true);
         try {
-            const { data } = await axios.post('/api/admin/mail-templates/test-email', testEmailData);
+            const { data } = await axios.post('/api/admin/mail-templates/test-email', { ...testEmailData, template_name: testTemplateName });
             if (data.success) {
                 toast.success(t('admin.mail_templates.messages.test_email_sent'));
                 setTestEmailOpen(false);
@@ -291,6 +296,12 @@ export default function MailTemplatesPage() {
         setPreviewOpen(true);
     };
 
+    const openTestEmail = (draft?: Draft) => {
+        setTestTemplateName(draft?.name);
+        setTestEmailData({ email: '', subject: draft?.subject ?? '', body: draft?.body ?? '' });
+        setTestEmailOpen(true);
+    };
+
     return (
         <div className='animate-in fade-in slide-in-from-bottom-4 space-y-6 duration-500'>
             <WidgetRenderer widgets={getWidgets('admin-mail-templates', 'top-of-page')} />
@@ -299,8 +310,11 @@ export default function MailTemplatesPage() {
                 description={t('admin.mail_templates.subtitle')}
                 icon={Mail}
                 actions={
-                    <div className='flex gap-2'>
-                        <Button variant='outline' onClick={() => setTestEmailOpen(true)}>
+                    <div className='flex flex-wrap gap-2'>
+                        <Button variant='outline' onClick={() => setDeliveryLogOpen(true)}>
+                            {t('admin.mail_templates.delivery.title')}
+                        </Button>
+                        <Button variant='outline' onClick={() => openTestEmail()}>
                             <Mail className='mr-2 h-4 w-4' />
                             {t('admin.mail_templates.send_test_email')}
                         </Button>
@@ -381,7 +395,8 @@ export default function MailTemplatesPage() {
                                         >
                                             <Pencil className='h-4 w-4' />
                                         </Button>
-                                        <Button
+                                        {!template.built_in && (
+                                            <Button
                                             variant='ghost'
                                             size='sm'
                                             title={t('common.delete')}
@@ -390,6 +405,7 @@ export default function MailTemplatesPage() {
                                         >
                                             <Trash2 className='h-4 w-4' />
                                         </Button>
+                                        )}
                                     </div>
                                 }
                                 description={
@@ -509,21 +525,7 @@ export default function MailTemplatesPage() {
                                     </p>
                                 </div>
                             </div>
-                            <div className='flex flex-col space-y-2 lg:overflow-hidden'>
-                                <Label>
-                                    {t('admin.mail_templates.form.preview_title', {
-                                        name: formData.name || t('ui.admin.mailTemplates.template'),
-                                    })}
-                                </Label>
-                                <div className='border-border/50 relative flex-1 overflow-hidden rounded-2xl border bg-white shadow-xl'>
-                                    <iframe
-                                        srcDoc={buildMailFrameDocument(formData.body)}
-                                        sandbox={MAIL_FRAME_SANDBOX}
-                                        className='h-full w-full border-none'
-                                        title={t('admin.mail_templates.form.live_preview')}
-                                    />
-                                </div>
-                            </div>
+                            <MailTemplatePreview {...formData} />
                         </div>
                         <SheetFooter className='mt-0 pt-4'>
                             <Button type='submit' loading={processing}>
@@ -553,6 +555,7 @@ export default function MailTemplatesPage() {
                                     <Label htmlFor='edit-name'>{t('admin.mail_templates.form.name')}</Label>
                                     <Input
                                         id='edit-name'
+                                        readOnly={selectedTemplate?.built_in}
                                         value={formData.name}
                                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                                         required
@@ -567,6 +570,18 @@ export default function MailTemplatesPage() {
                                         required
                                     />
                                 </div>
+                                {!!selectedTemplate?.placeholders?.length && (
+                                    <div className='space-y-2'>
+                                        <Label>{t('admin.mail_templates.preview.placeholders')}</Label>
+                                        <div className='flex flex-wrap gap-2'>
+                                            {selectedTemplate.placeholders.map((key) => (
+                                                <code key={key} className='bg-muted rounded px-1.5 py-0.5 text-xs'>
+                                                    {'{' + key + '}'}
+                                                </code>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                                 <div className='space-y-2'>
                                     <Label htmlFor='edit-body'>{t('admin.mail_templates.form.body')}</Label>
                                     <FeatherIDE
@@ -581,23 +596,12 @@ export default function MailTemplatesPage() {
                                     </p>
                                 </div>
                             </div>
-                            <div className='flex flex-col space-y-2 lg:overflow-hidden'>
-                                <Label>
-                                    {t('admin.mail_templates.form.preview_title', {
-                                        name: formData.name || t('ui.admin.mailTemplates.template'),
-                                    })}
-                                </Label>
-                                <div className='border-border/50 relative flex-1 overflow-hidden rounded-2xl border bg-white shadow-xl'>
-                                    <iframe
-                                        srcDoc={buildMailFrameDocument(formData.body)}
-                                        sandbox={MAIL_FRAME_SANDBOX}
-                                        className='h-full w-full border-none'
-                                        title={t('admin.mail_templates.form.live_preview')}
-                                    />
-                                </div>
-                            </div>
+                            <MailTemplatePreview {...formData} />
                         </div>
                         <SheetFooter className='mt-0 pt-4'>
+                            <Button type='button' variant='outline' onClick={() => openTestEmail(formData)}>
+                                {t('admin.mail_templates.send_test_email')}
+                            </Button>
                             <Button type='submit' loading={processing}>
                                 {t('admin.mail_templates.form.submit_update')}
                             </Button>
@@ -606,7 +610,7 @@ export default function MailTemplatesPage() {
                 </div>
             </Sheet>
 
-            <Sheet open={previewOpen} onOpenChange={setPreviewOpen}>
+            <Sheet open={previewOpen} onOpenChange={setPreviewOpen} className='max-w-5xl'>
                 <div className='space-y-6'>
                     <SheetHeader>
                         <SheetTitle>
@@ -622,31 +626,13 @@ export default function MailTemplatesPage() {
                             )}
                         </SheetDescription>
                     </SheetHeader>
-                    <div className='space-y-6 pt-6'>
-                        <div className='space-y-4'>
-                            <div className='space-y-1'>
-                                <Label className='text-muted-foreground text-xs font-bold tracking-wider uppercase'>
-                                    {t('admin.mail_templates.form.subject')}
-                                </Label>
-                                <p className='text-base font-semibold'>{selectedTemplate?.subject}</p>
-                            </div>
-                            <div className='space-y-1'>
-                                <Label className='text-muted-foreground text-xs font-bold tracking-wider uppercase'>
-                                    {t('admin.mail_templates.form.body')}
-                                </Label>
-                                <div className='border-border/50 min-h-[400px] overflow-hidden rounded-xl border bg-white dark:bg-zinc-950'>
-                                    <MailHtmlFrame
-                                        html={selectedTemplate?.body || ''}
-                                        title={selectedTemplate?.name || ''}
-                                        className='min-h-[400px]'
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                        <SheetFooter>
-                            <Button onClick={() => setPreviewOpen(false)}>{t('common.close')}</Button>
-                        </SheetFooter>
-                    </div>
+                    {selectedTemplate && <MailTemplatePreview {...selectedTemplate} />}
+                    <SheetFooter>
+                        <Button variant='outline' onClick={() => selectedTemplate && openTestEmail(selectedTemplate)}>
+                            {t('admin.mail_templates.send_test_email')}
+                        </Button>
+                        <Button onClick={() => setPreviewOpen(false)}>{t('common.close')}</Button>
+                    </SheetFooter>
                 </div>
             </Sheet>
 
@@ -757,6 +743,7 @@ export default function MailTemplatesPage() {
                     </form>
                 </div>
             </Sheet>
+            <MailDeliveryLog open={deliveryLogOpen} onOpenChange={setDeliveryLogOpen} />
             <WidgetRenderer widgets={getWidgets('admin-mail-templates', 'bottom-of-page')} />
         </div>
     );

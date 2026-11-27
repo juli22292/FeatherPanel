@@ -21,6 +21,8 @@ use App\App;
 use App\Chat\MailList;
 use GuzzleHttp\Client;
 use App\Chat\MailQueue;
+use App\Mail\MailTemplateCatalog;
+use App\Mail\MailTemplateRenderer;
 use App\Chat\UserPreference;
 use App\Chat\UserNotification;
 use App\Config\ConfigInterface;
@@ -147,7 +149,7 @@ class ExternalNotifier
             $lines = self::describe($kind, $data);
 
             if ($prefs['email_enabled'] && !empty($user['email'])) {
-                self::email($uuid, $appName, $title, $lines, $url);
+                self::email($uuid, $kind, $appName, $title, $lines, $url);
             }
             if ($prefs['discord_enabled'] && $prefs['discord_webhook_url'] !== '' && self::isValidWebhook($prefs['discord_webhook_url'])) {
                 self::discord($prefs['discord_webhook_url'], $appName, $kind, $title, $lines, $url);
@@ -239,17 +241,15 @@ class ExternalNotifier
         return $lines;
     }
 
-    private static function email(string $uuid, string $appName, string $title, array $lines, string $url): void
+    private static function email(string $uuid, string $kind, string $appName, string $title, array $lines, string $url): void
     {
-        $esc = static fn (string $s): string => htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
-        $body = '<h2>' . $esc($title) . '</h2>';
-        foreach ($lines as $line) {
-            $body .= '<p>' . $esc($line) . '</p>';
-        }
-        $body .= '<p><a href="' . $esc($url) . '">Open in ' . $esc($appName) . '</a></p>'
-            . '<p style="color:#888;font-size:12px">You can turn these emails off under Account, Notifications.</p>';
-
-        $id = MailQueue::create(['user_uuid' => $uuid, 'subject' => $appName . ': ' . $title, 'body' => $body]);
+        $name = 'notification_' . $kind;
+        $details = implode('', array_map(
+            static fn (string $line): string => '<p>' . MailTemplateRenderer::escape($line) . '</p>',
+            $lines,
+        ));
+        $mail = MailTemplateCatalog::render($name, ['app_name' => $appName, 'title' => $title, 'details' => $details, 'url' => $url]);
+        $id = MailQueue::create(['user_uuid' => $uuid, 'template_name' => $name, ...$mail]);
         if ($id === false || $id === true) {
             return;
         }

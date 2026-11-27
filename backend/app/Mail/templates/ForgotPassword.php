@@ -85,6 +85,7 @@ class ForgotPassword
         }
 
         $id = MailQueue::create([
+            'template_name' => 'forgot_password',
             'user_uuid' => $data['uuid'],
             'subject' => $subject,
             'body' => $template,

@@ -1,4 +1,14 @@
 {
+  "1.5.7": {
+    "version": "1.5.7",
+    "published_at": "2026-11-27",
+    "channel": "stable",
+    "notes": {
+      "en": "- SMTP messages now include plain-text and HTML alternatives, a Date header, and a unique Message-ID using the sender domain.\n- All automatic outbound panel emails have editable templates. The editor previews both formats with sample data, flags placeholder errors, and can send a test message.\n- The admin delivery log shows queued and processed timestamps, provider acceptance, and safe failure codes.\n- System Updates shows recorded updates and database migrations. With the new host updater, administrators can restore the latest eligible backup.",
+      "de": "- SMTP-Mails enthalten eine Nur-Text- und eine HTML-Version, einen Date-Header und eine eindeutige Message-ID mit der Absenderdomain.\n- Alle automatischen Panel-E-Mails haben bearbeitbare Vorlagen. Der Editor zeigt beide Formate mit Beispieldaten, meldet Platzhalterfehler und kann eine Testmail senden.\n- Das Versandprotokoll zeigt den Zeitpunkt der Einreihung und Verarbeitung, die Annahme durch den Anbieter und Fehlercodes.\n- Der Update-Verlauf zeigt aufgezeichnete Updates und Datenbankmigrationen. Mit dem neuen Host-Updater können Administratoren die letzte geeignete Sicherung wiederherstellen."
+    },
+    "url": "https://github.com/juli22292/FeatherPanel/releases/tag/v1.5.7"
+  },
   "1.5.6.9": {
     "version": "1.5.6.9",
     "published_at": "2026-11-26",

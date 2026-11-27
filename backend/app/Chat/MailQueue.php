@@ -71,8 +71,6 @@ class MailQueue
         if ($stmt->execute($data)) {
             $id = (int) $pdo->lastInsertId();
 
-            \App\Helpers\IAsyncRunnerService::notifyMailPending($id);
-
             return $id;
         }
 
@@ -197,6 +195,35 @@ class MailQueue
         return $stmt->execute(['user_uuid' => $userUuid]);
     }
 
+    /** A message subject or body can contain live tokens or passwords. */
+    public static function deliveryLog(?string $status, ?int $before): array
+    {
+        $pdo = Database::getPdoConnection();
+        $where = ["q.deleted = 'false'"];
+        $params = [];
+        if ($status !== null) {
+            $where[] = 'q.status = :status';
+            $params['status'] = $status;
+        }
+        if ($before !== null) {
+            $where[] = 'q.id < :before';
+            $params['before'] = $before;
+        }
+        $sql = 'SELECT q.id, q.template_name, u.username, q.status, q.transport, q.attempts,'
+            . ' UNIX_TIMESTAMP(q.created_at) AS queued_at, UNIX_TIMESTAMP(q.processed_at) AS processed_at, q.failure_code'
+            . ' FROM ' . self::$table . ' q LEFT JOIN featherpanel_users u ON u.uuid = q.user_uuid'
+            . ' WHERE ' . implode(' AND ', $where) . ' ORDER BY q.id DESC LIMIT 51';
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $messages = $stmt->fetchAll(\PDO::FETCH_ASSOC);
+        $hasMore = count($messages) > 50;
+        if ($hasMore) {
+            array_pop($messages);
+        }
+
+        return ['messages' => $messages, 'next_before' => $hasMore ? (int) end($messages)['id'] : null];
+    }
+
     /**
      * Re-queue a failed mail for delivery.
      */
@@ -206,16 +233,12 @@ class MailQueue
             return false;
         }
 
-        $mail = self::getById($id);
-        if (!$mail || ($mail['status'] ?? '') !== 'failed' || ($mail['deleted'] ?? 'false') === 'true') {
-            return false;
-        }
-
-        $updated = self::update($id, [
-            'status' => 'pending',
-            'locked' => 'false',
-        ]);
-        if (!$updated) {
+        $stmt = Database::getPdoConnection()->prepare(
+            "UPDATE " . self::$table . " SET status = 'pending', locked = 'false', processed_at = NULL,"
+            . " failure_code = NULL, transport = NULL WHERE id = :id AND status = 'failed' AND deleted = 'false'",
+        );
+        $stmt->execute(['id' => $id]);
+        if ($stmt->rowCount() !== 1) {
             return false;
         }
 

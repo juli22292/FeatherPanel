@@ -91,6 +91,7 @@ class ServerDeleted
         }
 
         $id = MailQueue::create([
+            'template_name' => 'server_deleted',
             'user_uuid' => $data['uuid'],
             'subject' => $subject,
             'body' => $template,

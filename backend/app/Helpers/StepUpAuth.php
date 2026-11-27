@@ -64,6 +64,7 @@ class StepUpAuth
     public const ACTION_ADMIN_ROLE = 'admin_role';
     public const ACTION_API_KEY = 'api_key';
     public const ACTION_CUSTOM_JS = 'custom_js';
+    public const ACTION_PANEL_RESTORE = 'panel_restore';
     /** Changing the password, e-mail or two-factor setup the confirmation itself relies on. */
     public const ACTION_ACCOUNT_SECURITY = 'account_security';
 

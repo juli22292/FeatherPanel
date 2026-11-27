@@ -113,6 +113,44 @@ class ForkUpdaterTests(unittest.TestCase):
                     self.instance.update()
                 backup.assert_not_called()
 
+    def test_history_only_offers_an_unrestored_backup_for_the_installed_version(self):
+        self.instance.backup_root.mkdir()
+        backup = self.instance.backup_root / ("a" * 32)
+        backup.mkdir()
+        (backup / "manifest.json").write_text("{}")
+        entry = self.instance.new_record("update", "v1.5.6.9", "v1.5.7")
+        entry.update(backup=backup.name, result="success")
+        self.instance.store_record(entry)
+        with patch.object(self.instance, "installed_version", return_value="v1.5.7"):
+            history = self.instance.history()
+            self.assertEqual(history["restore"], {"id": entry["id"], "version": "v1.5.6.9"})
+            self.assertNotIn("backup", history["entries"][0])
+            restored = self.instance.new_record("restore", "v1.5.7", "v1.5.6.9")
+            restored.update(source=entry["id"], result="success")
+            self.instance.store_record(restored)
+            self.assertIsNone(self.instance.history()["restore"])
+        with patch.object(self.instance, "installed_version", return_value="v1.5.8"):
+            self.assertIsNone(self.instance.history()["restore"])
+
+    def test_snapshot_validates_database_volume_names_and_file_hashes(self):
+        self.instance.backup_root.mkdir()
+        backup = self.instance.backup_root / ("b" * 32)
+        backup.mkdir()
+        database = backup / "database.sql"
+        database.write_text("fixture")
+        self.instance.write_json(backup / "manifest.json", {
+            "version": "v1.5.6.9", "database": "example",
+            "files": {"database.sql": self.instance.file_digest(database)},
+        })
+        entry = {"backup": backup.name, "from": "v1.5.6.9"}
+        with patch.object(self.instance, "database_name", return_value="example"):
+            self.assertEqual(self.instance.validate_snapshot(entry, {}), backup)
+            with self.assertRaisesRegex(RuntimeError, "volume"):
+                self.instance.validate_snapshot(entry, {"featherpanel_storage": backup})
+            database.write_text("changed")
+            with self.assertRaisesRegex(RuntimeError, "integrity"):
+                self.instance.validate_snapshot(entry, {})
+
     def test_release_archives_load_only_the_declared_fork_images(self):
         self.instance.backup_root.mkdir()
         tag = "v1.5.6"

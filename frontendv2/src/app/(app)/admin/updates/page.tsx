@@ -34,6 +34,7 @@ import { DataTable, StatusDot, TableIdentity, type DataTableColumn } from '@/com
 import { TipCard, TipGrid } from '@/components/featherui/TipCard';
 import { useRouter } from 'next/navigation';
 import { useTranslation } from '@/contexts/TranslationContext';
+import { UpdateHistory } from './UpdateHistory';
 import { PageHeader } from '@/components/featherui/PageHeader';
 import { PageCard } from '@/components/featherui/PageCard';
 import { Button } from '@/components/featherui/Button';
@@ -551,14 +552,17 @@ export default function AdminUpdatesPage() {
                 description={t('admin_updates.description')}
                 icon={RefreshCw}
                 actions={
-                    <Button variant='outline' size='sm' onClick={() => void checkAll()} disabled={isChecking}>
-                        {isChecking ? (
-                            <Loader2 className='mr-2 h-4 w-4 animate-spin' />
-                        ) : (
-                            <RefreshCw className='mr-2 h-4 w-4' />
-                        )}
-                        {t('admin_updates.check_for_updates')}
-                    </Button>
+                    <div className='flex flex-wrap gap-2'>
+                        {panelVersion?.source === 'github' && <UpdateHistory />}
+                        <Button variant='outline' size='sm' onClick={() => void checkAll()} disabled={isChecking}>
+                            {isChecking ? (
+                                <Loader2 className='mr-2 h-4 w-4 animate-spin' />
+                            ) : (
+                                <RefreshCw className='mr-2 h-4 w-4' />
+                            )}
+                            {t('admin_updates.check_for_updates')}
+                        </Button>
+                    </div>
                 }
             />
 

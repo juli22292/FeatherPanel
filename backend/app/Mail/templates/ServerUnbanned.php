@@ -38,6 +38,7 @@ class ServerUnbanned
                 'email' => $data['email'],
                 'username' => $data['username'],
                 'dashboard_url' => $data['app_url'] . '/dashboard',
+                'server_url' => $data['app_url'] . '/dashboard',
                 'support_url' => $data['app_support_url'],
                 'server_name' => $data['server_name'],
             ]);
@@ -89,6 +90,7 @@ class ServerUnbanned
         }
 
         $id = MailQueue::create([
+            'template_name' => 'server_unsuspended',
             'user_uuid' => $data['uuid'],
             'subject' => $subject,
             'body' => $template,
@@ -123,6 +125,7 @@ class ServerUnbanned
             'email' => $data['email'],
             'username' => $data['username'],
             'dashboard_url' => $data['app_url'] . '/dashboard',
+            'server_url' => $data['app_url'] . '/dashboard',
             'support_url' => $data['app_support_url'],
             'server_name' => $data['server_name'],
         ]);
